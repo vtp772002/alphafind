@@ -1,0 +1,377 @@
+[
+  {
+    "id": "fn_assets_fair_val_l1_q",
+    "description": "Asset Fair Value, Recurring, Level 1",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.3838,
+    "userCount": 5,
+    "alphaCount": 5,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fn_comp_non_opt_forfeited_a",
+    "description": "The number of equity-based payment instruments, excluding stock (or unit) options, that were forfeited during the reporting period.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.5821,
+    "userCount": 10,
+    "alphaCount": 16,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fn_derivative_fair_value_of_derivative_asset_a",
+    "description": "Fair value, before effects of master netting arrangements, of a financial asset or other contract with one or more underlyings, notional amount or payment provision or both, and the contract can be net settled by means outside the contract or delivery of an asset. Includes assets elected not to be offset. Excludes assets not subject to a master netting arrangement.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.3613,
+    "userCount": 1,
+    "alphaCount": 1,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fn_oth_comp_forfeitures_fair_value_a",
+    "description": "Annual Share Based Compensation Equity Instruments Other Than Options Forfeitures Weighted Average Grant Date Fair Value",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.4987,
+    "userCount": 8,
+    "alphaCount": 8,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fn_payments_to_acquire_businesses_net_of_cash_acquired_q",
+    "description": "The cash outflow associated with the acquisition of a business, net of the cash acquired from the purchase.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.3933,
+    "userCount": 5,
+    "alphaCount": 9,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fn_def_income_tax_expense_q",
+    "description": "Income Tax Expense, Deferred",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.4695,
+    "userCount": 3,
+    "alphaCount": 3,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fn_assets_fair_val_a",
+    "description": "Asset Fair Value, Recurring, Total",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.3258,
+    "userCount": 29,
+    "alphaCount": 30,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fn_derivative_notional_amount_q",
+    "description": "Nominal or face amount used to calculate payments on the derivative liability.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.3718,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fn_entity_common_stock_shares_out_a",
+    "description": "Indicate number of shares or other units outstanding of each of registrant's classes of capital or common stock or other ownership interests, if and as stated on cover of related periodic report. Where multiple classes or units exist define each class/interest by adding class of stock items such as Common Class A [Member], Common Class B [Member] or Partnership Interest [Member] onto the Instrument [Domain] of the Entity Listings, Instrument.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.7161,
+    "userCount": 21,
+    "alphaCount": 36,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fn_oth_comp_fair_value_a",
+    "description": "Annual share-based compensation equity instruments other than options grants in period weighted average grant date fair value",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.5463,
+    "userCount": 8,
+    "alphaCount": 11,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fn_finite_lived_intangible_assets_gross_a",
+    "description": "Amount before amortization of assets, excluding financial assets and goodwill, lacking physical substance with a finite life.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.4636,
+    "userCount": 6,
+    "alphaCount": 11,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fn_accum_oth_income_loss_net_of_tax_a",
+    "description": "Accumulated change in equity from transactions and other events and circumstances from non-owner sources, net of tax effect, at period end. Excludes Net Income (Loss), and accumulated changes in equity from transactions resulting from investments by owners and distributions to owners. Includes foreign currency translation items, certain pension adjustments, unrealized gains and losses on certain investments in debt and equity securities, other than temporary impairment (OTTI) losses related to factors other than credit losses on available-for-sale and held-to-maturity debt securities that an entity does not intend to sell and it is not more likely than not that the entity will be required to sell before recovery of the amortized cost basis, as well as changes in the fair value of derivatives related to the effective portion of a designated cash flow hedge.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.6936,
+    "userCount": 41,
+    "alphaCount": 58,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fn_def_income_tax_expense_a",
+    "description": "Income Tax Expense, Deferred",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.6422,
+    "userCount": 6,
+    "alphaCount": 11,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fn_assets_fair_val_l2_q",
+    "description": "Asset Fair Value, Recurring, Level 2",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.3812,
+    "userCount": 2,
+    "alphaCount": 3,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fn_assets_fair_val_l3_q",
+    "description": "Asset Fair Value, Recurring, Level 3",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.3813,
+    "userCount": 12,
+    "alphaCount": 12,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  }
+]

@@ -1,0 +1,36 @@
+MIT License
+
+Copyright (c) 2026 Pham Van Toan
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+### TRADEMARK & NON-AFFILIATION DISCLAIMER
+
+"WorldQuant", "BRAIN", "FASTEXPR", and associated logos, product names, and trade dress are trademarks or registered trademarks of WorldQuant, LLC or its respective affiliates. 
+
+This project is an independent open-source research and educational utility. It is NOT authored, maintained, sponsored, endorsed, or affiliated in any way with WorldQuant, LLC, WorldQuant BRAIN, or any of their subsidiaries or affiliates.
+
+### PLATFORM COMPLIANCE & LIMITATION OF LIABILITY
+
+1. **Independent Utility**: This software is provided solely as an academic and technological framework for quantitative research workflow automation.
+2. **User Responsibility**: Users are solely responsible for reviewing and adhering to all terms of service, participation agreements, competition rules, submission policies, and intellectual property requirements of any third-party platform (including WorldQuant BRAIN).
+3. **Assumption of Risk**: The authors and copyright holders accept NO responsibility or liability for any account actions, penalties, disqualifications, loss of profits, data corruption, or damages resulting from the installation, execution, or misuse of this software.
+4. **No Financial Advice**: Nothing in this repository constitutes financial, investment, trading, or legal advice.

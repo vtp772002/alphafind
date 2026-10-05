@@ -1,0 +1,259 @@
+[
+  {
+    "id": "return_assets",
+    "description": "Return on Assets",
+    "dataset": {
+      "id": "fundamental6",
+      "name": "Company Fundamental Data for Equity"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-fundamental-data",
+      "name": "Fundamental Data"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.5,
+    "userCount": 289,
+    "alphaCount": 457,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "returns",
+    "description": "Daily returns",
+    "dataset": {
+      "id": "pv1",
+      "name": "Price Volume Data for Equity"
+    },
+    "category": {
+      "id": "pv",
+      "name": "Price Volume"
+    },
+    "subcategory": {
+      "id": "pv-price-volume",
+      "name": "Price Volume"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 1.0,
+    "userCount": 6545,
+    "alphaCount": 22136,
+    "themes": [],
+    "dateCreated": "2023-07-01"
+  },
+  {
+    "id": "pv13_custretsig_retsig",
+    "description": "Sign of customer return",
+    "dataset": {
+      "id": "pv13",
+      "name": "Relationship Data for Equity"
+    },
+    "category": {
+      "id": "pv",
+      "name": "Price Volume"
+    },
+    "subcategory": {
+      "id": "pv-relationship",
+      "name": "Relationship"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.9276,
+    "userCount": 128,
+    "alphaCount": 180,
+    "themes": [],
+    "dateCreated": "2024-03-01"
+  },
+  {
+    "id": "return_equity",
+    "description": "Return on Equity",
+    "dataset": {
+      "id": "fundamental6",
+      "name": "Company Fundamental Data for Equity"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-fundamental-data",
+      "name": "Fundamental Data"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.5,
+    "userCount": 298,
+    "alphaCount": 599,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "snt_buzz_ret_fast_d1",
+    "description": "negative return of relative sentiment volume",
+    "dataset": {
+      "id": "socialmedia12",
+      "name": "Sentiment Data for Equity"
+    },
+    "category": {
+      "id": "socialmedia",
+      "name": "Social Media"
+    },
+    "subcategory": {
+      "id": "socialmedia-social-media",
+      "name": "Social Media"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.9769,
+    "userCount": 16,
+    "alphaCount": 21,
+    "themes": [],
+    "dateCreated": "2025-10-01"
+  },
+  {
+    "id": "snt_buzz_ret",
+    "description": "negative return of relative sentiment volume",
+    "dataset": {
+      "id": "socialmedia12",
+      "name": "Sentiment Data for Equity"
+    },
+    "category": {
+      "id": "socialmedia",
+      "name": "Social Media"
+    },
+    "subcategory": {
+      "id": "socialmedia-social-media",
+      "name": "Social Media"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 1.0,
+    "userCount": 107,
+    "alphaCount": 182,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "rel_ret_cust",
+    "description": "averaged one-day-return of the instrument's customers",
+    "dataset": {
+      "id": "pv13",
+      "name": "Relationship Data for Equity"
+    },
+    "category": {
+      "id": "pv",
+      "name": "Price Volume"
+    },
+    "subcategory": {
+      "id": "pv-relationship",
+      "name": "Relationship"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.4921,
+    "userCount": 45,
+    "alphaCount": 77,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "rel_ret_part",
+    "description": "Averaged one-day return of the instrument's partners",
+    "dataset": {
+      "id": "pv13",
+      "name": "Relationship Data for Equity"
+    },
+    "category": {
+      "id": "pv",
+      "name": "Price Volume"
+    },
+    "subcategory": {
+      "id": "pv-relationship",
+      "name": "Relationship"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.7097,
+    "userCount": 61,
+    "alphaCount": 113,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "rel_ret_comp",
+    "description": "Averaged one-day return of the competing companies",
+    "dataset": {
+      "id": "pv13",
+      "name": "Relationship Data for Equity"
+    },
+    "category": {
+      "id": "pv",
+      "name": "Price Volume"
+    },
+    "subcategory": {
+      "id": "pv-relationship",
+      "name": "Relationship"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.8228,
+    "userCount": 122,
+    "alphaCount": 161,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "one_minute_price_change_pct_2",
+    "description": "Return or analytic for the first one-minute interval post-event",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 1.0,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  }
+]

@@ -1,0 +1,764 @@
+[
+  {
+    "id": "nws12_afterhsz_vol_ratio",
+    "description": "Curr_Vol / Mov_Vol",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.7077,
+    "userCount": 3,
+    "alphaCount": 5,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_mainz_vol_ratio",
+    "description": "Curr_Vol / Mov_Vol",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9712,
+    "userCount": 8,
+    "alphaCount": 10,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_prez_vol_ratio",
+    "description": "Curr_Vol / Mov_Vol",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.7809,
+    "userCount": 1,
+    "alphaCount": 1,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "min_minutes_to_3pct_move_2",
+    "description": "The minimum elapsed minute value among L or S signals for each minute bucket in After Hours Day 1",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 0.4401,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "minimum_minutes_to_five_percent_move_afterhours",
+    "description": "The minimum elapsed minute value among L or S signals for each minute bucket in After Hours Day 1",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 0.289,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "minimum_minutes_to_one_percent_move_afterhours",
+    "description": "The minimum elapsed minute value among L or S signals for each minute bucket in After Hours Day 1",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 0.6318,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "first_minimum_gain_loss_time",
+    "description": "The minimum elapsed time among upward or downward moves (L or S) for the 1 minute bucket after the event in the pre-market session",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 0.7532,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "session_low_post_event",
+    "description": "Lowest price reached in the period from time of news until the end of the after-hours session, Day 1",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 0.8727,
+    "userCount": 1,
+    "alphaCount": 1,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "third_minimum_gain_loss_time",
+    "description": "The minimum elapsed time among upward or downward moves (L or S) for the 3 minute bucket after the event in the pre-market session",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 0.5801,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "second_minimum_gain_loss_time",
+    "description": "The minimum elapsed time among upward or downward moves (L or S) for the 2 minute bucket after the event in the pre-market session",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 0.6667,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "nws12_mainz_2p",
+    "description": "The minimum of L or S above for 2 minute bucket",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9741,
+    "userCount": 4,
+    "alphaCount": 4,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "minimum_minutes_to_four_percent_move_pre",
+    "description": "The minimum elapsed time among upward or downward moves (L or S) for the 4 minute bucket after the event in the pre-market session",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 0.4936,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "nws12_afterhsz_57p",
+    "description": "The minimum of L or S above for 7.5-minute bucket",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.707,
+    "userCount": 4,
+    "alphaCount": 6,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_mainz_57p",
+    "description": "The minimum of L or S above for 7.5-minute bucket",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9741,
+    "userCount": 8,
+    "alphaCount": 9,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_prez_57p",
+    "description": "The minimum of L or S above for 7.5-minute bucket",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9199,
+    "userCount": 7,
+    "alphaCount": 7,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_afterhsz_2p",
+    "description": "The minimum of L or S above for 2-minute bucket",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.707,
+    "userCount": 2,
+    "alphaCount": 8,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_prez_2p",
+    "description": "The minimum of L or S above for 2-minute bucket",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9199,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "fifth_minimum_gain_loss_time",
+    "description": "The minimum elapsed time among upward or downward moves (L or S) for the 5 minute bucket after the event in the pre-market session",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 0.4072,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "nws12_afterhsz_3p",
+    "description": "The minimum of L or S above for 3-minute bucket",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.707,
+    "userCount": 3,
+    "alphaCount": 4,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_mainz_3p",
+    "description": "The minimum of L or S above for 3-minute bucket",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9741,
+    "userCount": 1,
+    "alphaCount": 1,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_prez_3p",
+    "description": "The minimum of L or S above for 3-minute bucket",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9199,
+    "userCount": 4,
+    "alphaCount": 4,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_mainz_4p",
+    "description": "The minimum of L or S above for 4 minute bucket",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9741,
+    "userCount": 1,
+    "alphaCount": 1,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "fnd6_newqeventv110_invoq",
+    "description": "Inventory - Other",
+    "dataset": {
+      "id": "fundamental6",
+      "name": "Company Fundamental Data for Equity"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-fundamental-data",
+      "name": "Fundamental Data"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 0.5,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "fnd6_newqv1300_invoq",
+    "description": "Inventory - Other",
+    "dataset": {
+      "id": "fundamental6",
+      "name": "Company Fundamental Data for Equity"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-fundamental-data",
+      "name": "Fundamental Data"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.5,
+    "userCount": 22,
+    "alphaCount": 22,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "nws12_afterhsz_1p",
+    "description": "The minimum of L or S above for 1-minute bucket",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.707,
+    "userCount": 14,
+    "alphaCount": 16,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_mainz_1p",
+    "description": "The minimum of L or S above for 1-minute bucket",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9741,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_prez_1p",
+    "description": "The minimum of L or S above for 1-minute bucket",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9199,
+    "userCount": 2,
+    "alphaCount": 2,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "fnd6_prchq",
+    "description": "Price High - Quarter",
+    "dataset": {
+      "id": "fundamental6",
+      "name": "Company Fundamental Data for Equity"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-fundamental-data",
+      "name": "Fundamental Data"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.5,
+    "userCount": 2,
+    "alphaCount": 2,
+    "themes": [],
+    "dateCreated": "2022-08-01"
+  },
+  {
+    "id": "nws12_afterhsz_4p",
+    "description": "The minimum of L or S above for 4-minute bucket",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.707,
+    "userCount": 2,
+    "alphaCount": 2,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_prez_4p",
+    "description": "The minimum of L or S above for 4-minute bucket",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9199,
+    "userCount": 17,
+    "alphaCount": 17,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  }
+]

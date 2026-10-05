@@ -1,0 +1,262 @@
+[
+  {
+    "id": "equity",
+    "description": "Common/Ordinary Equity - Total",
+    "dataset": {
+      "id": "fundamental6",
+      "name": "Company Fundamental Data for Equity"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-fundamental-data",
+      "name": "Fundamental Data"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.5,
+    "userCount": 940,
+    "alphaCount": 1886,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "equity_investment_ownership_ratio",
+    "description": "Percentage ownership in an entity accounted for using the equity method.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.2618,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "equity_awards_nonoption_forfeited_count",
+    "description": "Number of equity awards other than options forfeited during the period.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.4085,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "equity_method_investment_income",
+    "description": "Income earned from investments accounted for using the equity method.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.3892,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "fnd6_ivaeqs",
+    "description": "Investments at Equity",
+    "dataset": {
+      "id": "fundamental6",
+      "name": "Company Fundamental Data for Equity"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-fundamental-data",
+      "name": "Fundamental Data"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 0.5,
+    "userCount": 1,
+    "alphaCount": 1,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "fnd6_esubs",
+    "description": "Equity in Earnings",
+    "dataset": {
+      "id": "fundamental6",
+      "name": "Company Fundamental Data for Equity"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-fundamental-data",
+      "name": "Fundamental Data"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 0.5,
+    "userCount": 3,
+    "alphaCount": 6,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "fnd6_newa1v1300_ceqt",
+    "description": "Common Equity - Tangible",
+    "dataset": {
+      "id": "fundamental6",
+      "name": "Company Fundamental Data for Equity"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-fundamental-data",
+      "name": "Fundamental Data"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.5,
+    "userCount": 7,
+    "alphaCount": 10,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fnd6_newa2v1300_seq",
+    "description": "Stockholders Equity - Parent",
+    "dataset": {
+      "id": "fundamental6",
+      "name": "Company Fundamental Data for Equity"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-fundamental-data",
+      "name": "Fundamental Data"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.5,
+    "userCount": 6,
+    "alphaCount": 47,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "return_equity",
+    "description": "Return on Equity",
+    "dataset": {
+      "id": "fundamental6",
+      "name": "Company Fundamental Data for Equity"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-fundamental-data",
+      "name": "Fundamental Data"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.5,
+    "userCount": 298,
+    "alphaCount": 599,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fnd6_teq",
+    "description": "Stockholders' Equity - Total",
+    "dataset": {
+      "id": "fundamental6",
+      "name": "Company Fundamental Data for Equity"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-fundamental-data",
+      "name": "Fundamental Data"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.5,
+    "userCount": 30,
+    "alphaCount": 53,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  }
+]

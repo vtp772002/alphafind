@@ -1,0 +1,773 @@
+[
+  {
+    "id": "scl12_alltype_sentvec",
+    "description": "sentiment",
+    "dataset": {
+      "id": "socialmedia12",
+      "name": "Sentiment Data for Equity"
+    },
+    "category": {
+      "id": "socialmedia",
+      "name": "Social Media"
+    },
+    "subcategory": {
+      "id": "socialmedia-social-media",
+      "name": "Social Media"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 0.9525,
+    "userCount": 12,
+    "alphaCount": 12,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "scl12_alltype_typevec",
+    "description": "instrument type index",
+    "dataset": {
+      "id": "socialmedia12",
+      "name": "Sentiment Data for Equity"
+    },
+    "category": {
+      "id": "socialmedia",
+      "name": "Social Media"
+    },
+    "subcategory": {
+      "id": "socialmedia-social-media",
+      "name": "Social Media"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 0.9525,
+    "userCount": 16,
+    "alphaCount": 24,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "scl12_sentvec",
+    "description": "Vector representing the sentiment score (bullish/bearish/neutral) derived from social media data for the instrument",
+    "dataset": {
+      "id": "socialmedia12",
+      "name": "Sentiment Data for Equity"
+    },
+    "category": {
+      "id": "socialmedia",
+      "name": "Social Media"
+    },
+    "subcategory": {
+      "id": "socialmedia-social-media",
+      "name": "Social Media"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 1.0,
+    "userCount": 56,
+    "alphaCount": 151,
+    "themes": [],
+    "dateCreated": "2025-11-01"
+  },
+  {
+    "id": "scl12_sentiment_fast_d1",
+    "description": "sentiment",
+    "dataset": {
+      "id": "socialmedia12",
+      "name": "Sentiment Data for Equity"
+    },
+    "category": {
+      "id": "socialmedia",
+      "name": "Social Media"
+    },
+    "subcategory": {
+      "id": "socialmedia-social-media",
+      "name": "Social Media"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.9756,
+    "userCount": 25,
+    "alphaCount": 29,
+    "themes": [],
+    "dateCreated": "2025-10-01"
+  },
+  {
+    "id": "scl12_buzzvec",
+    "description": "Vector representing the volume of social media sentiment/mentions related to the instrument",
+    "dataset": {
+      "id": "socialmedia12",
+      "name": "Sentiment Data for Equity"
+    },
+    "category": {
+      "id": "socialmedia",
+      "name": "Social Media"
+    },
+    "subcategory": {
+      "id": "socialmedia-social-media",
+      "name": "Social Media"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 1.0,
+    "userCount": 70,
+    "alphaCount": 144,
+    "themes": [],
+    "dateCreated": "2025-11-01"
+  },
+  {
+    "id": "scl12_sentiment",
+    "description": "sentiment",
+    "dataset": {
+      "id": "socialmedia12",
+      "name": "Sentiment Data for Equity"
+    },
+    "category": {
+      "id": "socialmedia",
+      "name": "Social Media"
+    },
+    "subcategory": {
+      "id": "socialmedia-social-media",
+      "name": "Social Media"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 1.0,
+    "userCount": 203,
+    "alphaCount": 324,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "scl12_alltype_buzzvec",
+    "description": "sentiment volume",
+    "dataset": {
+      "id": "socialmedia12",
+      "name": "Sentiment Data for Equity"
+    },
+    "category": {
+      "id": "socialmedia",
+      "name": "Social Media"
+    },
+    "subcategory": {
+      "id": "socialmedia-social-media",
+      "name": "Social Media"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 0.9525,
+    "userCount": 12,
+    "alphaCount": 21,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "scl12_buzz_fast_d1",
+    "description": "relative sentiment volume",
+    "dataset": {
+      "id": "socialmedia12",
+      "name": "Sentiment Data for Equity"
+    },
+    "category": {
+      "id": "socialmedia",
+      "name": "Social Media"
+    },
+    "subcategory": {
+      "id": "socialmedia-social-media",
+      "name": "Social Media"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.9756,
+    "userCount": 16,
+    "alphaCount": 16,
+    "themes": [],
+    "dateCreated": "2025-10-01"
+  },
+  {
+    "id": "scl12_typevec",
+    "description": "Vector containing the type indices identifying the categories of instruments in the dataset",
+    "dataset": {
+      "id": "socialmedia12",
+      "name": "Sentiment Data for Equity"
+    },
+    "category": {
+      "id": "socialmedia",
+      "name": "Social Media"
+    },
+    "subcategory": {
+      "id": "socialmedia-social-media",
+      "name": "Social Media"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 1.0,
+    "userCount": 28,
+    "alphaCount": 104,
+    "themes": [],
+    "dateCreated": "2025-11-01"
+  },
+  {
+    "id": "scl12_buzz",
+    "description": "relative sentiment volume",
+    "dataset": {
+      "id": "socialmedia12",
+      "name": "Sentiment Data for Equity"
+    },
+    "category": {
+      "id": "socialmedia",
+      "name": "Social Media"
+    },
+    "subcategory": {
+      "id": "socialmedia-social-media",
+      "name": "Social Media"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 1.0,
+    "userCount": 313,
+    "alphaCount": 474,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fnd2_a_ltrmdmrepoplinytwo",
+    "description": "Amount of long-term debt payable, sinking fund requirements, and other securities issued that are redeemable by holder at fixed or determinable prices and dates maturing in the 2nd fiscal year following the latest fiscal year. Excludes interim and annual periods when interim periods are reported on a rolling approach, from latest balance sheet date.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.4277,
+    "userCount": 6,
+    "alphaCount": 8,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fnd2_a_ltrmdmrepoplay5",
+    "description": "Amount of long-term debt payable, sinking fund requirements, and other securities issued that are redeemable by holder at fixed or determinable prices and dates maturing after the 5th fiscal year following the latest fiscal year. Excludes interim and annual periods when interim periods are reported on a rolling approach, from latest balance sheet date.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.3272,
+    "userCount": 3,
+    "alphaCount": 4,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "lease_minimum_payments_due_two_years",
+    "description": "Minimum required payments for capital leases due in two years.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.3075,
+    "userCount": 2,
+    "alphaCount": 2,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "fnd2_a_ltrmdmrepopliny5",
+    "description": "Amount of long-term debt payable, sinking fund requirements, and other securities issued that are redeemable by holder at fixed or determinable prices and dates maturing in the 5th fiscal year following the latest fiscal year. Excludes interim and annual periods when interim periods are reported on a rolling approach, from latest balance sheet date.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.3973,
+    "userCount": 1,
+    "alphaCount": 1,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fnd2_a_ltrmdmrepoplinnext12m",
+    "description": "Amount of long-term debt payable, sinking fund requirements, and other securities issued that are redeemable by holder at fixed or determinable prices and dates maturing in the next fiscal year following the latest fiscal year. Excludes interim and annual periods when interim periods are reported on a rolling approach, from latest balance sheet date.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.3936,
+    "userCount": 3,
+    "alphaCount": 4,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fnd2_a_ltrmdmrepoplinythree",
+    "description": "Amount of long-term debt payable, sinking fund requirements, and other securities issued that are redeemable by holder at fixed or determinable prices and dates maturing in the 3rd fiscal year following the latest fiscal year. Excludes interim and annual periods when interim periods are reported on a rolling approach, from latest balance sheet date.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.427,
+    "userCount": 4,
+    "alphaCount": 4,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fnd2_a_ltrmdmrepoplinyfour",
+    "description": "Amount of long-term debt payable, sinking fund requirements, and other securities issued that are redeemable by holder at fixed or determinable prices and dates maturing in the 4th fiscal year following the latest fiscal year. Excludes interim and annual periods when interim periods are reported on a rolling approach, from latest balance sheet date.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.4141,
+    "userCount": 3,
+    "alphaCount": 15,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "stddev_reported_eps_quarterly_estimate",
+    "description": "The standard deviation of broker estimates for reported earnings per share in the current quarter.",
+    "dataset": {
+      "id": "analyst4",
+      "name": "Analyst Estimate Data for Equity"
+    },
+    "category": {
+      "id": "analyst",
+      "name": "Analyst"
+    },
+    "subcategory": {
+      "id": "analyst-analyst-estimates",
+      "name": "Analyst Estimates"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.5649,
+    "userCount": 1,
+    "alphaCount": 1,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "free_cashflow_min",
+    "description": "Lowest estimate of free cash flow for the period.",
+    "dataset": {
+      "id": "analyst4",
+      "name": "Analyst Estimate Data for Equity"
+    },
+    "category": {
+      "id": "analyst",
+      "name": "Analyst"
+    },
+    "subcategory": {
+      "id": "analyst-analyst-estimates",
+      "name": "Analyst Estimates"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.5519,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "free_cash_flow_reported_value",
+    "description": "Free cash flow value for the quarter.",
+    "dataset": {
+      "id": "analyst4",
+      "name": "Analyst Estimate Data for Equity"
+    },
+    "category": {
+      "id": "analyst",
+      "name": "Analyst"
+    },
+    "subcategory": {
+      "id": "analyst-analyst-estimates",
+      "name": "Analyst Estimates"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.5288,
+    "userCount": 15,
+    "alphaCount": 69,
+    "themes": [],
+    "dateCreated": "2025-11-01"
+  },
+  {
+    "id": "fn_op_lease_min_pay_due_in_2y_a",
+    "description": "Amount of required minimum rental payments for operating leases having an initial or remaining non-cancelable lease term in excess of 1 year due in the 2nd fiscal year following the latest fiscal year. Excludes interim and annual periods when interim periods are reported on a rolling approach, from latest balance sheet date.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.6419,
+    "userCount": 9,
+    "alphaCount": 18,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "minimum_useful_life_software_assets",
+    "description": "Minimum useful life assigned to software assets.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.2534,
+    "userCount": 1,
+    "alphaCount": 1,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "stddev_sga_expense_quarterly_estimate",
+    "description": "The standard deviation of broker estimates for selling, general, and administrative expenses in the current quarter.",
+    "dataset": {
+      "id": "analyst4",
+      "name": "Analyst Estimate Data for Equity"
+    },
+    "category": {
+      "id": "analyst",
+      "name": "Analyst"
+    },
+    "subcategory": {
+      "id": "analyst-analyst-estimates",
+      "name": "Analyst Estimates"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.3387,
+    "userCount": 2,
+    "alphaCount": 2,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "lease_minimum_payments_due_2yr",
+    "description": "Minimum payments due in two years for operating leases.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.505,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "debt_maturities_repayments_next12m",
+    "description": "Repayments of long-term debt principal due in the next twelve months.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.551,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "pv13_revere_city",
+    "description": "City code",
+    "dataset": {
+      "id": "pv13",
+      "name": "Relationship Data for Equity"
+    },
+    "category": {
+      "id": "pv",
+      "name": "Price Volume"
+    },
+    "subcategory": {
+      "id": "pv-relationship",
+      "name": "Relationship"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.9382,
+    "userCount": 33,
+    "alphaCount": 35,
+    "themes": [],
+    "dateCreated": "2024-03-01"
+  },
+  {
+    "id": "op_cash_flow_stddev",
+    "description": "Standard deviation of operating cash flow estimates.",
+    "dataset": {
+      "id": "analyst4",
+      "name": "Analyst Estimate Data for Equity"
+    },
+    "category": {
+      "id": "analyst",
+      "name": "Analyst"
+    },
+    "subcategory": {
+      "id": "analyst-analyst-estimates",
+      "name": "Analyst Estimates"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.2734,
+    "userCount": 1,
+    "alphaCount": 1,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "stddev_rd_expense_quarterly_estimate",
+    "description": "The standard deviation of broker estimates for research and development expense in the current quarter.",
+    "dataset": {
+      "id": "analyst4",
+      "name": "Analyst Estimate Data for Equity"
+    },
+    "category": {
+      "id": "analyst",
+      "name": "Analyst"
+    },
+    "subcategory": {
+      "id": "analyst-analyst-estimates",
+      "name": "Analyst Estimates"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.2633,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "fn_op_lease_min_pay_due_after_5y_a",
+    "description": "Amount of required minimum rental payments for operating leases having an initial or remaining non-cancelable lease term in excess of one year due after the 5th fiscal year following the latest fiscal year. Excludes interim and annual periods when interim periods are reported on a rolling approach, from latest balance sheet date.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.6011,
+    "userCount": 8,
+    "alphaCount": 8,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "future_benefit_payments_next_12mo",
+    "description": "Expected future benefit payments in the next twelve months for a defined benefit plan.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.3164,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  }
+]

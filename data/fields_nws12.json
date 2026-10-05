@@ -1,0 +1,752 @@
+[
+  {
+    "id": "nws12_allz_result1",
+    "description": "Percent change between the price at the time of the news release and the price at the close of the session",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9736,
+    "userCount": 3,
+    "alphaCount": 3,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_mainz_eodclose",
+    "description": "Close price of the session",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9733,
+    "userCount": 3,
+    "alphaCount": 12,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_afterhsz_peratio",
+    "description": "Reported price to earnings ratio for the calendar day of the session",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.55,
+    "userCount": 5,
+    "alphaCount": 6,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_mainz_spyclose",
+    "description": "Price of SPY at close of session",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9733,
+    "userCount": 2,
+    "alphaCount": 2,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_mainz_lowexcstddev",
+    "description": "(TONLast - EODLow)/StdDev, where StdDev is one standard deviation for the close price for 30 calendar days",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9691,
+    "userCount": 1,
+    "alphaCount": 1,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_prez_maxdown",
+    "description": "Percent change from the price at the time of the news to the after the news low",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.7728,
+    "userCount": 3,
+    "alphaCount": 3,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_afterhsz_provider",
+    "description": "index of name of the news provider",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.707,
+    "userCount": 1,
+    "alphaCount": 4,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_mainz_provider",
+    "description": "index of name of the news provider",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9741,
+    "userCount": 2,
+    "alphaCount": 3,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_allz_provider",
+    "description": "index of name of the news provider",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9745,
+    "userCount": 4,
+    "alphaCount": 6,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_afterhsz_newssess",
+    "description": "Index of the session in which the news was reported",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.707,
+    "userCount": 1,
+    "alphaCount": 1,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_prez_newssess",
+    "description": "Index of session in which the news was reported",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9199,
+    "userCount": 3,
+    "alphaCount": 7,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_afterhsz_mktcap",
+    "description": "Reported market capitalization for the calendar day of the session",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.706,
+    "userCount": 3,
+    "alphaCount": 3,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_prez_div_y",
+    "description": "Annual yield",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.4445,
+    "userCount": 2,
+    "alphaCount": 2,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_afterhsz_10_min",
+    "description": "The percent change in price in the first 10 minutes following the news release",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.3704,
+    "userCount": 25,
+    "alphaCount": 30,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_afterhsz_30_min",
+    "description": "The percent change in price in the first 30 minutes following the news release",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.4203,
+    "userCount": 14,
+    "alphaCount": 33,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_afterhsz_120_min",
+    "description": "The percent change in price in the first 120 minutes following the news release",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.4604,
+    "userCount": 14,
+    "alphaCount": 19,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_afterhsz_opengap",
+    "description": "(DayOpen - PrevClose) / PrevClose.",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.707,
+    "userCount": 1,
+    "alphaCount": 1,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_mainz_maxdown",
+    "description": "Percent change from the price at the time of the news to the after-the-news low",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9733,
+    "userCount": 1,
+    "alphaCount": 1,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_prez_lowexcstddev",
+    "description": "(TONLast - EODLow)/StdDev, where StdDev is one standard deviation for the close price for 30 calendar days",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.7687,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_prez_volstddev",
+    "description": "(CurrentVolume - AvgVol)/VolStDev, where AvgVol is the average of the daily volume, and VolStdDev is one standard deviation for the daily volume, both for 30 calendar days",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.7692,
+    "userCount": 5,
+    "alphaCount": 7,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_prez_highexcstddev",
+    "description": "(EODHigh - TONLast)/StdDev, where StdDev is one standard deviation for the close price for 30 calendar days",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.7687,
+    "userCount": 1,
+    "alphaCount": 1,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_prez_result_vs_index",
+    "description": "((EODClose - TONLast) / TONLast) - ((SPYClose - SPYLast) / SPYLast)",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.7742,
+    "userCount": 2,
+    "alphaCount": 7,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_prez_eodclose",
+    "description": "Close price of the session",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.7742,
+    "userCount": 4,
+    "alphaCount": 4,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_afterhsz_epsactual",
+    "description": "The actual Earnings Per Share value that was conveyed by the news release",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.3815,
+    "userCount": 3,
+    "alphaCount": 7,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_afterhsz_3p",
+    "description": "The minimum of L or S above for 3-minute bucket",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.707,
+    "userCount": 3,
+    "alphaCount": 4,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_mainz_10_min",
+    "description": "The percent change in price in the first 10 minutes following the news release",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9648,
+    "userCount": 1,
+    "alphaCount": 1,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_mainz_30_seconds",
+    "description": "The percent change in price in the 30 seconds following the news release",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9075,
+    "userCount": 2,
+    "alphaCount": 3,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_mainz_result1",
+    "description": "Percent change between the price at the time of the news release and the price at the close of the session",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9733,
+    "userCount": 3,
+    "alphaCount": 3,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_mainz_volstddev",
+    "description": "(CurrentVolume - AvgVol)/VolStDev, where AvgVol is the average of the daily volume, and VolStdDev is one standard deviation for the daily volume, both for 30 calendar days",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9692,
+    "userCount": 3,
+    "alphaCount": 5,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "nws12_mainz_dayopen",
+    "description": "Price at the session open",
+    "dataset": {
+      "id": "news12",
+      "name": "US News Data"
+    },
+    "category": {
+      "id": "news",
+      "name": "News"
+    },
+    "subcategory": {
+      "id": "news-news",
+      "name": "News"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "coverage": 0.9733,
+    "userCount": 2,
+    "alphaCount": 2,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  }
+]
