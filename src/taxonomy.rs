@@ -23,6 +23,7 @@ impl FactorPillar {
         }
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         let upper = s.to_uppercase();
         if upper.contains("ANALYST") {
@@ -44,7 +45,10 @@ impl FactorPillar {
 }
 
 /// Generates a curated batch of 9 orthogonal candidate alphas for parallel distributed screening
-pub fn get_curated_candidates(pillar: Option<FactorPillar>, universe: Option<&str>) -> Vec<CandidateAlpha> {
+pub fn get_curated_candidates(
+    pillar: Option<FactorPillar>,
+    universe: Option<&str>,
+) -> Vec<CandidateAlpha> {
     let u = universe.unwrap_or("TOP1000");
 
     match pillar {

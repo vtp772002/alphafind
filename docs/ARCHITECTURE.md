@@ -28,7 +28,7 @@
 │        TIER 3: CORRELATION ENGINE & AUDIT GUARD                        │
 │                                                                        │
 │   ├── src/correlation.rs     : Microsecond Pearson Matrix & Simulator  │
-│   ├── /tmp/cache             : Instant Disk-Cached Daily PnL Baseline  │
+│   ├── ~/.cache/alphafind     : Disk-Cached Daily PnL Baseline          │
 │   └── portfolio_os.json      : Master Active Out-of-Sample Portfolio   │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
@@ -94,7 +94,7 @@ The portfolio correlation engine (`src/correlation.rs`) audits a candidate's 1,2
 
 * **Vectorized Dot Product**: Computes Pearson product-moment correlation coefficient in microseconds:
   $$\rho_{X, Y} = \frac{\sum (X_i - \overline{X})(Y_i - \overline{Y})}{\sqrt{\sum (X_i - \overline{X})^2 \sum (Y_i - \overline{Y})^2}}$$
-* **Local Disk Cache**: Daily PnL vectors are cached locally with SHA-256 integrity hashing to eliminate redundant API round-trips.
+* **Local Disk Cache**: Daily PnL vectors are cached locally under `~/.cache/alphafind/` to eliminate redundant API round-trips.
 * **Merged Sharpe Simulation**: Calculates aggregate portfolio returns, standard deviation, and merged Sharpe taking the full covariance matrix into account.
 
 ---

@@ -7,12 +7,14 @@ use crate::autotuner::FitnessAutoTuner;
 use crate::client::BrainClient;
 use crate::models::{CandidateAlpha, SubmittableAlphaRecord};
 
+/// A single authenticated BRAIN account worker used for distributed screening.
 pub struct AccountWorker {
     pub client: BrainClient,
     pub role: String,
     pub is_main: bool,
 }
 
+/// Coordinates distributed alpha screening across multiple authenticated BRAIN accounts.
 pub struct MultiAccountScreener {
     pub main_client: BrainClient,
     pub accounts: Vec<AccountWorker>,
@@ -21,6 +23,7 @@ pub struct MultiAccountScreener {
 }
 
 impl MultiAccountScreener {
+    /// Creates a multi-account screener by loading credentials from environment variables.
     pub fn from_env(workers_per_account: usize) -> Result<Self> {
         dotenvy::dotenv().ok();
 
@@ -42,7 +45,7 @@ impl MultiAccountScreener {
 
         // Load Secondary / Worker Sessions (for collaborative team research pooling)
         let mut idx = 1;
-        while {
+        loop {
             let s_email = std::env::var(format!("SECONDARY_ACCOUNT_{idx}_EMAIL"))
                 .or_else(|_| std::env::var(format!("SCOUT_ACCOUNT_{idx}_EMAIL")))
                 .or_else(|_| std::env::var(format!("WQ_BRAIN_EMAIL_ACC{}", idx + 1)));
@@ -59,11 +62,10 @@ impl MultiAccountScreener {
                         });
                     }
                     idx += 1;
-                    true
                 }
-                _ => false,
+                _ => break,
             }
-        } {}
+        }
 
         Ok(Self {
             main_client,
@@ -75,7 +77,10 @@ impl MultiAccountScreener {
 
     /// Authenticates all accounts in parallel
     pub async fn authenticate_all(&self) -> Result<()> {
-        println!("{}", "🔐 Authenticating all configured WorldQuant BRAIN accounts...".bold());
+        println!(
+            "{}",
+            "🔐 Authenticating all configured WorldQuant BRAIN accounts...".bold()
+        );
         let mut tasks = Vec::new();
 
         for acc in &self.accounts {
@@ -206,7 +211,7 @@ impl MultiAccountScreener {
                     };
 
                 // Check submission criteria
-                if final_fit >= min_fitness && final_sh >= 1.25 && final_turn >= 0.01 && final_turn <= 0.70 {
+                if final_fit >= min_fitness && final_sh >= 1.25 && (0.01..=0.70).contains(&final_turn) {
                     println!(
                         "{}",
                         format!(
@@ -299,10 +304,8 @@ impl MultiAccountScreener {
         let mut existing_ids = std::collections::HashSet::new();
         if file_exists {
             if let Ok(mut rdr) = csv::Reader::from_path(csv_path) {
-                for result in rdr.deserialize::<SubmittableAlphaRecord>() {
-                    if let Ok(r) = result {
-                        existing_ids.insert(r.alpha_id);
-                    }
+                for r in rdr.deserialize::<SubmittableAlphaRecord>().flatten() {
+                    existing_ids.insert(r.alpha_id);
                 }
             }
         }
@@ -313,9 +316,13 @@ impl MultiAccountScreener {
             .open(csv_path)?;
 
         let mut wtr = if file_exists {
-            csv::WriterBuilder::new().has_headers(false).from_writer(file)
+            csv::WriterBuilder::new()
+                .has_headers(false)
+                .from_writer(file)
         } else {
-            csv::WriterBuilder::new().has_headers(true).from_writer(file)
+            csv::WriterBuilder::new()
+                .has_headers(true)
+                .from_writer(file)
         };
 
         for r in records {

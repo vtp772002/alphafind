@@ -127,4 +127,4 @@ alphafind audit <ALPHA_ID>
 * [CLI Command Reference](CLI_REFERENCE.md) — Comprehensive guide to all 8 CLI subcommands and options.
 * [Quantitative Methodology](METHODOLOGY.md) — Detailed mathematical proofs, factor pillars, and platform rules.
 * [System Architecture](ARCHITECTURE.md) — Multi-account concurrency design and internal engine layout.
-* [Operator Knowledge Graph](BRAIN_KNOWLEDGE_GRAPH.md) — Complete catalog of all 66 FASTEXPR operators.
+* [Operator Knowledge Graph](BRAIN_KNOWLEDGE_GRAPH.md) — Curated selection of core FASTEXPR operators.

@@ -82,11 +82,9 @@ alphafind sim [OPTIONS] --expr <EXPRESSION>
 |:---|:---:|:---:|:---|
 | `--expr <STR>` | `-e` | *Required* | FASTEXPR Alpha expression to simulate |
 | `--universe <U>` | `-u` | `TOP1000` | Equity universe (`TOP3000`, `TOP1000`, `TOP500`, `TOP200`) |
-| `--decay <N>` | `-d` | `4` | Linear decay factor in trading days |
+| `--decay <N>` | `-d` | `5` | Linear decay factor in trading days |
 | `--neutralization <N>` | `-n` | `SUBINDUSTRY` | Neutralization regime (`MARKET`, `SECTOR`, `INDUSTRY`, `SUBINDUSTRY`) |
-| `--truncation <F>` | `-t` | `0.08` | Maximum single-stock position weight truncation |
-| `--pasteurization` | | `ON` | Data lookahead protection (`ON` or `OFF`) |
-| `--delay <N>` | | `1` | Simulation execution delay in days |
+| `--truncation <F>` | `-t` | `0.05` | Maximum single-stock position weight truncation |
 
 ### Example
 ```bash
@@ -106,17 +104,17 @@ Launches the 9-worker distributed screening engine across 3 parallel accounts wi
 
 ### Usage
 ```bash
-alphafind screen [OPTIONS] --pillar <PILLAR>
+alphafind screen [OPTIONS]
 ```
 
 ### Options
 | Flag | Short | Default | Description |
 |:---|:---:|:---:|:---|
-| `--pillar <PILLAR>` | `-p` | *Required* | Factor pillar: `OPTIONS`, `ANALYST`, `MICRO`, `QUAL`, `RISK` |
+| `--pillar <PILLAR>` | `-p` | *Optional* | Factor pillar: `OPTIONS`, `ANALYST`, `MICRO`, `QUAL`, `RISK`, `SHORT` |
 | `--universe <U>` | `-u` | `TOP1000` | Equity universe (`TOP3000`, `TOP1000`, `TOP500`, `TOP200`) |
-| `--min-fitness <F>` | | `1.40` | Minimum Fitness threshold to trigger transfer lock & verification |
-| `--min-sharpe <S>` | | `1.25` | Minimum Sharpe threshold |
-| `--max-turnover <T>` | | `0.70` | Maximum turnover limit |
+| `--min-fitness <F>` | `-m` | `1.50` | Minimum Fitness threshold to trigger transfer lock & verification |
+| `--workers <N>` | `-w` | `3` | Workers per account (total = workers × accounts) |
+| `--no-tune` | | `false` | Disable automatic decay parameter sweeps |
 
 ### Example
 ```bash
@@ -180,9 +178,11 @@ alphafind submit [OPTIONS] <ALPHA_ID>
 | Flag | Short | Description |
 |:---|:---:|:---|
 | `<ALPHA_ID>` | | Alpha ID to submit |
-| `--name <NAME>` | `-n` | Institutional Alpha name |
-| `--color <COLOR>` | `-c` | Color classification (`BLUE`, `GREEN`, `PURPLE`, `ORANGE`, `RED`) |
-| `--tags <TAGS>` | `-t` | Comma-separated category tags |
+| `--name <NAME>` | | Institutional Alpha name |
+| `--category <CAT>` | | Alpha category (e.g., `FUNDAMENTAL`, `PRICE_VOLUME`) |
+| `--color <COLOR>` | | Color classification (`BLUE`, `GREEN`, `PURPLE`, `ORANGE`, `RED`) |
+| `--tags <TAGS>` | | Comma-separated category tags |
+| `--skip-checks` | | Skip pre-flight 8/8 check verification (not recommended) |
 
 ### Example
 ```bash
