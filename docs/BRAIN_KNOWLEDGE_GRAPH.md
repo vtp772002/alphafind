@@ -14,12 +14,12 @@ The engine interconnects 5 entity tiers into a directed knowledge graph:
 ```mermaid
 flowchart TD
     subgraph P["Economic Factor Pillars"]
-        VAL["VALUATION<br/>(P/E, P/B, Sales Yield)"]
-        QUAL["QUALITY<br/>(Sloan Accrual, Gross Profit)"]
         ANL["ANALYST CONSENSUS<br/>(EPS, Cashflow Revisions)"]
-        LIQ["LIQUIDITY & VWAP<br/>(VWAP Imbalance, Volume Flow)"]
-        VRP["OPTION & VRP<br/>(IV Call/Put, Spread)"]
-        NWS["NEWS & SENTIMENT<br/>(Social Chatter, After-Hours)"]
+        VRP["OPTIONS & VRP<br/>(IV Call/Put, Volatility Surface)"]
+        MICRO["MICROSTRUCTURE VWAP<br/>(VWAP Imbalance, Volume Flow)"]
+        FHQ["FINANCIAL HEALTH & QUALITY<br/>(Sloan Accrual, Gross Profit)"]
+        RISK["IDIOSYNCRATIC RISK<br/>(Unsystematic Vol Curvature)"]
+        SHORT["SHORT INTEREST<br/>(Short Squeeze, Borrow Cost)"]
     end
 
     subgraph OP["FASTEXPR Operators (66 Operators)"]
@@ -44,8 +44,8 @@ flowchart TD
         T5["Universe migration<br/>TOP3000 -> TOP1000 -> TOP500"]
     end
 
-    LIQ --> TS
-    QUAL --> TS
+    MICRO --> TS
+    FHQ --> TS
     TS --> T1
     NL --> T2
     T1 -->|Remediates| C1
@@ -114,9 +114,9 @@ When simulation fails any of the 8 mandatory BRAIN submission checks, apply thes
 
 ---
 
-## 3. Directory of 66 Official BRAIN FASTEXPR Operators
+## 3. Core FASTEXPR Operators Reference (Curated Selection)
 
-All 66 operators extracted directly from the `/operators` endpoint categorized by quantitative domain:
+Key operators curated from the official BRAIN `/operators` endpoint, categorized by quantitative domain:
 
 ### A. Time-Series Operators
 | Operator | Syntax | Description & Quantitative Application |
@@ -151,25 +151,23 @@ All 66 operators extracted directly from the `/operators` endpoint categorized b
 
 ---
 
-## 4. Knowledge Graph CLI Reference
+## 4. Querying the Knowledge Graph via AlphaFind CLI
 
-Researchers and agents can query the Knowledge Graph directly via CLI for diagnostics and heuristics:
+Researchers and agents can use the AlphaFind CLI to leverage the knowledge graph:
 
 ```bash
-# 1. Diagnose root cause and generate remediation formula for LOW_FITNESS
-python3 brain_knowledge_graph.py --diagnose LOW_FITNESS
+# 1. Check an alpha against all 8 mandatory submission checks
+alphafind check <ALPHA_ID>
 
-# 2. Diagnose root cause and generate remediation formula for LOW_SHARPE
-python3 brain_knowledge_graph.py --diagnose LOW_SHARPE
+# 2. Audit correlation against active OS portfolio
+alphafind audit <ALPHA_ID>
 
-# 3. Diagnose and resolve redundancy for SELF_CORRELATION
-python3 brain_knowledge_graph.py --diagnose SELF_CORRELATION
+# 3. Launch distributed screening with automated parameter tuning
+alphafind screen --pillar OPTIONS --universe TOP1000
 
-# 4. Inspect syntax, mathematical definition, and examples for an operator
-python3 brain_knowledge_graph.py --operator signed_power
-python3 brain_knowledge_graph.py --operator ts_decay_linear
-python3 brain_knowledge_graph.py --operator trade_when
+# 4. Simulate a single FastExpr formula
+alphafind sim --expr "rank(ts_delta(close, 5))" --universe TOP1000 --decay 5
 
-# 5. Analyze current OS portfolio and recommend orthogonal factor spaces
-python3 brain_knowledge_graph.py --recommend
+# 5. View merged portfolio Sharpe and diversification metrics
+alphafind portfolio
 ```

@@ -60,8 +60,9 @@ AlphaFind provides a high-performance CLI engine that coordinates **scalable asy
 | **`OPTIONS`** | Volatility Surface, Term Structure, Skew, VRP | `TOP1000` / `TOP3000` | `MARKET` / `SUBINDUSTRY` |
 | **`ANALYST`** | Consensus EPS Revisions, Price Targets, Revisions Drift | `TOP500` | `SECTOR` / `MARKET` |
 | **`MICRO`** | VWAP Slippage, Order Imbalance, Liquidity Shocks | `TOP1000` | `SUBINDUSTRY` |
-| **`QUAL`** | Fundamental Quality, Accruals, Cash Flow Spreads | `TOP1000` / `TOP500` | `INDUSTRY` |
-| **`RISK`** | Short Interest Dynamics, Borrow Supply Constraints | `TOP2000` / `TOP1000` | `MARKET` |
+| **`QUAL`** | Fundamental Quality, Accruals, Cash Flow Spreads | `TOP1000` / `TOP500` | `SUBINDUSTRY` |
+| **`RISK`** | Idiosyncratic Risk, Unsystematic Volatility Curvature | `TOP1000` / `TOP500` | `SUBINDUSTRY` |
+| **`SHORT`** | Short Interest Dynamics, Borrow Supply Constraints | `TOP2000` / `TOP1000` | `MARKET` |
 
 ### Equity Universes
 | Universe | Description | Institutional Role |
@@ -144,7 +145,7 @@ alphafind screen --pillar OPTIONS --universe TOP1000 --min-fitness 1.50
 ┌───────────────────────────────────┴────────────────────────────────────┐
 │        TIER 3: CORRELATION ENGINE & AUDIT GUARD                        │
 │   ├── src/correlation.rs: Microsecond Pearson Matrix & Merge Simulator │
-│   ├── /tmp/cache        : Instant Disk-Cached Daily PnL Baseline       │
+│   ├── ~/.cache/alphafind: Disk-Cached Daily PnL Baseline               │
 │   └── portfolio_os.json : Master Active Out-of-Sample Portfolio Cache  │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
@@ -170,7 +171,7 @@ All technical and quantitative documentation is organized within the [`docs/`](d
 | 📖 [**CLI Command Reference**](docs/CLI_REFERENCE.md) | Exhaustive parameter descriptions, CLI syntax, and practical examples |
 | 📐 [**Quantitative Methodology**](docs/METHODOLOGY.md) | Orthogonal Variance Law math, factor taxonomy, and 8 In-Sample checks |
 | 🏛️ [**System Architecture**](docs/ARCHITECTURE.md) | 9-worker concurrency model, atomic transfer lock, and SIMD Pearson engine |
-| 🧠 [**FASTEXPR Knowledge Graph**](docs/BRAIN_KNOWLEDGE_GRAPH.md) | Complete index of all 66 platform operators and diagnostic heuristics |
+| 🧠 [**FASTEXPR Knowledge Graph**](docs/BRAIN_KNOWLEDGE_GRAPH.md) | Curated selection of core platform operators and diagnostic heuristics |
 
 ---
 

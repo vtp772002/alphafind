@@ -115,9 +115,7 @@ pub struct PortfolioMergeMetrics {
 }
 
 /// Simulates the exact equal-weighted multi-alpha portfolio PnL across common days
-pub fn simulate_portfolio(
-    pnls: &[&HashMap<String, f64>],
-) -> Option<PortfolioMergeMetrics> {
+pub fn simulate_portfolio(pnls: &[&HashMap<String, f64>]) -> Option<PortfolioMergeMetrics> {
     if pnls.is_empty() {
         return None;
     }
@@ -158,7 +156,11 @@ pub fn simulate_portfolio(
 
     let ann_pnl = mean_daily * 252.0;
     let ann_vol = std_daily * (252.0f64).sqrt();
-    let merged_sharpe = if ann_vol > 1e-9 { ann_pnl / ann_vol } else { 0.0 };
+    let merged_sharpe = if ann_vol > 1e-9 {
+        ann_pnl / ann_vol
+    } else {
+        0.0
+    };
 
     // Average pairwise correlation
     let mut sum_rho = 0.0;

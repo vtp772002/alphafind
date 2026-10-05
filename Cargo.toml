@@ -1,6 +1,6 @@
 [package]
 name = "alphafind"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 authors = ["AlphaFind Quant Team"]
 description = "High-Performance Quantitative Alpha Mining Engine for WorldQuant BRAIN"
@@ -15,11 +15,5 @@ csv = "1.3"
 clap = { version = "4.5", features = ["derive"] }
 dotenvy = "0.15"
 colored = "2.1"
-indicatif = { version = "0.17", features = ["tokio"] }
 anyhow = "1.0"
-thiserror = "1.0"
-chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22"
-regex = "1.10"
-rand = "0.8"
-futures = "0.3"

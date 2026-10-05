@@ -47,8 +47,9 @@ AlphaFind organizes quantitative hypotheses into distinct economic factor pillar
 | **ANALYST** | Consensus EPS Revisions, Price Targets | `TOP500` | `SECTOR` or `MARKET` | Analyst upgrades occur in sector-wide waves. Subindustry neutralization strips systemic revisions. |
 | **OPTIONS** | Implied Volatility Surface, VRP, Skew | `TOP1000` / `TOP3000` | `MARKET` or `SUBINDUSTRY` | Option variance premiums are idiosyncratic across single-stock equities. |
 | **MICRO** | VWAP Slippage, Order Imbalance, Gaps | `TOP1000` | `SUBINDUSTRY` | Captures intraday liquidity dislocations and institutional execution drag. |
-| **QUAL** | ROIC, Accruals, Free Cash Flow Yield | `TOP1000` / `TOP500` | `INDUSTRY` | Long-term fundamental quality spreads; robust across market regimes. |
-| **RISK** | Short Interest, Borrow Fee Rates | `TOP2000` / `TOP1000` | `MARKET` | Crowded short squeezes and borrow supply constraints. |
+| **QUAL** | ROIC, Accruals, Free Cash Flow Yield | `TOP1000` / `TOP500` | `SUBINDUSTRY` | Long-term fundamental quality spreads; robust across market regimes. |
+| **RISK** | Idiosyncratic Risk, Unsystematic Volatility Curvature | `TOP1000` / `TOP500` | `SUBINDUSTRY` | Non-linear unhedged variance spreads and residual volatility. |
+| **SHORT** | Short Interest, Borrow Fee Rates, Squeeze Pressure | `TOP2000` / `TOP1000` | `MARKET` | Crowded short squeezes and borrow supply constraints. |
 
 ---
 
@@ -105,4 +106,4 @@ Every Alpha must achieve **8/8 PASS** on `GET /alphas/{id}/check` to be admitted
 
 ## 6. Further Documentation
 
-* [BRAIN Knowledge Graph](BRAIN_KNOWLEDGE_GRAPH.md) — Comprehensive reference of all 66 FASTEXPR operators, syntax rules, and heuristic unsticking recipes.
+* [BRAIN Knowledge Graph](BRAIN_KNOWLEDGE_GRAPH.md) — Curated reference of core FASTEXPR operators, syntax rules, and heuristic unsticking recipes.

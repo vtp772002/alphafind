@@ -30,17 +30,39 @@ pub struct AlphaSettings {
     pub visualization: bool,
 }
 
-fn default_instrument_type() -> String { "EQUITY".to_string() }
-fn default_region() -> String { "USA".to_string() }
-fn default_universe() -> String { "TOP1000".to_string() }
-fn default_delay() -> i32 { 1 }
-fn default_decay() -> i32 { 5 }
-fn default_neutralization() -> String { "SUBINDUSTRY".to_string() }
-fn default_truncation() -> f64 { 0.05 }
-fn default_pasteurization() -> String { "ON".to_string() }
-fn default_unit_handling() -> String { "VERIFY".to_string() }
-fn default_nan_handling() -> String { "OFF".to_string() }
-fn default_language() -> String { "FASTEXPR".to_string() }
+fn default_instrument_type() -> String {
+    "EQUITY".to_string()
+}
+fn default_region() -> String {
+    "USA".to_string()
+}
+fn default_universe() -> String {
+    "TOP1000".to_string()
+}
+fn default_delay() -> i32 {
+    1
+}
+fn default_decay() -> i32 {
+    5
+}
+fn default_neutralization() -> String {
+    "SUBINDUSTRY".to_string()
+}
+fn default_truncation() -> f64 {
+    0.05
+}
+fn default_pasteurization() -> String {
+    "ON".to_string()
+}
+fn default_unit_handling() -> String {
+    "VERIFY".to_string()
+}
+fn default_nan_handling() -> String {
+    "OFF".to_string()
+}
+fn default_language() -> String {
+    "FASTEXPR".to_string()
+}
 
 impl Default for AlphaSettings {
     fn default() -> Self {

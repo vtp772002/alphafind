@@ -8,8 +8,8 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 use crate::models::{
-    AlphaDetails, AlphaSettings, DailyPnlResponse, InSampleStats, PortfolioAlpha, SimulationPayload,
-    SimulationResponse,
+    AlphaDetails, AlphaSettings, DailyPnlResponse, InSampleStats, PortfolioAlpha,
+    SimulationPayload, SimulationResponse,
 };
 
 pub const BASE_URL: &str = "https://api.worldquantbrain.com";
@@ -18,53 +18,68 @@ pub const BASE_URL: &str = "https://api.worldquantbrain.com";
 pub struct BrainClient {
     client: reqwest::Client,
     email: String,
-    password: String,
+    auth_value: String,
     authenticated: Arc<AtomicBool>,
 }
 
 impl BrainClient {
+    /// Creates a new BRAIN API client with the given credentials.
     pub fn new(email: impl Into<String>, password: impl Into<String>) -> Result<Self> {
         let email = email.into();
         let password = password.into();
+
+        let creds = format!("{}:{}", email, password);
+        let encoded = base64::engine::general_purpose::STANDARD.encode(creds.as_bytes());
+        let auth_value = format!("Basic {}", encoded);
+
+        let mut default_headers = HeaderMap::new();
+        default_headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
 
         let client = reqwest::Client::builder()
             .cookie_store(true)
             .gzip(true)
             .timeout(Duration::from_secs(60))
+            .default_headers(default_headers)
             .build()
             .context("Failed to build reqwest HTTP client")?;
 
         Ok(Self {
             client,
             email,
-            password,
+            auth_value,
             authenticated: Arc::new(AtomicBool::new(false)),
         })
     }
 
+    /// Returns the email address for this client session.
     pub fn email(&self) -> &str {
         &self.email
     }
 
-    fn auth_header(&self) -> String {
-        let creds = format!("{}:{}", self.email, self.password);
-        let encoded = base64::engine::general_purpose::STANDARD.encode(creds.as_bytes());
-        format!("Basic {}", encoded)
+    /// Returns headers with Authorization for GET requests (Accept is already default).
+    fn auth_headers(&self) -> Result<HeaderMap> {
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, HeaderValue::from_str(&self.auth_value)?);
+        Ok(headers)
     }
 
+    /// Returns headers with Authorization + Content-Type for POST/PATCH requests.
+    fn auth_headers_json(&self) -> Result<HeaderMap> {
+        let mut headers = self.auth_headers()?;
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        Ok(headers)
+    }
+
+    /// Authenticates with the BRAIN API using Basic auth and establishes a session cookie.
     pub async fn authenticate(&self) -> Result<()> {
         if self.authenticated.load(Ordering::SeqCst) {
             return Ok(());
         }
 
         let url = format!("{}/authentication", BASE_URL);
-        let auth = self.auth_header();
 
         for attempt in 0..4 {
-            let mut headers = HeaderMap::new();
-            headers.insert(AUTHORIZATION, HeaderValue::from_str(&auth)?);
-            headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-            headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+            let headers = self.auth_headers_json()?;
 
             let resp = self.client.post(&url).headers(headers).send().await;
 
@@ -82,11 +97,8 @@ impl BrainClient {
                             .get(RETRY_AFTER)
                             .and_then(|v| v.to_str().ok())
                             .and_then(|v| v.parse::<f64>().ok())
-                            .unwrap_or(2.0f64.powi(attempt as i32) + 1.5);
-                        println!(
-                            "[*] [Auth 429] {} Sleeping {:.1}s...",
-                            self.email, wait
-                        );
+                            .unwrap_or(2.0f64.powi(attempt) + 1.5);
+                        println!("[*] [Auth 429] {} Sleeping {:.1}s...", self.email, wait);
                         sleep(Duration::from_secs_f64(wait)).await;
                         continue;
                     }
@@ -104,7 +116,11 @@ impl BrainClient {
                         sleep(Duration::from_secs(2)).await;
                         continue;
                     }
-                    return Err(anyhow!("Connection error during auth for {}: {}", self.email, e));
+                    return Err(anyhow!(
+                        "Connection error during auth for {}: {}",
+                        self.email,
+                        e
+                    ));
                 }
             }
         }
@@ -112,6 +128,7 @@ impl BrainClient {
         Err(anyhow!("Exceeded max auth retries for {}", self.email))
     }
 
+    /// Submits a FastExpr alpha simulation and returns the simulation ID/URL.
     pub async fn submit_simulation(
         &self,
         expression: &str,
@@ -126,13 +143,8 @@ impl BrainClient {
             regular: expression,
         };
 
-        let auth = self.auth_header();
-
         for retry in 0..8 {
-            let mut headers = HeaderMap::new();
-            headers.insert(AUTHORIZATION, HeaderValue::from_str(&auth)?);
-            headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-            headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+            let headers = self.auth_headers_json()?;
 
             let res = self
                 .client
@@ -156,19 +168,26 @@ impl BrainClient {
                         if let Some(loc) = body.get("location").and_then(|v| v.as_str()) {
                             return Ok(loc.to_string());
                         }
-                        return Err(anyhow!("Simulation succeeded but no ID/Location returned: {:?}", body));
+                        return Err(anyhow!(
+                            "Simulation succeeded but no ID/Location returned: {:?}",
+                            body
+                        ));
                     } else if status.as_u16() == 429 {
                         let wait = resp
                             .headers()
                             .get(RETRY_AFTER)
                             .and_then(|v| v.to_str().ok())
                             .and_then(|v| v.parse::<f64>().ok())
-                            .unwrap_or(2.0f64.powi(retry.min(5) as i32) + 1.2);
+                            .unwrap_or(2.0f64.powi(retry.min(5)) + 1.2);
                         sleep(Duration::from_secs_f64(wait)).await;
                         continue;
                     } else {
                         let err_body = resp.text().await.unwrap_or_default();
-                        return Err(anyhow!("Simulation post failed (HTTP {}): {}", status, err_body));
+                        return Err(anyhow!(
+                            "Simulation post failed (HTTP {}): {}",
+                            status,
+                            err_body
+                        ));
                     }
                 }
                 Err(e) => {
@@ -184,6 +203,7 @@ impl BrainClient {
         Err(anyhow!("Exceeded max simulation post retries"))
     }
 
+    /// Polls a running simulation until completion, error, or timeout.
     pub async fn poll_simulation(
         &self,
         sim_url_or_id: &str,
@@ -196,14 +216,11 @@ impl BrainClient {
             format!("{}/simulations/{}", BASE_URL, sim_url_or_id)
         };
 
-        let auth = self.auth_header();
         let start = std::time::Instant::now();
         let timeout = Duration::from_secs(timeout_secs);
 
         while start.elapsed() < timeout {
-            let mut headers = HeaderMap::new();
-            headers.insert(AUTHORIZATION, HeaderValue::from_str(&auth)?);
-            headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+            let headers = self.auth_headers()?;
 
             let res = self.client.get(&url).headers(headers).send().await;
 
@@ -241,15 +258,12 @@ impl BrainClient {
         Err(anyhow!("Simulation timed out after {}s", timeout_secs))
     }
 
+    /// Fetches complete alpha details including In-Sample statistics.
     pub async fn get_alpha_details(&self, alpha_id: &str) -> Result<AlphaDetails> {
         self.authenticate().await?;
 
         let url = format!("{}/alphas/{}", BASE_URL, alpha_id);
-        let auth = self.auth_header();
-
-        let mut headers = HeaderMap::new();
-        headers.insert(AUTHORIZATION, HeaderValue::from_str(&auth)?);
-        headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+        let headers = self.auth_headers()?;
 
         let res = self
             .client
@@ -263,6 +277,7 @@ impl BrainClient {
         Ok(details)
     }
 
+    /// Verifies the 8 mandatory submission checks for an alpha.
     pub async fn check_submission(
         &self,
         alpha_id: &str,
@@ -271,12 +286,9 @@ impl BrainClient {
         self.authenticate().await?;
 
         let url = format!("{}/alphas/{}/check", BASE_URL, alpha_id);
-        let auth = self.auth_header();
 
         for _attempt in 0..max_attempts {
-            let mut headers = HeaderMap::new();
-            headers.insert(AUTHORIZATION, HeaderValue::from_str(&auth)?);
-            headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+            let headers = self.auth_headers()?;
 
             let resp = self.client.get(&url).headers(headers).send().await?;
 
@@ -345,19 +357,19 @@ impl BrainClient {
             }
         }
 
-        Err(anyhow!("Submission check timed out waiting for correlation calculation"))
+        Err(anyhow!(
+            "Submission check timed out waiting for correlation calculation"
+        ))
     }
 
+    /// Fetches the daily PnL time series for a given alpha.
     pub async fn fetch_daily_pnl(&self, alpha_id: &str) -> Result<HashMap<String, f64>> {
         self.authenticate().await?;
 
         let url = format!("{}/alphas/{}/recordsets/daily-pnl", BASE_URL, alpha_id);
-        let auth = self.auth_header();
 
         for attempt in 0..5 {
-            let mut headers = HeaderMap::new();
-            headers.insert(AUTHORIZATION, HeaderValue::from_str(&auth)?);
-            headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+            let headers = self.auth_headers()?;
 
             let resp = self.client.get(&url).headers(headers).send().await;
 
@@ -377,7 +389,8 @@ impl BrainClient {
                             let mut map = HashMap::new();
                             for row in data.records {
                                 if row.len() >= 2 {
-                                    if let (Some(d), Some(val)) = (row[0].as_str(), row[1].as_f64()) {
+                                    if let (Some(d), Some(val)) = (row[0].as_str(), row[1].as_f64())
+                                    {
                                         map.insert(d.to_string(), val);
                                     }
                                 }
@@ -399,16 +412,12 @@ impl BrainClient {
         Err(anyhow!("Could not fetch daily-pnl for {}", alpha_id))
     }
 
+    /// Submits an alpha to Out-of-Sample tracking.
     pub async fn submit_alpha(&self, alpha_id: &str) -> Result<(bool, String)> {
         self.authenticate().await?;
 
         let url = format!("{}/alphas/{}/submit", BASE_URL, alpha_id);
-        let auth = self.auth_header();
-
-        let mut headers = HeaderMap::new();
-        headers.insert(AUTHORIZATION, HeaderValue::from_str(&auth)?);
-        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-        headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+        let headers = self.auth_headers_json()?;
 
         let resp = self
             .client
@@ -428,6 +437,7 @@ impl BrainClient {
         }
     }
 
+    /// Updates alpha metadata (name, category, color, tags).
     pub async fn update_metadata(
         &self,
         alpha_id: &str,
@@ -439,7 +449,6 @@ impl BrainClient {
         self.authenticate().await?;
 
         let url = format!("{}/alphas/{}", BASE_URL, alpha_id);
-        let auth = self.auth_header();
 
         let mut payload = serde_json::Map::new();
         if let Some(n) = name {
@@ -455,10 +464,7 @@ impl BrainClient {
             payload.insert("tags".to_string(), serde_json::json!(t));
         }
 
-        let mut headers = HeaderMap::new();
-        headers.insert(AUTHORIZATION, HeaderValue::from_str(&auth)?);
-        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-        headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+        let headers = self.auth_headers_json()?;
 
         let resp = self
             .client
@@ -471,17 +477,20 @@ impl BrainClient {
         Ok(resp.status().is_success())
     }
 
+    /// Fetches user's alphas with the given query parameters.
     pub async fn fetch_user_alphas(&self, query: &str) -> Result<Vec<serde_json::Value>> {
         self.authenticate().await?;
 
         let url = format!("{}/users/self/alphas?{}", BASE_URL, query);
-        let auth = self.auth_header();
+        let headers = self.auth_headers()?;
 
-        let mut headers = HeaderMap::new();
-        headers.insert(AUTHORIZATION, HeaderValue::from_str(&auth)?);
-        headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
-
-        let resp = self.client.get(&url).headers(headers).send().await?.error_for_status()?;
+        let resp = self
+            .client
+            .get(&url)
+            .headers(headers)
+            .send()
+            .await?
+            .error_for_status()?;
         let data: serde_json::Value = resp.json().await?;
 
         if let Some(arr) = data.as_array() {
@@ -493,6 +502,7 @@ impl BrainClient {
         }
     }
 
+    /// Fetches all active Out-of-Sample alphas in the user's portfolio.
     pub async fn fetch_active_portfolio(&self) -> Result<Vec<PortfolioAlpha>> {
         let queries = [
             "stage=OS&limit=100",
@@ -509,36 +519,66 @@ impl BrainClient {
                 for item in alphas {
                     if let Some(aid) = item.get("id").and_then(|v| v.as_str()) {
                         let is_os = item.get("stage").and_then(|s| s.as_str()) == Some("OS")
-                            || matches!(item.get("status").and_then(|s| s.as_str()), Some("ACTIVE") | Some("SUBMITTED") | Some("UNPROCESSED"))
+                            || matches!(
+                                item.get("status").and_then(|s| s.as_str()),
+                                Some("ACTIVE") | Some("SUBMITTED") | Some("UNPROCESSED")
+                            )
                             || item.get("dateSubmitted").is_some();
 
                         if is_os && seen.insert(aid.to_string()) {
                             let st = item.get("is");
                             let sett = item.get("settings");
-                            let code = item.get("regular")
+                            let code = item
+                                .get("regular")
                                 .and_then(|r| r.get("code"))
                                 .and_then(|c| c.as_str())
                                 .map(|s| s.trim().to_string())
-                                .or_else(|| item.get("code").and_then(|c| c.as_str()).map(|s| s.to_string()));
+                                .or_else(|| {
+                                    item.get("code")
+                                        .and_then(|c| c.as_str())
+                                        .map(|s| s.to_string())
+                                });
 
                             portfolio.push(PortfolioAlpha {
                                 id: aid.to_string(),
                                 name: item.get("name").and_then(|v| v.as_str()).map(String::from),
-                                status: item.get("status").and_then(|v| v.as_str()).map(String::from),
+                                status: item
+                                    .get("status")
+                                    .and_then(|v| v.as_str())
+                                    .map(String::from),
                                 stage: item.get("stage").and_then(|v| v.as_str()).map(String::from),
-                                date_submitted: item.get("dateSubmitted").and_then(|v| v.as_str()).map(String::from),
-                                universe: sett.and_then(|s| s.get("universe")).and_then(|v| v.as_str()).map(String::from),
-                                decay: sett.and_then(|s| s.get("decay")).and_then(|v| v.as_i64()).map(|d| d as i32),
-                                category: item.get("category").and_then(|v| v.as_str()).map(String::from),
+                                date_submitted: item
+                                    .get("dateSubmitted")
+                                    .and_then(|v| v.as_str())
+                                    .map(String::from),
+                                universe: sett
+                                    .and_then(|s| s.get("universe"))
+                                    .and_then(|v| v.as_str())
+                                    .map(String::from),
+                                decay: sett
+                                    .and_then(|s| s.get("decay"))
+                                    .and_then(|v| v.as_i64())
+                                    .map(|d| d as i32),
+                                category: item
+                                    .get("category")
+                                    .and_then(|v| v.as_str())
+                                    .map(String::from),
                                 color: item.get("color").and_then(|v| v.as_str()).map(String::from),
                                 sharpe: st.and_then(|s| s.get("sharpe")).and_then(|v| v.as_f64()),
                                 fitness: st.and_then(|s| s.get("fitness")).and_then(|v| v.as_f64()),
                                 returns: st.and_then(|s| s.get("returns")).and_then(|v| v.as_f64()),
-                                turnover: st.and_then(|s| s.get("turnover")).and_then(|v| v.as_f64()),
-                                direct_url: Some(format!("https://platform.worldquantbrain.com/alpha/{}", aid)),
+                                turnover: st
+                                    .and_then(|s| s.get("turnover"))
+                                    .and_then(|v| v.as_f64()),
+                                direct_url: Some(format!(
+                                    "https://platform.worldquantbrain.com/alpha/{}",
+                                    aid
+                                )),
                                 code,
                                 tags: item.get("tags").and_then(|t| t.as_array()).map(|arr| {
-                                    arr.iter().filter_map(|x| x.as_str().map(String::from)).collect()
+                                    arr.iter()
+                                        .filter_map(|x| x.as_str().map(String::from))
+                                        .collect()
                                 }),
                                 settings: sett.cloned(),
                             });
