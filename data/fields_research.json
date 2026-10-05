@@ -1,0 +1,210 @@
+[
+  {
+    "id": "research_development_expense",
+    "description": "Research & Development Expense - Actual Value (Annual)",
+    "dataset": {
+      "id": "analyst4",
+      "name": "Analyst Estimate Data for Equity"
+    },
+    "category": {
+      "id": "analyst",
+      "name": "Analyst"
+    },
+    "subcategory": {
+      "id": "analyst-analyst-estimates",
+      "name": "Analyst Estimates"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.3766,
+    "userCount": 6,
+    "alphaCount": 6,
+    "themes": [],
+    "dateCreated": "2025-11-01"
+  },
+  {
+    "id": "research_development_expense_actual_value",
+    "description": "Research and Development Expense- announced financial value",
+    "dataset": {
+      "id": "analyst4",
+      "name": "Analyst Estimate Data for Equity"
+    },
+    "category": {
+      "id": "analyst",
+      "name": "Analyst"
+    },
+    "subcategory": {
+      "id": "analyst-analyst-estimates",
+      "name": "Analyst Estimates"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.3797,
+    "userCount": 5,
+    "alphaCount": 5,
+    "themes": [],
+    "dateCreated": "2025-11-01"
+  },
+  {
+    "id": "research_development_expense_reported_value",
+    "description": "Research & Development (Income Statement) Value in Millions",
+    "dataset": {
+      "id": "analyst4",
+      "name": "Analyst Estimate Data for Equity"
+    },
+    "category": {
+      "id": "analyst",
+      "name": "Analyst"
+    },
+    "subcategory": {
+      "id": "analyst-analyst-estimates",
+      "name": "Analyst Estimates"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.3797,
+    "userCount": 1,
+    "alphaCount": 1,
+    "themes": [],
+    "dateCreated": "2025-11-01"
+  },
+  {
+    "id": "research_development_max_guidance",
+    "description": "The maximum guidance value for Research and Development Expense on an annual basis.",
+    "dataset": {
+      "id": "analyst4",
+      "name": "Analyst Estimate Data for Equity"
+    },
+    "category": {
+      "id": "analyst",
+      "name": "Analyst"
+    },
+    "subcategory": {
+      "id": "analyst-analyst-estimates",
+      "name": "Analyst Estimates"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 1.0,
+    "userCount": 5,
+    "alphaCount": 5,
+    "themes": [],
+    "dateCreated": "2025-11-01"
+  },
+  {
+    "id": "fnd6_rds",
+    "description": "Research and Development",
+    "dataset": {
+      "id": "fundamental6",
+      "name": "Company Fundamental Data for Equity"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-fundamental-data",
+      "name": "Fundamental Data"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 0.5,
+    "userCount": 2,
+    "alphaCount": 2,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "rd_expense",
+    "description": "Research And Development (Quarterly)",
+    "dataset": {
+      "id": "fundamental6",
+      "name": "Company Fundamental Data for Equity"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-fundamental-data",
+      "name": "Fundamental Data"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.5,
+    "userCount": 84,
+    "alphaCount": 162,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "fnd6_newqeventv110_xrdq",
+    "description": "Research and Development Expense",
+    "dataset": {
+      "id": "fundamental6",
+      "name": "Company Fundamental Data for Equity"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-fundamental-data",
+      "name": "Fundamental Data"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 0.5,
+    "userCount": 4,
+    "alphaCount": 4,
+    "themes": [],
+    "dateCreated": "2022-07-01"
+  },
+  {
+    "id": "fnd6_newqv1300_xrdq",
+    "description": "Research and Development Expense",
+    "dataset": {
+      "id": "fundamental6",
+      "name": "Company Fundamental Data for Equity"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-fundamental-data",
+      "name": "Fundamental Data"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.5,
+    "userCount": 95,
+    "alphaCount": 156,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  }
+]

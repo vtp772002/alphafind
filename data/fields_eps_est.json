@@ -1,0 +1,260 @@
+[
+  {
+    "id": "eps_estimate_value",
+    "description": "Earnings per share - estimation value",
+    "dataset": {
+      "id": "analyst4",
+      "name": "Analyst Estimate Data for Equity"
+    },
+    "category": {
+      "id": "analyst",
+      "name": "Analyst"
+    },
+    "subcategory": {
+      "id": "analyst-analyst-estimates",
+      "name": "Analyst Estimates"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "VECTOR",
+    "dateCoverage": 1.0,
+    "coverage": 0.9942,
+    "userCount": 3,
+    "alphaCount": 11,
+    "themes": [],
+    "dateCreated": "2025-11-01"
+  },
+  {
+    "id": "anl4_fs_guidances_basic_qf_nd_eps_value",
+    "description": "Current EPS guidance value",
+    "dataset": {
+      "id": "analyst4",
+      "name": "Analyst Estimate Data for Equity"
+    },
+    "category": {
+      "id": "analyst",
+      "name": "Analyst"
+    },
+    "subcategory": {
+      "id": "analyst-analyst-estimates",
+      "name": "Analyst Estimates"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.2928,
+    "userCount": 2,
+    "alphaCount": 3,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "anl4_fs_guidances_basic_qf_nd_eps_maxguidance",
+    "description": "Upper bound of the company\u2019s EPS guidance range",
+    "dataset": {
+      "id": "analyst4",
+      "name": "Analyst Estimate Data for Equity"
+    },
+    "category": {
+      "id": "analyst",
+      "name": "Analyst"
+    },
+    "subcategory": {
+      "id": "analyst-analyst-estimates",
+      "name": "Analyst Estimates"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 1.0,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "anl4_fs_detail_estimate_1qf_v4_nd_epsr_mean",
+    "description": "Mean estimated EPS growth rate",
+    "dataset": {
+      "id": "analyst4",
+      "name": "Analyst Estimate Data for Equity"
+    },
+    "category": {
+      "id": "analyst",
+      "name": "Analyst"
+    },
+    "subcategory": {
+      "id": "analyst-analyst-estimates",
+      "name": "Analyst Estimates"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.8623,
+    "userCount": 6,
+    "alphaCount": 37,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "anl4_fs_detail_estimates_basic_af_v4_nd_eps_mean",
+    "description": "Earnings per share (EPS) consensus mean of analyst estimates for the annual period",
+    "dataset": {
+      "id": "analyst4",
+      "name": "Analyst Estimate Data for Equity"
+    },
+    "category": {
+      "id": "analyst",
+      "name": "Analyst"
+    },
+    "subcategory": {
+      "id": "analyst-analyst-estimates",
+      "name": "Analyst Estimates"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.9918,
+    "userCount": 12,
+    "alphaCount": 21,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "anl4_qf_az_eps",
+    "description": "EPS - aggregation on estimations, 50th percentile",
+    "dataset": {
+      "id": "analyst4",
+      "name": "Analyst Estimate Data for Equity"
+    },
+    "category": {
+      "id": "analyst",
+      "name": "Analyst"
+    },
+    "subcategory": {
+      "id": "analyst-analyst-estimates",
+      "name": "Analyst Estimates"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.7848,
+    "userCount": 13,
+    "alphaCount": 13,
+    "themes": [],
+    "dateCreated": "2022-08-01"
+  },
+  {
+    "id": "anl4_qfd1_azeps",
+    "description": "EPS - aggregation on estimations, 50th percentile",
+    "dataset": {
+      "id": "analyst4",
+      "name": "Analyst Estimate Data for Equity"
+    },
+    "category": {
+      "id": "analyst",
+      "name": "Analyst"
+    },
+    "subcategory": {
+      "id": "analyst-analyst-estimates",
+      "name": "Analyst Estimates"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "coverage": 0.7848,
+    "userCount": 7,
+    "alphaCount": 7,
+    "themes": [],
+    "dateCreated": "2022-08-01"
+  },
+  {
+    "id": "anl4_fs_guidances_basic_qf_nd_eps_minguidance",
+    "description": "Lower bound of the company\u2019s EPS guidance range",
+    "dataset": {
+      "id": "analyst4",
+      "name": "Analyst Estimate Data for Equity"
+    },
+    "category": {
+      "id": "analyst",
+      "name": "Analyst"
+    },
+    "subcategory": {
+      "id": "analyst-analyst-estimates",
+      "name": "Analyst Estimates"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 1.0,
+    "userCount": 1,
+    "alphaCount": 1,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "anl4_fs_detail_estimate_1qf_v4_nd_epsr_number",
+    "description": "Number of EPS growth rate estimates",
+    "dataset": {
+      "id": "analyst4",
+      "name": "Analyst Estimate Data for Equity"
+    },
+    "category": {
+      "id": "analyst",
+      "name": "Analyst"
+    },
+    "subcategory": {
+      "id": "analyst-analyst-estimates",
+      "name": "Analyst Estimates"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.8623,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "anl4_fs_detail_estimates_basic_af_v4_nd_eps_median",
+    "description": "Earnings per share (EPS) median of analyst estimates for the annual period",
+    "dataset": {
+      "id": "analyst4",
+      "name": "Analyst Estimate Data for Equity"
+    },
+    "category": {
+      "id": "analyst",
+      "name": "Analyst"
+    },
+    "subcategory": {
+      "id": "analyst-analyst-estimates",
+      "name": "Analyst Estimates"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.9918,
+    "userCount": 3,
+    "alphaCount": 4,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  }
+]

@@ -1,0 +1,262 @@
+[
+  {
+    "id": "interest_due_liabilities",
+    "description": "Amount of interest payable as a liability.",
+    "dataset": {
+      "id": "fundamental2",
+      "name": "Report Footnotes"
+    },
+    "category": {
+      "id": "fundamental",
+      "name": "Fundamental"
+    },
+    "subcategory": {
+      "id": "fundamental-footnotes",
+      "name": "Footnotes"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.2603,
+    "userCount": 0,
+    "alphaCount": 0,
+    "themes": [],
+    "dateCreated": "2026-03-01"
+  },
+  {
+    "id": "pcr_oi_360",
+    "description": "Ratio of total put option open interest to call option open interest for options expiring in 360 days",
+    "dataset": {
+      "id": "option9",
+      "name": "Options Analytics"
+    },
+    "category": {
+      "id": "option",
+      "name": "Option"
+    },
+    "subcategory": {
+      "id": "option-option-analytics",
+      "name": "Option Analytics"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.9838,
+    "userCount": 52,
+    "alphaCount": 77,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "pcr_oi_10",
+    "description": "Ratio of put open interest to call open interest for options expiring in 10 days, indicating short-term positioning",
+    "dataset": {
+      "id": "option9",
+      "name": "Options Analytics"
+    },
+    "category": {
+      "id": "option",
+      "name": "Option"
+    },
+    "subcategory": {
+      "id": "option-option-analytics",
+      "name": "Option Analytics"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.9838,
+    "userCount": 82,
+    "alphaCount": 157,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "pcr_oi_90",
+    "description": "Ratio of put open interest to call open interest for options expiring in 90 days, reflecting longer-term positioning",
+    "dataset": {
+      "id": "option9",
+      "name": "Options Analytics"
+    },
+    "category": {
+      "id": "option",
+      "name": "Option"
+    },
+    "subcategory": {
+      "id": "option-option-analytics",
+      "name": "Option Analytics"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.9838,
+    "userCount": 103,
+    "alphaCount": 116,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "pcr_oi_all",
+    "description": "Ratio of total put option open interest to call option open interest aggregated across all option maturities for the stock",
+    "dataset": {
+      "id": "option9",
+      "name": "Options Analytics"
+    },
+    "category": {
+      "id": "option",
+      "name": "Option"
+    },
+    "subcategory": {
+      "id": "option-option-analytics",
+      "name": "Option Analytics"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.9838,
+    "userCount": 39,
+    "alphaCount": 53,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "pcr_oi_270",
+    "description": "Ratio of put open interest to call open interest for options expiring in 270 days, indicating longer-term position skew",
+    "dataset": {
+      "id": "option9",
+      "name": "Options Analytics"
+    },
+    "category": {
+      "id": "option",
+      "name": "Option"
+    },
+    "subcategory": {
+      "id": "option-option-analytics",
+      "name": "Option Analytics"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.9838,
+    "userCount": 709,
+    "alphaCount": 841,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "pcr_oi_30",
+    "description": "Ratio of put open interest to call open interest for options expiring in 30 days, reflecting medium-term option positioning",
+    "dataset": {
+      "id": "option9",
+      "name": "Options Analytics"
+    },
+    "category": {
+      "id": "option",
+      "name": "Option"
+    },
+    "subcategory": {
+      "id": "option-option-analytics",
+      "name": "Option Analytics"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.9838,
+    "userCount": 61,
+    "alphaCount": 113,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "pcr_oi_720",
+    "description": "Ratio of put open interest to call open interest for options expiring in 720 days, indicating very long-term option sentiment",
+    "dataset": {
+      "id": "option9",
+      "name": "Options Analytics"
+    },
+    "category": {
+      "id": "option",
+      "name": "Option"
+    },
+    "subcategory": {
+      "id": "option-option-analytics",
+      "name": "Option Analytics"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.9838,
+    "userCount": 32,
+    "alphaCount": 40,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "pcr_oi_180",
+    "description": "Ratio of total put option open interest to call option open interest for options expiring in 180 days, representing longer-term positioning",
+    "dataset": {
+      "id": "option9",
+      "name": "Options Analytics"
+    },
+    "category": {
+      "id": "option",
+      "name": "Option"
+    },
+    "subcategory": {
+      "id": "option-option-analytics",
+      "name": "Option Analytics"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.9838,
+    "userCount": 216,
+    "alphaCount": 262,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  },
+  {
+    "id": "pcr_oi_1080",
+    "description": "Ratio of put option open interest to call option open interest for stock options expiring in 1080 days, representing longer-term positioning",
+    "dataset": {
+      "id": "option9",
+      "name": "Options Analytics"
+    },
+    "category": {
+      "id": "option",
+      "name": "Option"
+    },
+    "subcategory": {
+      "id": "option-option-analytics",
+      "name": "Option Analytics"
+    },
+    "region": "USA",
+    "delay": 1,
+    "universe": "TOP1000",
+    "type": "MATRIX",
+    "dateCoverage": 1.0,
+    "coverage": 0.9838,
+    "userCount": 51,
+    "alphaCount": 88,
+    "themes": [],
+    "dateCreated": "2022-05-01"
+  }
+]

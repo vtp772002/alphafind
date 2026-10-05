@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 260" width="100%" height="100%">
+  <defs>
+    <!-- Background & Gradients -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#070b14"/>
+      <stop offset="50%" stop-color="#0b1324"/>
+      <stop offset="100%" stop-color="#060911"/>
+    </linearGradient>
+
+    <radialGradient id="glowPulse" cx="50%" cy="40%" r="50%">
+      <stop offset="0%" stop-color="#0284c7" stop-opacity="0.25"/>
+      <stop offset="60%" stop-color="#38bdf8" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#0b1324" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="40%" stop-color="#60a5fa"/>
+      <stop offset="70%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#c084fc"/>
+    </linearGradient>
+
+    <linearGradient id="iconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f2fe"/>
+      <stop offset="100%" stop-color="#4facfe"/>
+    </linearGradient>
+
+    <linearGradient id="pillGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1e293b" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#0f172a" stop-opacity="0.8"/>
+    </linearGradient>
+
+    <!-- Glow Filter -->
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+
+    <filter id="badgeShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+
+  <!-- Container Box with Rounded Borders -->
+  <rect x="2" y="2" width="896" height="256" rx="18" fill="url(#bgGrad)" stroke="#1e293b" stroke-width="1.5"/>
+  <rect x="2" y="2" width="896" height="256" rx="18" fill="url(#glowPulse)"/>
+
+  <!-- Subtle Quant Background Grid / Market Wave -->
+  <g opacity="0.12" stroke="#38bdf8" stroke-width="1">
+    <line x1="40" y1="50" x2="860" y2="50" stroke-dasharray="4,6"/>
+    <line x1="40" y1="100" x2="860" y2="100" stroke-dasharray="4,6"/>
+    <line x1="40" y1="150" x2="860" y2="150" stroke-dasharray="4,6"/>
+    <line x1="40" y1="200" x2="860" y2="200" stroke-dasharray="4,6"/>
+    <!-- Vertical Grid -->
+    <line x1="180" y1="30" x2="180" y2="230" stroke-dasharray="4,6"/>
+    <line x1="360" y1="30" x2="360" y2="230" stroke-dasharray="4,6"/>
+    <line x1="540" y1="30" x2="540" y2="230" stroke-dasharray="4,6"/>
+    <line x1="720" y1="30" x2="720" y2="230" stroke-dasharray="4,6"/>
+  </g>
+
+  <!-- Quant Wave Curve Motif -->
+  <path d="M 40 180 Q 200 130 350 160 T 600 110 T 860 135" fill="none" stroke="#38bdf8" stroke-width="1.8" opacity="0.22"/>
+  <path d="M 40 195 Q 220 150 400 175 T 700 120 T 860 145" fill="none" stroke="#818cf8" stroke-width="1.2" opacity="0.18"/>
+
+  <!-- Header Icon: Glowing Stylized Greek Alpha + Target Scope -->
+  <g transform="translate(140, 92)" filter="url(#softGlow)">
+    <!-- Outer Scope Ring -->
+    <circle cx="0" cy="0" r="38" fill="#0f172a" stroke="url(#iconGrad)" stroke-width="2.5" opacity="0.9"/>
+    <circle cx="0" cy="0" r="44" fill="none" stroke="#38bdf8" stroke-width="1" stroke-dasharray="6,8" opacity="0.5"/>
+    
+    <!-- Radar Ticks -->
+    <line x1="0" y1="-48" x2="0" y2="-40" stroke="#38bdf8" stroke-width="2"/>
+    <line x1="0" y1="40" x2="0" y2="48" stroke="#38bdf8" stroke-width="2"/>
+    <line x1="-48" y1="0" x2="-40" y2="0" stroke="#38bdf8" stroke-width="2"/>
+    <line x1="40" y1="0" x2="48" y2="0" stroke="#38bdf8" stroke-width="2"/>
+
+    <!-- Stylized Greek Alpha (α) -->
+    <path d="M 16 -12 C 12 -20, 2 -24, -10 -20 C -22 -14, -26 0, -22 12 C -18 22, -4 24, 8 16 C 14 12, 18 4, 20 0 L -12 -12 M 8 16 L 22 24" 
+          fill="none" stroke="url(#textGrad)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Brand Typography: ALPHAFIND -->
+  <g transform="translate(215, 0)">
+    <!-- Main Title -->
+    <text x="0" y="108" 
+          font-family="system-ui, -apple-system, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif" 
+          font-size="52" 
+          font-weight="850" 
+          letter-spacing="5.5" 
+          fill="url(#textGrad)" 
+          filter="url(#softGlow)">
+      ALPHAFIND
+    </text>
+
+    <!-- Subtitle / Mission Tagline -->
+    <text x="2" y="142" 
+          font-family="system-ui, -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif" 
+          font-size="13" 
+          font-weight="600" 
+          letter-spacing="2.2" 
+          fill="#94a3b8">
+      DISTRIBUTED QUANTITATIVE ALPHA MINING ENGINE · WORLDQUANT BRAIN
+    </text>
+  </g>
+
+  <!-- Feature Pills / Badges in Footer -->
+  <g transform="translate(75, 188)">
+    <!-- Pill 1: Rust Native -->
+    <g transform="translate(0, 0)" filter="url(#badgeShadow)">
+      <rect x="0" y="0" width="168" height="34" rx="8" fill="url(#pillGrad)" stroke="#334155" stroke-width="1.2"/>
+      <text x="14" y="21" font-family="system-ui, sans-serif" font-size="12" font-weight="650" fill="#f8fafc">🦀 Native Rust 2021</text>
+    </g>
+
+    <!-- Pill 2: 9-Worker Async -->
+    <g transform="translate(182, 0)" filter="url(#badgeShadow)">
+      <rect x="0" y="0" width="186" height="34" rx="8" fill="url(#pillGrad)" stroke="#334155" stroke-width="1.2"/>
+      <text x="14" y="21" font-family="system-ui, sans-serif" font-size="12" font-weight="650" fill="#38bdf8">⚡ 9-Worker Tokio Async</text>
+    </g>
+
+    <!-- Pill 3: SIMD Pearson Matrix -->
+    <g transform="translate(382, 0)" filter="url(#badgeShadow)">
+      <rect x="0" y="0" width="186" height="34" rx="8" fill="url(#pillGrad)" stroke="#334155" stroke-width="1.2"/>
+      <text x="14" y="21" font-family="system-ui, sans-serif" font-size="12" font-weight="650" fill="#a78bfa">📊 SIMD Pearson Matrix</text>
+    </g>
+
+    <!-- Pill 4: 8/8 Platform PASS -->
+    <g transform="translate(582, 0)" filter="url(#badgeShadow)">
+      <rect x="0" y="0" width="168" height="34" rx="8" fill="url(#pillGrad)" stroke="#334155" stroke-width="1.2"/>
+      <text x="14" y="21" font-family="system-ui, sans-serif" font-size="12" font-weight="650" fill="#4ade80">🛡️ 8/8 PASS Engine</text>
+    </g>
+  </g>
+</svg>
