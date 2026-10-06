@@ -1,4 +1,6 @@
-use alphafind::correlation::{audit_candidate, pearson_correlation, simulate_portfolio};
+use alphafind::correlation::{
+    audit_candidate, calculate_portfolio_impact, pearson_correlation, simulate_portfolio,
+};
 use std::collections::HashMap;
 
 /// Helper to create a PnL map from a slice of (date, value) pairs
@@ -154,4 +156,24 @@ fn test_simulate_portfolio_identical_alphas() {
         (metrics.avg_pairwise_corr - 1.0).abs() < 1e-10,
         "Identical alphas should have corr=1.0"
     );
+}
+
+#[test]
+fn test_calculate_portfolio_impact_basic() {
+    let pnl1 = generate_pnl(200, 1.0);
+    let pnl2 = generate_pnl(200, 2.0);
+    let candidate_pnl = generate_pnl(200, 3.0);
+
+    let mut os_pnls = HashMap::new();
+    os_pnls.insert("alpha_1".to_string(), pnl1);
+    os_pnls.insert("alpha_2".to_string(), pnl2);
+
+    let impact = calculate_portfolio_impact("cand_1", &candidate_pnl, &os_pnls);
+    assert!(impact.is_some());
+    let imp = impact.unwrap();
+
+    assert_eq!(imp.candidate_id, "cand_1");
+    assert_eq!(imp.baseline_alphas, 2);
+    assert_eq!(imp.new_alphas, 3);
+    assert!(imp.safety_buffer_pct >= 0.0);
 }

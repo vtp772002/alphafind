@@ -48,6 +48,7 @@ portfolio_os.json
 STRATEGIC_ROADMAP.md
 data/results.json
 data/candidates_orthogonality_ranked.json
+data/census_snapshots.json
 archive/
 brain_knowledge_graph.json
 brain_operators.json

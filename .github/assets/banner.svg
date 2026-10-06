@@ -1,132 +1,146 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 260" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 240" width="100%" height="100%">
   <defs>
-    <!-- Background & Gradients -->
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#070b14"/>
-      <stop offset="50%" stop-color="#0b1324"/>
-      <stop offset="100%" stop-color="#060911"/>
+    <!-- Background Gradient: Deep Obsidian Matte -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#080a0f"/>
+      <stop offset="50%" stop-color="#0c1017"/>
+      <stop offset="100%" stop-color="#080a0f"/>
     </linearGradient>
 
-    <radialGradient id="glowPulse" cx="50%" cy="40%" r="50%">
-      <stop offset="0%" stop-color="#0284c7" stop-opacity="0.25"/>
-      <stop offset="60%" stop-color="#38bdf8" stop-opacity="0.06"/>
-      <stop offset="100%" stop-color="#0b1324" stop-opacity="0"/>
+    <!-- Subtle Radial Top Highlight -->
+    <radialGradient id="topHighlight" cx="50%" cy="0%" r="60%">
+      <stop offset="0%" stop-color="#1e293b" stop-opacity="0.38"/>
+      <stop offset="100%" stop-color="#0c1017" stop-opacity="0"/>
     </radialGradient>
 
-    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+    <!-- Title Gradient: Pure Crisp White to Slate -->
+    <linearGradient id="titleGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#e2e8f0"/>
+    </linearGradient>
+
+    <!-- Accent Gradient: Institutional Cyan -->
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%" stop-color="#38bdf8"/>
-      <stop offset="40%" stop-color="#60a5fa"/>
-      <stop offset="70%" stop-color="#818cf8"/>
-      <stop offset="100%" stop-color="#c084fc"/>
+      <stop offset="100%" stop-color="#0284c7"/>
     </linearGradient>
 
-    <linearGradient id="iconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#00f2fe"/>
-      <stop offset="100%" stop-color="#4facfe"/>
+    <!-- Card Background -->
+    <linearGradient id="cardBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#121826"/>
+      <stop offset="100%" stop-color="#0a0e17"/>
     </linearGradient>
 
-    <linearGradient id="pillGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#1e293b" stop-opacity="0.8"/>
-      <stop offset="100%" stop-color="#0f172a" stop-opacity="0.8"/>
+    <!-- Chip Background -->
+    <linearGradient id="chipBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#111624"/>
+      <stop offset="100%" stop-color="#0b0e18"/>
     </linearGradient>
-
-    <!-- Glow Filter -->
-    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="6" result="blur"/>
-      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-    </filter>
-
-    <filter id="badgeShadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.5"/>
-    </filter>
   </defs>
 
-  <!-- Container Box with Rounded Borders -->
-  <rect x="2" y="2" width="896" height="256" rx="18" fill="url(#bgGrad)" stroke="#1e293b" stroke-width="1.5"/>
-  <rect x="2" y="2" width="896" height="256" rx="18" fill="url(#glowPulse)"/>
+  <!-- Canvas Container with Rounded Border -->
+  <rect x="1" y="1" width="898" height="238" rx="16" fill="url(#bg)" stroke="#1a2333" stroke-width="1.2"/>
+  <rect x="1" y="1" width="898" height="238" rx="16" fill="url(#topHighlight)"/>
 
-  <!-- Subtle Quant Background Grid / Market Wave -->
-  <g opacity="0.12" stroke="#38bdf8" stroke-width="1">
-    <line x1="40" y1="50" x2="860" y2="50" stroke-dasharray="4,6"/>
-    <line x1="40" y1="100" x2="860" y2="100" stroke-dasharray="4,6"/>
-    <line x1="40" y1="150" x2="860" y2="150" stroke-dasharray="4,6"/>
-    <line x1="40" y1="200" x2="860" y2="200" stroke-dasharray="4,6"/>
-    <!-- Vertical Grid -->
-    <line x1="180" y1="30" x2="180" y2="230" stroke-dasharray="4,6"/>
-    <line x1="360" y1="30" x2="360" y2="230" stroke-dasharray="4,6"/>
-    <line x1="540" y1="30" x2="540" y2="230" stroke-dasharray="4,6"/>
-    <line x1="720" y1="30" x2="720" y2="230" stroke-dasharray="4,6"/>
+  <!-- Minimal Institutional Top Highlight Rule -->
+  <line x1="160" y1="1" x2="740" y2="1" stroke="url(#accentGrad)" stroke-width="1.5" stroke-opacity="0.75"/>
+
+  <!-- Subtle Precision Grid (3.5% Opacity) -->
+  <g opacity="0.035" stroke="#ffffff" stroke-width="1">
+    <line x1="40" y1="60" x2="860" y2="60"/>
+    <line x1="40" y1="120" x2="860" y2="120"/>
+    <line x1="40" y1="180" x2="860" y2="180"/>
+    <line x1="225" y1="20" x2="225" y2="220"/>
+    <line x1="450" y1="20" x2="450" y2="220"/>
+    <line x1="675" y1="20" x2="675" y2="220"/>
   </g>
 
-  <!-- Quant Wave Curve Motif -->
-  <path d="M 40 180 Q 200 130 350 160 T 600 110 T 860 135" fill="none" stroke="#38bdf8" stroke-width="1.8" opacity="0.22"/>
-  <path d="M 40 195 Q 220 150 400 175 T 700 120 T 860 145" fill="none" stroke="#818cf8" stroke-width="1.2" opacity="0.18"/>
-
-  <!-- Header Icon: Glowing Stylized Greek Alpha + Target Scope -->
-  <g transform="translate(140, 92)" filter="url(#softGlow)">
-    <!-- Outer Scope Ring -->
-    <circle cx="0" cy="0" r="38" fill="#0f172a" stroke="url(#iconGrad)" stroke-width="2.5" opacity="0.9"/>
-    <circle cx="0" cy="0" r="44" fill="none" stroke="#38bdf8" stroke-width="1" stroke-dasharray="6,8" opacity="0.5"/>
-    
-    <!-- Radar Ticks -->
-    <line x1="0" y1="-48" x2="0" y2="-40" stroke="#38bdf8" stroke-width="2"/>
-    <line x1="0" y1="40" x2="0" y2="48" stroke="#38bdf8" stroke-width="2"/>
-    <line x1="-48" y1="0" x2="-40" y2="0" stroke="#38bdf8" stroke-width="2"/>
-    <line x1="40" y1="0" x2="48" y2="0" stroke="#38bdf8" stroke-width="2"/>
-
-    <!-- Stylized Greek Alpha (α) -->
-    <path d="M 16 -12 C 12 -20, 2 -24, -10 -20 C -22 -14, -26 0, -22 12 C -18 22, -4 24, 8 16 C 14 12, 18 4, 20 0 L -12 -12 M 8 16 L 22 24" 
-          fill="none" stroke="url(#textGrad)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Left Icon Mark: Geometric Card with Vector Mathematical Greek Alpha -->
+  <g transform="translate(68, 56)">
+    <!-- Squircle Card -->
+    <rect x="0" y="0" width="80" height="80" rx="18" fill="url(#cardBg)" stroke="#222e42" stroke-width="1.2"/>
+    <rect x="4" y="4" width="72" height="72" rx="14" fill="none" stroke="#38bdf8" stroke-width="1" stroke-opacity="0.12"/>
+    <!-- Precision Vector Alpha (α) -->
+    <g transform="translate(18, 62) scale(0.0108 -0.0108)" fill="#38bdf8">
+      <path d="M 3281 3163 L 3459 3500 L 4428 3500 L 3475 1697 L 3466 1219 Q 3456 703 3669 703 L 3925 703 L 3788 0 L 3469 0 Q 2972 0 2769 263 Q 2725 322 2716 353 Q 2528 163 2359 41 Q 2191 -78 1488 -78 Q 638 -78 388 400 Q 244 675 244 1040 Q 244 1406 319 1794 Q 497 2713 922 3088 Q 1475 3578 2350 3578 Q 3050 3578 3281 3163 z M 2594 1841 L 2597 2350 Q 2603 2825 2191 2828 Q 1981 2828 1756 2559 Q 1531 2291 1422 1734 Q 1313 1178 1313 875 Q 1313 656 1488 656 Q 1869 656 2184 1034 Q 2500 1413 2594 1841 z"/>
+    </g>
   </g>
 
-  <!-- Brand Typography: ALPHAFIND -->
-  <g transform="translate(215, 0)">
-    <!-- Main Title -->
-    <text x="0" y="108" 
-          font-family="system-ui, -apple-system, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif" 
-          font-size="52" 
-          font-weight="850" 
-          letter-spacing="5.5" 
-          fill="url(#textGrad)" 
-          filter="url(#softGlow)">
+  <!-- Main Branding Typography -->
+  <g transform="translate(172, 54)">
+    <!-- Top Pill: Category -->
+    <g transform="translate(0, 0)">
+      <rect x="0" y="0" width="224" height="22" rx="5" fill="#0c1220" stroke="#1d293d" stroke-width="1"/>
+      <circle cx="10" cy="11" r="3" fill="#38bdf8"/>
+      <text x="20" y="15" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif" font-size="10.5" font-weight="650" letter-spacing="1.2" fill="#94a3b8">WORLDQUANT BRAIN ENGINE</text>
+    </g>
+
+    <!-- Title: ALPHAFIND -->
+    <text x="0" y="58" 
+          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif" 
+          font-size="42" 
+          font-weight="800" 
+          letter-spacing="5" 
+          fill="url(#titleGrad)">
       ALPHAFIND
     </text>
 
-    <!-- Subtitle / Mission Tagline -->
-    <text x="2" y="142" 
-          font-family="system-ui, -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif" 
-          font-size="13" 
-          font-weight="600" 
-          letter-spacing="2.2" 
+    <!-- Subtitle -->
+    <text x="0" y="80" 
+          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif" 
+          font-size="13.5" 
+          font-weight="450" 
+          letter-spacing="0.3" 
           fill="#94a3b8">
-      DISTRIBUTED QUANTITATIVE ALPHA MINING ENGINE · WORLDQUANT BRAIN
+      Institutional Distributed Quantitative Alpha Mining &amp; Portfolio Orchestration
     </text>
   </g>
 
-  <!-- Feature Pills / Badges in Footer -->
-  <g transform="translate(75, 188)">
-    <!-- Pill 1: Rust Native -->
-    <g transform="translate(0, 0)" filter="url(#badgeShadow)">
-      <rect x="0" y="0" width="168" height="34" rx="8" fill="url(#pillGrad)" stroke="#334155" stroke-width="1.2"/>
-      <text x="14" y="21" font-family="system-ui, sans-serif" font-size="12" font-weight="650" fill="#f8fafc">🦀 Native Rust 2021</text>
+  <!-- Right Decorative Micro-Chart: Cumulative PnL Curve -->
+  <g transform="translate(685, 52)" opacity="0.45">
+    <!-- Grid frame -->
+    <rect x="0" y="0" width="150" height="84" rx="8" fill="#0b0f1a" stroke="#1d263b" stroke-width="1"/>
+    <!-- Subtle axes lines -->
+    <line x1="12" y1="24" x2="138" y2="24" stroke="#1e293b" stroke-width="0.8" stroke-dasharray="2,3"/>
+    <line x1="12" y1="48" x2="138" y2="48" stroke="#1e293b" stroke-width="0.8" stroke-dasharray="2,3"/>
+    <!-- Cumulative Sharpe/PnL Curve -->
+    <path d="M 14 66 Q 42 58 68 40 T 106 30 T 136 16" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="136" cy="16" r="3" fill="#38bdf8"/>
+    <!-- Monospace metric watermark -->
+    <text x="14" y="74" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="8.5" font-weight="600" fill="#64748b" letter-spacing="0.5">SHARPE 3.62 · PASS 8/8</text>
+  </g>
+
+  <!-- Divider Line -->
+  <line x1="40" y1="164" x2="860" y2="164" stroke="#141a28" stroke-width="1"/>
+
+  <!-- Footer Feature Chips -->
+  <g transform="translate(68, 180)">
+    <!-- Chip 1: Native Rust Core -->
+    <g transform="translate(0, 0)">
+      <rect x="0" y="0" width="162" height="30" rx="7" fill="url(#chipBg)" stroke="#1c2538" stroke-width="1"/>
+      <circle cx="14" cy="15" r="3.5" fill="#f97316"/>
+      <text x="26" y="19" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11.5" font-weight="550" fill="#cbd5e1" letter-spacing="0.2">Rust 2021 Engine</text>
     </g>
 
-    <!-- Pill 2: 9-Worker Async -->
-    <g transform="translate(182, 0)" filter="url(#badgeShadow)">
-      <rect x="0" y="0" width="186" height="34" rx="8" fill="url(#pillGrad)" stroke="#334155" stroke-width="1.2"/>
-      <text x="14" y="21" font-family="system-ui, sans-serif" font-size="12" font-weight="650" fill="#38bdf8">⚡ 9-Worker Tokio Async</text>
+    <!-- Chip 2: 9-Worker Async Concurrency -->
+    <g transform="translate(177, 0)">
+      <rect x="0" y="0" width="180" height="30" rx="7" fill="url(#chipBg)" stroke="#1c2538" stroke-width="1"/>
+      <circle cx="14" cy="15" r="3.5" fill="#38bdf8"/>
+      <text x="26" y="19" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11.5" font-weight="550" fill="#cbd5e1" letter-spacing="0.2">9-Worker Tokio Async</text>
     </g>
 
-    <!-- Pill 3: SIMD Pearson Matrix -->
-    <g transform="translate(382, 0)" filter="url(#badgeShadow)">
-      <rect x="0" y="0" width="186" height="34" rx="8" fill="url(#pillGrad)" stroke="#334155" stroke-width="1.2"/>
-      <text x="14" y="21" font-family="system-ui, sans-serif" font-size="12" font-weight="650" fill="#a78bfa">📊 SIMD Pearson Matrix</text>
+    <!-- Chip 3: Dynamic Crowd Radar -->
+    <g transform="translate(372, 0)">
+      <rect x="0" y="0" width="185" height="30" rx="7" fill="url(#chipBg)" stroke="#1c2538" stroke-width="1"/>
+      <circle cx="14" cy="15" r="3.5" fill="#a855f7"/>
+      <text x="26" y="19" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11.5" font-weight="550" fill="#cbd5e1" letter-spacing="0.2">Dynamic Crowd Radar</text>
     </g>
 
-    <!-- Pill 4: 8/8 Platform PASS -->
-    <g transform="translate(582, 0)" filter="url(#badgeShadow)">
-      <rect x="0" y="0" width="168" height="34" rx="8" fill="url(#pillGrad)" stroke="#334155" stroke-width="1.2"/>
-      <text x="14" y="21" font-family="system-ui, sans-serif" font-size="12" font-weight="650" fill="#4ade80">🛡️ 8/8 PASS Engine</text>
+    <!-- Chip 4: 8/8 Platform PASS Engine -->
+    <g transform="translate(572, 0)">
+      <rect x="0" y="0" width="192" height="30" rx="7" fill="url(#chipBg)" stroke="#1c2538" stroke-width="1"/>
+      <circle cx="14" cy="15" r="3.5" fill="#22c55e"/>
+      <text x="26" y="19" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11.5" font-weight="550" fill="#cbd5e1" letter-spacing="0.2">8/8 Submission PASS</text>
     </g>
   </g>
 </svg>

@@ -137,3 +137,90 @@ fn test_alpha_details_deserialization() {
     let is = details.is.unwrap();
     assert_eq!(is.sharpe, Some(1.50));
 }
+
+#[test]
+fn test_user_profile_deserialization() {
+    let json = r#"{
+        "id": "USR12345",
+        "email": "user@example.com",
+        "firstName": "Alex",
+        "lastName": "Quant",
+        "fullName": "Alex Quant",
+        "level": "GOLD"
+    }"#;
+    let profile: alphafind::models::UserProfile = serde_json::from_str(json).unwrap();
+    assert_eq!(profile.id, "USR12345");
+    assert_eq!(profile.email, "user@example.com");
+    assert_eq!(profile.full_name, Some("Alex Quant".to_string()));
+    assert_eq!(profile.level, Some("GOLD".to_string()));
+}
+
+#[test]
+fn test_competition_entry_deserialization() {
+    let json = r#"{
+        "id": "challenge",
+        "name": "Challenge - Global",
+        "status": "ACCEPTED",
+        "scoring": "PERFORMANCE",
+        "leaderboard": {
+            "rank": 2,
+            "score": 0.74,
+            "daysOfSubmission": 22,
+            "isScore": 8887.0,
+            "uniquenessScore": 0.50,
+            "university": "Institute of Technology"
+        }
+    }"#;
+    let comp: alphafind::models::CompetitionEntry = serde_json::from_str(json).unwrap();
+    assert_eq!(comp.id, "challenge");
+    assert_eq!(comp.name, "Challenge - Global");
+    assert!(comp.leaderboard.is_some());
+    let lb = comp.leaderboard.unwrap();
+    assert_eq!(lb.rank, Some(2));
+    assert_eq!(lb.score, Some(0.74));
+    assert_eq!(lb.days_of_submission, Some(22));
+    assert_eq!(lb.is_score, Some(8887.0));
+    assert_eq!(lb.uniqueness_score, Some(0.50));
+}
+
+#[test]
+fn test_leaderboard_response_deserialization() {
+    let json = r#"{
+        "count": 52,
+        "results": [
+            {
+                "rank": 1,
+                "user": "USR99001",
+                "score": 0.8,
+                "daysOfSubmission": 10,
+                "isScore": 21679.0,
+                "uniquenessScore": -0.03,
+                "university": "Institute of Technology"
+            },
+            {
+                "rank": 2,
+                "user": {
+                    "id": "USR12345",
+                    "name": null,
+                    "image": null
+                },
+                "score": 0.74,
+                "daysOfSubmission": 22,
+                "isScore": 8887.0,
+                "uniquenessScore": 0.5,
+                "university": "Institute of Technology"
+            }
+        ]
+    }"#;
+    let resp: alphafind::models::LeaderboardResponse = serde_json::from_str(json).unwrap();
+    assert_eq!(resp.count, 52);
+    assert_eq!(resp.results.len(), 2);
+    assert_eq!(resp.results[0].rank, 1);
+    assert_eq!(resp.results[0].user.id(), "USR99001");
+    assert_eq!(resp.results[0].score, 0.8);
+    assert_eq!(resp.results[1].rank, 2);
+    assert_eq!(resp.results[1].user.id(), "USR12345");
+    assert_eq!(resp.results[1].score, 0.74);
+}
+
+

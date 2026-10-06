@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use crate::models::PortfolioImpactResult;
 
 /// Computes the exact Pearson correlation between two daily PnL series over their shared trading days.
 pub fn pearson_correlation(
@@ -185,5 +186,88 @@ pub fn simulate_portfolio(pnls: &[&HashMap<String, f64>]) -> Option<PortfolioMer
         annualized_vol: ann_vol,
         merged_sharpe,
         avg_pairwise_corr: rho_bar,
+    })
+}
+
+/// Simulates the exact portfolio impact of adding a candidate Alpha to an existing portfolio.
+pub fn calculate_portfolio_impact(
+    candidate_id: &str,
+    candidate_pnl: &HashMap<String, f64>,
+    os_pnls: &HashMap<String, HashMap<String, f64>>,
+) -> Option<PortfolioImpactResult> {
+    if os_pnls.is_empty() {
+        return None;
+    }
+
+    // Build baseline excluding candidate if it is already present in os_pnls
+    let mut baseline_refs: Vec<&HashMap<String, f64>> = Vec::new();
+    for (os_id, pnl) in os_pnls {
+        if os_id != candidate_id {
+            baseline_refs.push(pnl);
+        }
+    }
+
+    if baseline_refs.is_empty() {
+        return None;
+    }
+
+    let baseline = simulate_portfolio(&baseline_refs)?;
+
+    let mut combined_refs = baseline_refs.clone();
+    combined_refs.push(candidate_pnl);
+    let new_metrics = simulate_portfolio(&combined_refs)?;
+
+    // Calculate candidate correlation vs active OS alphas (skipping itself)
+    let mut max_corr = -1.0;
+    let mut most_corr_id = String::new();
+    let mut sum_corr = 0.0;
+    let mut valid_pairs = 0;
+
+    for (os_id, pnl) in os_pnls {
+        if os_id == candidate_id {
+            continue;
+        }
+        let (corr, days) = pearson_correlation(candidate_pnl, pnl);
+        if days >= 30 {
+            if corr > max_corr {
+                max_corr = corr;
+                most_corr_id = os_id.clone();
+            }
+            sum_corr += corr;
+            valid_pairs += 1;
+        }
+    }
+
+    let avg_corr_vs_os = if valid_pairs > 0 {
+        sum_corr / (valid_pairs as f64)
+    } else {
+        0.0
+    };
+
+    let safety_buffer = (0.70 - max_corr).max(0.0) * 100.0;
+
+    Some(PortfolioImpactResult {
+        candidate_id: candidate_id.to_string(),
+        baseline_alphas: baseline.n_alphas,
+        baseline_sharpe: baseline.merged_sharpe,
+        baseline_pnl: baseline.annualized_pnl,
+        baseline_vol: baseline.annualized_vol,
+        baseline_avg_corr: baseline.avg_pairwise_corr,
+
+        new_alphas: new_metrics.n_alphas,
+        new_sharpe: new_metrics.merged_sharpe,
+        new_pnl: new_metrics.annualized_pnl,
+        new_vol: new_metrics.annualized_vol,
+        new_avg_corr: new_metrics.avg_pairwise_corr,
+
+        delta_sharpe: new_metrics.merged_sharpe - baseline.merged_sharpe,
+        delta_pnl: new_metrics.annualized_pnl - baseline.annualized_pnl,
+        delta_vol: new_metrics.annualized_vol - baseline.annualized_vol,
+        delta_avg_corr: new_metrics.avg_pairwise_corr - baseline.avg_pairwise_corr,
+
+        max_pairwise_corr: max_corr,
+        most_correlated_id: most_corr_id,
+        avg_pairwise_corr_vs_os: avg_corr_vs_os,
+        safety_buffer_pct: safety_buffer,
     })
 }

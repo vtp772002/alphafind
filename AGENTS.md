@@ -37,7 +37,7 @@
      - **Method B (Ad-hoc Hypothesis)**: Create the experimental script strictly inside the git-ignored `scratch/` directory (e.g., `scratch/hunt_day21.py`).
 2. **Mandatory Post-Discovery Cleanup Protocol:**
    - As soon as a qualified 8/8 PASS Alpha is discovered and verified on Main Account:
-     - Record its expression, universe, decay, truncation, neutralization, ID, and metrics into [`submittable_alphas.csv`](file:///Users/phamtoan/Developer/alphafind/submittable_alphas.csv) and [`portfolio_os.json`](file:///Users/phamtoan/Developer/alphafind/portfolio_os.json).
+     - Record its expression, universe, decay, truncation, neutralization, ID, and metrics into [`submittable_alphas.csv`](submittable_alphas.csv) and [`portfolio_os.json`](portfolio_os.json).
      - **The temporary script in `scratch/` MUST BE DELETED IMMEDIATELY before concluding the session.**
    - No throwaway `hunt_*.py`, `tune_*.py`, `test_*.py`, or temporary `.json` files are ever permitted to persist in Git.
 
@@ -65,6 +65,41 @@
 ### 4. Non-Linear Convexity & The Fitness Denominator Trap
 * BRAIN clamps the Fitness denominator at $\max(\text{Turnover}, 0.125)$. Suppressing turnover below $12.5\%$ provides zero marginal benefit in the denominator.
 * To achieve **Fitness $\ge 1.50$ (GOOD)** or $\ge 2.50$ (SPECTACULAR), maximize annual returns via non-linear convex transformations `signed_power(signal, p)` with $p \in [3.8, 4.4]$ while keeping `truncation: 0.065 - 0.07` to avoid `CONCENTRATED_WEIGHT` violations.
+
+### 5. Official BRAIN Leaderboard Scoring Mechanics & Uniqueness Law
+* **Leaderboard Formula (Verified via WorldQuant BRAIN API Spec `OPTIONS /competitions/challenge/boards/leader`)**:
+  $$\text{Total Score} = \frac{1}{3} \text{Rank}_{\text{norm}}(\text{IS Score}) + \frac{1}{3} \text{Rank}_{\text{norm}}(\text{Days of Submission}) + \frac{1}{3} \text{Rank}_{\text{norm}}(-\text{uniquenessScore})$$
+  *(Official Definition: "Equally weighted score across ranked values of Uniqueness, IS Score and Days of Submission")*.
+* **The Exact Mathematical Meaning of `uniquenessScore`**:
+  > **Official BRAIN API Definition:** `"Merged PnL Correlation with all other users Merged PnL. (Lower the correlation, higher the uniqueness)"`
+  * `uniquenessScore` is **NOT internal portfolio correlation**. It measures the Pearson correlation between your merged portfolio PnL and the merged portfolio PnL of **ALL OTHER COMPETITORS on WorldQuant BRAIN**.
+  * **Lower correlation = Higher uniqueness = Higher Total Score**.
+  * **Ideal Target**: $\text{uniquenessScore} \le 0.00$ (as achieved by Top 1 at `-0.03`).
+* **The Dual Correlation Paradox**:
+  * An Alpha can have negative internal correlation ($\overline{\rho}_{\text{internal}} < 0$) against your own portfolio (e.g., `O08nV9mp` had $-2.86\%$ internal correlation, reducing your own portfolio correlation from $25.59\% \to 24.20\%$).
+  * However, if that alpha uses crowded concepts (e.g., standard Options Term Slope / VRP on `TOP1000` with `MARKET` neutralization), its PnL will co-move with the broader crowd of quants on BRAIN, causing your **`uniquenessScore` with the platform to rise** (e.g., from $0.46 \to 0.50$).
+* **Protocol to Suppress `uniquenessScore` to $\le 0.00$**:
+  1. **Mine Non-Crowded Factor Pillars**: Prioritize `MICRO` (order flow imbalance / VWAP slippage), `SHORT` (borrow fees / short squeeze dynamics), and `ANALYST` (post-earnings revision drift).
+  2. **Use `SUBINDUSTRY` Neutralization**: Strips away market and sector common factors shared by crowd models.
+  3. **Broaden to `TOP3000`**: Expands into small/mid-cap idiosyncratic territory where crowd alphas do not operate.
+
+### 6. The Official BRAIN Crowd Census & Uncrowded Factor Sanctuary
+* **Production API Census Evidence (Verified via `GET https://api.worldquantbrain.com/data-sets?region=USA`)**:
+  * **🔴 High-Crowd Red Zone (Tử địa đám đông — Tuyệt đối tránh hoặc hạn chế tối đa)**:
+    * `fundamental6` (*Company Fundamental Data for Equity*): **88,698 Quants** \| **850,369 Alphas** (Chiếm tới 80%+ toàn bộ alphas trên nền tảng!).
+    * `analyst4` (*Analyst Estimate Data for Equity*): **49,471 Quants** \| **760,206 Alphas**.
+    * `option8` & `option9` (*Volatility & Options Analytics*): **1,740 Quants** \| **3,392 Alphas** (Nguyên nhân trực tiếp đẩy `uniquenessScore` lên cao khi nộp VRP/IV Term Slope).
+  * **🟢 Low-Crowd Green Sanctuary (Vùng đất độc bản — Trọng tâm khai thác)**:
+    * `pv1` (*Price Volume Data for Equity - Vi cấu trúc VWAP, Intraday Overnight-Day spread*): **234 Quants** \| **388 Alphas** (Ít hơn Fundamental tới 370 lần!).
+    * `news12` (*US News Data - Tin tức sau giờ giao dịch `nws12_afterhsz_sl`*): **10 Quants** \| **12 Alphas** (Gần như vắng bóng người).
+    * `news18` (*Ravenpack News Data*): **193 Quants** \| **637 Alphas**.
+    * `model16` / `model51` (*Idiosyncratic Risk Metrics*): Vài trăm quants.
+    * Short Interest Dynamics (`shares_sold_short_count_2`, `shorted_shares_count_all`).
+* **Mandatory Anti-Crowd Exploration Directive**:
+  1. **Dynamic Pre-Screening Radar Check (BẮT BUỘC)**: Factor crowding mang tính chất động (Dynamic Rotation). Tuyệt đối không giả định một dataset sẽ vĩnh viễn là "vùng an toàn". Trước mỗi đợt screening hoặc thử nghiệm, bắt buộc phải chạy `./target/release/alphafind radar` để quét live 150 datasets và kiểm tra vận tốc di cư của đám đông ($\Delta \text{users}$).
+  2. Tất cả các đợt screening và sinh alpha mới phải ưu tiên số 1 vào **Green Sanctuary** (`users < 300`, trạng thái `PRISTINE` hoặc `SAFE`).
+  3. Tuyệt đối không sinh thêm các alpha cơ bản trùng lặp DuPont/Cashflow trên `TOP1000`/`TOP500` hoặc các gói thuộc `DANGER`.
+  4. Sử dụng **Hierarchical Cross-Sanctuary Conditioning** (lai tạo phân tầng giữa News x Short x Microstructure) kết hợp `SUBINDUSTRY` neutralization để triệt tiêu toàn bộ Beta đám đông.
 
 ---
 
@@ -99,8 +134,9 @@ An Alpha must achieve **8/8 PASS** on `GET /alphas/{id}/check` to be admitted in
 > 1. Verify official **8/8 PASS** via Main Account: `GET https://api.worldquantbrain.com/alphas/{alpha_id}/check`.
 > 2. Ensure **Grade $\ge 1.50$ (GOOD)** (Sharpe $\ge 1.35$, Return $\ge 12.0\%$, Turnover $\in [10\%, 35\%]$).
 > 3. Audit exact 1,236-day Pearson cross-correlation against existing portfolio ($\rho \le 0.15$).
-> 4. Record entry in [`submittable_alphas.csv`](file:///Users/phamtoan/Developer/alphafind/submittable_alphas.csv).
-> 5. Present user with: Alpha ID, In-Sample Metrics (Sharpe, Fitness, Return, Turnover), Category & Tags, and the **1-Click Web Submission URL**:
+> 4. Run `alphafind impact <alpha_id>`: Verify positive delta Sharpe ($\Delta \text{Sharpe} > 0$) and safety buffer $\ge 8.0\%$ to 70% limit.
+> 5. Record entry in [`submittable_alphas.csv`](submittable_alphas.csv).
+> 6. Present user with: Alpha ID, In-Sample Metrics (Sharpe, Fitness, Return, Turnover), Category & Tags, and the **1-Click Web Submission URL**:
 >    `https://platform.worldquantbrain.com/alpha/{alpha_id}`
 
 ---
@@ -111,12 +147,12 @@ To maintain strict context window hygiene and avoid duplicate bloat, refer to sp
 
 | Dimension / Topic | Canonical File / Reference | Purpose & Contents |
 |:---|:---|:---|
-| **Active OS Portfolio** | [`portfolio_os.json`](file:///Users/phamtoan/Developer/alphafind/portfolio_os.json) | Database of active Out-of-Sample Alphas with exact expressions, IDs, settings, and metrics. |
-| **Verified Submittable Candidate Ledger** | [`submittable_alphas.csv`](file:///Users/phamtoan/Developer/alphafind/submittable_alphas.csv) | Master audit log of verified 8/8 PASS Alphas ready for scheduled submission. |
-| **Strategic Portfolio Roadmap** | [`STRATEGIC_ROADMAP.md`](file:///Users/phamtoan/Developer/alphafind/STRATEGIC_ROADMAP.md) | In-depth breakdown of the 3-pillar scoring system, empirical milestones, and daily schedule. |
-| **FASTEXPR Operators & Diagnostics** | [`docs/BRAIN_KNOWLEDGE_GRAPH.md`](file:///Users/phamtoan/Developer/alphafind/docs/BRAIN_KNOWLEDGE_GRAPH.md) | Comprehensive index of all 66 FASTEXPR operators, syntax constraints, and heuristic unsticking recipes. |
-| **Factor Pillars & Field Schemas** | [`src/taxonomy.rs`](file:///Users/phamtoan/Developer/alphafind/src/taxonomy.rs) & `data/` | 6 Economic factor pillars (Analyst Consensus, Options/VRP, Microstructure VWAP, Financial Health/Quality, Idiosyncratic Risk, Short Interest). |
-| **Portfolio Analytics & Audit Engine** | [`src/correlation.rs`](file:///Users/phamtoan/Developer/alphafind/src/correlation.rs) | Microsecond Pearson audits, disk-cached PnLs, and merged Sharpe simulator (`alphafind audit`, `alphafind portfolio`). |
-| **Core Distributed Simulation Engine** | [`src/screener.rs`](file:///Users/phamtoan/Developer/alphafind/src/screener.rs) | 9-worker distributed screening across 3 accounts with auto-transfer lock (`alphafind screen`). |
-| **Official Submission & Check CLI** | [`src/main.rs`](file:///Users/phamtoan/Developer/alphafind/src/main.rs) | Unified native binary CLI for 8/8 PASS verification and submission dispatch (`alphafind submit`, `alphafind check`). |
+| **Active OS Portfolio** | [`portfolio_os.json`](portfolio_os.json) | Database of active Out-of-Sample Alphas with exact expressions, IDs, settings, and metrics. |
+| **Verified Submittable Candidate Ledger** | [`submittable_alphas.csv`](submittable_alphas.csv) | Master audit log of verified 8/8 PASS Alphas ready for scheduled submission. |
+| **Strategic Portfolio Roadmap** | [`STRATEGIC_ROADMAP.md`](STRATEGIC_ROADMAP.md) | In-depth breakdown of the 3-pillar scoring system, empirical milestones, and daily schedule. |
+| **FASTEXPR Operators & Diagnostics** | [`docs/BRAIN_KNOWLEDGE_GRAPH.md`](docs/BRAIN_KNOWLEDGE_GRAPH.md) | Comprehensive index of all 66 FASTEXPR operators, syntax constraints, and heuristic unsticking recipes. |
+| **Factor Pillars & Field Schemas** | [`src/taxonomy.rs`](src/taxonomy.rs) & `data/` | 6 Economic factor pillars (Analyst Consensus, Options/VRP, Microstructure VWAP, Financial Health/Quality, Idiosyncratic Risk, Short Interest). |
+| **Portfolio Analytics & Audit Engine** | [`src/correlation.rs`](src/correlation.rs) | Microsecond Pearson audits, disk-cached PnLs, and merged Sharpe simulator (`alphafind audit`, `alphafind portfolio`). |
+| **Core Distributed Simulation Engine** | [`src/screener.rs`](src/screener.rs) | 9-worker distributed screening across 3 accounts with auto-transfer lock (`alphafind screen`). |
+| **Official Submission & Check CLI** | [`src/main.rs`](src/main.rs) | Unified native binary CLI for 8/8 PASS verification and submission dispatch (`alphafind submit`, `alphafind check`). |
 | **Ephemeral Sandbox** | `scratch/` (Git-ignored) | Disposable workspace for session research scripts, purged post-discovery. |
