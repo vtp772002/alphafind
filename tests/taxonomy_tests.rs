@@ -160,3 +160,31 @@ fn test_candidate_to_settings() {
     assert_eq!(settings.delay, 1);
     assert_eq!(settings.pasteurization, "ON");
 }
+
+#[test]
+fn test_factor_pillar_from_str_cross() {
+    assert_eq!(
+        FactorPillar::from_str("CROSS"),
+        Some(FactorPillar::CrossSanctuary)
+    );
+    assert_eq!(
+        FactorPillar::from_str("SANCTUARY"),
+        Some(FactorPillar::CrossSanctuary)
+    );
+    assert_eq!(
+        FactorPillar::from_str("HYBRID"),
+        Some(FactorPillar::CrossSanctuary)
+    );
+    assert_eq!(FactorPillar::CrossSanctuary.as_str(), "CROSS_SANCTUARY");
+}
+
+#[test]
+fn test_curated_candidates_cross_sanctuary() {
+    let candidates = get_curated_candidates(Some(FactorPillar::CrossSanctuary), Some("TOP1000"));
+    assert!(!candidates.is_empty(), "Should generate cross-sanctuary candidates");
+    for c in &candidates {
+        assert_eq!(c.pillar, "CROSS_SANCTUARY");
+        assert_eq!(c.universe, "TOP1000");
+        assert_eq!(c.neutralization, "SUBINDUSTRY");
+    }
+}

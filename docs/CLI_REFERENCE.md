@@ -46,7 +46,26 @@ alphafind sync
 * Connects to your Main Account.
 * Paginates through all active Out-of-Sample alphas.
 * Saves expressions, IDs, settings, and metrics to `portfolio_os.json`.
-* Displays a universe distribution breakdown.
+* Displays a universe distribution breakdown and live leaderboard status.
+
+---
+
+## 3. `alphafind score`
+
+Fetches and displays live user status, rank, and official WorldQuant BRAIN leaderboard metrics.
+
+### Usage
+```bash
+alphafind score
+```
+
+### Metrics Displayed
+* **User Profile**: User ID, Full Name, Email, and Consultant Tier (e.g., `GOLD`).
+* **Active Competition**: Competition title (e.g., `Challenge - Vietnam`).
+* **Leaderboard Rank**: Live position on the national leaderboard.
+* **Total Score & Components**: Normalized Score, In-Sample Score (`isScore`), Uniqueness Score (`uniquenessScore`), and `daysOfSubmission` (rolling 60-day window).
+* **Affiliation**: Associated university or institution.
+* **Active Portfolio Snapshot**: Number of tracked Out-of-Sample Alphas.
 
 ---
 
@@ -190,4 +209,55 @@ alphafind submit <ALPHA_ID> \
   --name "US_D1_TOP1000_OPT_TermSlope_VRP_Dec32" \
   --color PURPLE \
   --tags "OPTIONS,VOLATILITY,TOP1000,VRP"
+```
+
+---
+
+## 9. `alphafind impact`
+
+Simulates the exact equal-weighted portfolio merge impact of adding a candidate alpha to the active 42-alpha Out-of-Sample portfolio over 1,236 common backtest days.
+
+### Usage
+```bash
+alphafind impact <ALPHA_ID>
+```
+
+### Output
+* Delta Merged Portfolio Sharpe ($\Delta \text{Sharpe}$).
+* Delta Annualized PnL ($\Delta \text{PnL}$).
+* Delta Annualized Volatility ($\Delta \text{Vol}$) and variance collapse indicator.
+* Delta Average Pairwise Correlation ($\Delta \overline{\rho}$).
+* Maximum Pairwise Correlation and direct OS average correlation.
+* **Safety Buffer to 70% Limit**: Distance $(70.0\% - \max \rho)$ preventing future self-correlation violations.
+* Automated Recommendation verdict: `🌟 [RECOMMENDED]`, `🟡 [CAUTION]`, or `❌ [UNSUBMITTABLE]`.
+
+---
+
+## 10. `alphafind radar`
+
+Live Dynamic Crowd Census Radar querying all 150 datasets on WorldQuant BRAIN Production API to track factor crowding and quant migration velocity.
+
+### Usage
+```bash
+alphafind radar [OPTIONS]
+```
+
+### Options
+| Flag | Short | Description | Default |
+|:---|:---:|:---|:---:|
+| `--region <REGION>` | `-r` | Target market region | `USA` |
+| `--top <NUM>` | `-t` | Number of ranked datasets to display | `15` |
+| `--filter <KEYWORD>` | `-f` | Filter by dataset name or subcategory | None |
+| `--green-only` | | Show only Green Sanctuaries (`users < 300`) | `false` |
+
+### Examples
+```bash
+# General live crowd radar across all USA datasets
+alphafind radar
+
+# Monitor News and Sentiment packages
+alphafind radar --filter news
+
+# View only uncrowded Green Sanctuaries
+alphafind radar --green-only
 ```

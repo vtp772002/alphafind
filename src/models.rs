@@ -246,3 +246,169 @@ impl CandidateAlpha {
         }
     }
 }
+
+/// User profile returned by /users/self
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserProfile {
+    pub id: String,
+    pub email: String,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+    pub full_name: Option<String>,
+    pub level: Option<String>,
+}
+
+/// User competition leaderboard metrics
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UserLeaderboard {
+    pub rank: Option<i64>,
+    pub score: Option<f64>,
+    pub days_of_submission: Option<i64>,
+    pub is_score: Option<f64>,
+    pub uniqueness_score: Option<f64>,
+    pub university: Option<String>,
+}
+
+/// Competition entry returned by /competitions or /users/self/competitions
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompetitionEntry {
+    pub id: String,
+    pub name: String,
+    pub status: Option<String>,
+    pub scoring: Option<String>,
+    pub leaderboard: Option<UserLeaderboard>,
+}
+
+/// User representation in competition leaderboard board
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum LeaderboardUser {
+    Id(String),
+    Detailed {
+        id: String,
+        name: Option<serde_json::Value>,
+        image: Option<serde_json::Value>,
+    },
+}
+
+impl LeaderboardUser {
+    pub fn id(&self) -> &str {
+        match self {
+            LeaderboardUser::Id(id) => id,
+            LeaderboardUser::Detailed { id, .. } => id,
+        }
+    }
+
+    pub fn display_name(&self) -> String {
+        match self {
+            LeaderboardUser::Id(id) => id.clone(),
+            LeaderboardUser::Detailed { id, name, .. } => {
+                if let Some(n) = name {
+                    if let Some(fn_str) = n.get("fullName").and_then(|v| v.as_str()) {
+                        return format!("{} ({})", fn_str, id);
+                    }
+                }
+                id.clone()
+            }
+        }
+    }
+}
+
+/// Individual standing in /competitions/{id}/boards/leader
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LeaderboardEntry {
+    pub rank: i64,
+    pub user: LeaderboardUser,
+    pub score: f64,
+    pub days_of_submission: i64,
+    pub is_score: f64,
+    pub uniqueness_score: f64,
+    pub university: Option<String>,
+}
+
+/// Response returned by /competitions/{id}/boards/leader
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LeaderboardResponse {
+    pub count: usize,
+    pub results: Vec<LeaderboardEntry>,
+}
+
+/// Category / subcategory info in DatasetEntry
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DatasetCategoryInfo {
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub name: Option<String>,
+}
+
+/// A dataset entry returned by /data-sets
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatasetEntry {
+    pub id: String,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub category: Option<DatasetCategoryInfo>,
+    #[serde(default)]
+    pub subcategory: Option<DatasetCategoryInfo>,
+    #[serde(default)]
+    pub user_count: Option<i64>,
+    #[serde(default)]
+    pub alpha_count: Option<i64>,
+    #[serde(default)]
+    pub field_count: Option<i64>,
+}
+
+/// Response returned by /data-sets
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatasetListResponse {
+    pub count: usize,
+    #[serde(default)]
+    pub results: Vec<DatasetEntry>,
+}
+
+/// Historical snapshot of dataset census for tracking crowd migration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CensusSnapshot {
+    pub timestamp: String,
+    pub region: String,
+    pub total_datasets: usize,
+    pub datasets: Vec<DatasetEntry>,
+}
+
+/// Portfolio Impact report for a candidate alpha
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortfolioImpactResult {
+    pub candidate_id: String,
+    pub baseline_alphas: usize,
+    pub baseline_sharpe: f64,
+    pub baseline_pnl: f64,
+    pub baseline_vol: f64,
+    pub baseline_avg_corr: f64,
+
+    pub new_alphas: usize,
+    pub new_sharpe: f64,
+    pub new_pnl: f64,
+    pub new_vol: f64,
+    pub new_avg_corr: f64,
+
+    pub delta_sharpe: f64,
+    pub delta_pnl: f64,
+    pub delta_vol: f64,
+    pub delta_avg_corr: f64,
+
+    pub max_pairwise_corr: f64,
+    pub most_correlated_id: String,
+    pub avg_pairwise_corr_vs_os: f64,
+    pub safety_buffer_pct: f64,
+}
+
+

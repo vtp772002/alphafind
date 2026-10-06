@@ -8,8 +8,9 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 use crate::models::{
-    AlphaDetails, AlphaSettings, DailyPnlResponse, InSampleStats, PortfolioAlpha,
-    SimulationPayload, SimulationResponse,
+    AlphaDetails, AlphaSettings, CompetitionEntry, DailyPnlResponse, DatasetEntry,
+    DatasetListResponse, InSampleStats, LeaderboardResponse, PortfolioAlpha, SimulationPayload,
+    SimulationResponse, UserProfile,
 };
 
 pub const BASE_URL: &str = "https://api.worldquantbrain.com";
@@ -292,16 +293,27 @@ impl BrainClient {
 
             let resp = self.client.get(&url).headers(headers).send().await?;
 
-            if resp.status().as_u16() == 429 {
-                sleep(Duration::from_secs(5)).await;
-                continue;
-            }
-
             let retry_after = resp
                 .headers()
                 .get(RETRY_AFTER)
                 .and_then(|v| v.to_str().ok())
                 .and_then(|v| v.parse::<f64>().ok());
+
+            let status = resp.status();
+            if status.as_u16() == 429 || status.is_server_error() {
+                let wait = retry_after.unwrap_or(3.0);
+                sleep(Duration::from_secs_f64(wait)).await;
+                continue;
+            }
+
+            if !status.is_success() {
+                let err_text = resp.text().await.unwrap_or_default();
+                return Err(anyhow!(
+                    "API check returned HTTP {}: {}",
+                    status,
+                    err_text.chars().take(200).collect::<String>()
+                ));
+            }
 
             let text = resp.text().await?;
             if text.trim().is_empty() {
@@ -310,7 +322,18 @@ impl BrainClient {
                 continue;
             }
 
-            let val: serde_json::Value = serde_json::from_str(&text)?;
+            let val: serde_json::Value = match serde_json::from_str(&text) {
+                Ok(v) => v,
+                Err(e) => {
+                    if text.trim().starts_with('<') {
+                        // Gateway or proxy HTML returned instead of JSON
+                        let wait = retry_after.unwrap_or(3.0);
+                        sleep(Duration::from_secs_f64(wait)).await;
+                        continue;
+                    }
+                    return Err(anyhow!("Failed to parse check response JSON: {}. Body: {}", e, text.chars().take(200).collect::<String>()));
+                }
+            };
             let is_data = val.get("is").cloned().unwrap_or(val.clone());
             let stats: InSampleStats = serde_json::from_value(is_data)?;
 
@@ -590,4 +613,133 @@ impl BrainClient {
 
         Ok(portfolio)
     }
+
+    /// Fetches the user's profile information from /users/self.
+    pub async fn fetch_user_profile(&self) -> Result<UserProfile> {
+        self.authenticate().await?;
+
+        let url = format!("{}/users/self", BASE_URL);
+        let headers = self.auth_headers()?;
+
+        let resp = self
+            .client
+            .get(&url)
+            .headers(headers)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let profile = resp.json::<UserProfile>().await?;
+        Ok(profile)
+    }
+
+    /// Fetches the user's active competitions and leaderboard scores from /users/self/competitions.
+    pub async fn fetch_competitions(&self) -> Result<Vec<CompetitionEntry>> {
+        self.authenticate().await?;
+
+        let url = format!("{}/users/self/competitions", BASE_URL);
+        let headers = self.auth_headers()?;
+
+        let resp = self
+            .client
+            .get(&url)
+            .headers(headers)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let data: serde_json::Value = resp.json().await?;
+        let results = data.get("results").cloned().unwrap_or(data);
+        let comps: Vec<CompetitionEntry> = serde_json::from_value(results)?;
+        Ok(comps)
+    }
+
+    /// Fetches the standings leaderboard for a given competition.
+    pub async fn fetch_competition_leaderboard(
+        &self,
+        competition_id: &str,
+        limit: usize,
+    ) -> Result<LeaderboardResponse> {
+        self.authenticate().await?;
+
+        let url = format!(
+            "{}/competitions/{}/boards/leader?limit={}&offset=0",
+            BASE_URL, competition_id, limit
+        );
+        let headers = self.auth_headers()?;
+
+        let resp = self
+            .client
+            .get(&url)
+            .headers(headers)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let board = resp.json::<LeaderboardResponse>().await?;
+        Ok(board)
+    }
+
+    /// Fetches all datasets with pagination (limit 50 per page) for a given region with exponential backoff on 429.
+    pub async fn fetch_all_datasets(&self, region: &str) -> Result<Vec<DatasetEntry>> {
+        self.authenticate().await?;
+
+        let mut all_datasets = Vec::new();
+        let mut offset = 0;
+        let limit = 50;
+
+        loop {
+            let url = format!(
+                "{}/data-sets?region={}&limit={}&offset={}",
+                BASE_URL, region, limit, offset
+            );
+
+            let mut fetched_page = false;
+            for attempt in 0..5 {
+                let headers = self.auth_headers()?;
+                let resp = self.client.get(&url).headers(headers).send().await;
+
+                match resp {
+                    Ok(r) => {
+                        let status = r.status();
+                        if status.as_u16() == 429 {
+                            let wait = r
+                                .headers()
+                                .get(RETRY_AFTER)
+                                .and_then(|v| v.to_str().ok())
+                                .and_then(|v| v.parse::<f64>().ok())
+                                .unwrap_or(2.0f64.powi(attempt) + 1.0);
+                            sleep(Duration::from_secs_f64(wait)).await;
+                            continue;
+                        }
+                        if status.is_success() {
+                            let list: DatasetListResponse = r.json().await?;
+                            let total = list.count;
+                            let n_fetched = list.results.len();
+
+                            all_datasets.extend(list.results);
+
+                            offset += limit;
+                            if offset >= total || n_fetched == 0 {
+                                return Ok(all_datasets);
+                            }
+                            fetched_page = true;
+                            break;
+                        }
+                    }
+                    Err(_) => {
+                        sleep(Duration::from_secs(2)).await;
+                    }
+                }
+            }
+
+            if !fetched_page {
+                anyhow::bail!(
+                    "Failed to fetch dataset page at offset {} after 5 retries",
+                    offset
+                );
+            }
+        }
+    }
 }
+

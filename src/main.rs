@@ -6,8 +6,8 @@ use std::fs;
 use std::path::Path;
 
 use alphafind::client::BrainClient;
-use alphafind::correlation::{audit_candidate, simulate_portfolio};
-use alphafind::models::{AlphaSettings, PortfolioAlpha};
+use alphafind::correlation::{audit_candidate, calculate_portfolio_impact, simulate_portfolio};
+use alphafind::models::{AlphaSettings, CensusSnapshot, DatasetEntry, PortfolioAlpha};
 use alphafind::screener::MultiAccountScreener;
 use alphafind::taxonomy::{get_curated_candidates, FactorPillar};
 
@@ -27,6 +27,9 @@ enum Commands {
 
     /// Sync active Out-of-Sample (OS) portfolio from BRAIN into portfolio_os.json
     Sync,
+
+    /// View live user status, rank, and official BRAIN leaderboard scores
+    Score,
 
     /// Verify the 8 mandatory In-Sample platform submission checks for an Alpha
     Check {
@@ -118,6 +121,31 @@ enum Commands {
         #[arg(short, long, default_value_t = 0.05)]
         truncation: f64,
     },
+
+    /// Live Dynamic Crowd Census Radar querying all 150 datasets to track crowd migration
+    Radar {
+        /// Target Region (default: USA)
+        #[arg(short, long, default_value = "USA")]
+        region: String,
+
+        /// Maximum results to show (default: 15)
+        #[arg(short, long, default_value_t = 15)]
+        top: usize,
+
+        /// Keyword filter (e.g. news, short, vwap, analyst, fundamental)
+        #[arg(short, long)]
+        filter: Option<String>,
+
+        /// Filter only Green Sanctuaries (userCount < 300)
+        #[arg(long)]
+        green_only: bool,
+    },
+
+    /// Simulate exact portfolio merge impact (Delta Sharpe, PnL, Vol, Correlation) for a candidate Alpha
+    Impact {
+        /// Candidate Alpha ID (e.g., vR2lzJor)
+        alpha_id: String,
+    },
 }
 
 fn get_main_client() -> Result<BrainClient> {
@@ -150,6 +178,7 @@ async fn main() -> Result<()> {
     match cli.command {
         Commands::Auth => cmd_auth().await,
         Commands::Sync => cmd_sync().await,
+        Commands::Score => cmd_score().await,
         Commands::Check { alpha_id } => cmd_check(alpha_id).await,
         Commands::Audit { alpha_id, label } => cmd_audit(alpha_id, label).await,
         Commands::Portfolio => cmd_portfolio().await,
@@ -175,6 +204,13 @@ async fn main() -> Result<()> {
             neutralization,
             truncation,
         } => cmd_sim(expr, universe, decay, neutralization, truncation).await,
+        Commands::Radar {
+            region,
+            top,
+            filter,
+            green_only,
+        } => cmd_radar(region, top, filter, green_only).await,
+        Commands::Impact { alpha_id } => cmd_impact(alpha_id).await,
     }
 }
 
@@ -248,8 +284,191 @@ async fn cmd_sync() -> Result<()> {
             json_path.bold()
         );
     }
+
+    if let Ok(competitions) = client.fetch_competitions().await {
+        for comp in &competitions {
+            if let Some(lb) = &comp.leaderboard {
+                println!("\n  {} Live Leaderboard Status ({}):", "🏆".bold(), comp.name.yellow());
+                if let Some(r) = lb.rank {
+                    println!(
+                        "    Rank: #{} | Score: {:.2} | isScore: {:.1} | Uniqueness: {:.2} | Days: {}/60",
+                        r.to_string().bold().green(),
+                        lb.score.unwrap_or(0.0),
+                        lb.is_score.unwrap_or(0.0),
+                        lb.uniqueness_score.unwrap_or(0.0),
+                        lb.days_of_submission.unwrap_or(0)
+                    );
+                }
+            }
+        }
+    }
+
     Ok(())
 }
+
+async fn cmd_score() -> Result<()> {
+    println!(
+        "{}",
+        "═════════════════════════════════════════════════════════════════════════".cyan()
+    );
+    println!(
+        "{}",
+        "  AlphaFind Quant Engine — WorldQuant BRAIN Live Leaderboard & Status"
+            .bold()
+            .cyan()
+    );
+    println!(
+        "{}",
+        "═════════════════════════════════════════════════════════════════════════".cyan()
+    );
+
+    let client = get_main_client()?;
+    println!("  Connecting to MAIN account: {}...", client.email().cyan());
+
+    let user_profile = client.fetch_user_profile().await.ok();
+    if let Some(ref profile) = user_profile {
+        let name_str = profile.full_name.as_deref().unwrap_or("Quant Researcher");
+        let level_str = profile.level.as_deref().unwrap_or("MEMBER");
+        println!(
+            "  👤 User: {} ({}) | Email: {} | Tier: {}",
+            name_str.bold().white(),
+            profile.id.yellow(),
+            profile.email.cyan(),
+            level_str.yellow().bold()
+        );
+    }
+
+    let competitions = client.fetch_competitions().await?;
+    let mut found_board = false;
+
+    for comp in &competitions {
+        if let Some(lb) = &comp.leaderboard {
+            found_board = true;
+            println!(
+                "\n  🏆 Competition: {} [{}]",
+                comp.name.bold().yellow(),
+                comp.id.cyan()
+            );
+            println!("  ─────────────────────────────────────────────────────────────────────────");
+            if let Some(r) = lb.rank {
+                let rank_str = format!("#{}", r);
+                let rank_display = if r == 1 {
+                    rank_str.bold().green()
+                } else if r <= 3 {
+                    rank_str.bold().yellow()
+                } else {
+                    rank_str.bold().white()
+                };
+                println!("    Leaderboard Rank:          {}", rank_display);
+            }
+            if let Some(sc) = lb.score {
+                println!(
+                    "    Total Leaderboard Score:   {}",
+                    format!("{:.2}", sc).bold().green()
+                );
+            }
+            if let Some(is) = lb.is_score {
+                println!(
+                    "    In-Sample Score (isScore): {}",
+                    format!("{:.1}", is).bold().yellow()
+                );
+            }
+            if let Some(uniq) = lb.uniqueness_score {
+                println!(
+                    "    Uniqueness Score:          {}",
+                    format!("{:.2}", uniq).cyan()
+                );
+            }
+            if let Some(days) = lb.days_of_submission {
+                println!(
+                    "    Days of Submission:        {} / 60",
+                    days.to_string().cyan()
+                );
+            }
+            if let Some(uni) = &lb.university {
+                println!("    Affiliation / University:  {}", uni.white());
+            }
+            println!("  ─────────────────────────────────────────────────────────────────────────");
+
+            // Fetch Top Podium Competitors
+            if let Ok(board) = client.fetch_competition_leaderboard(&comp.id, 5).await {
+                println!(
+                    "\n  🏅 National Podium Standings (Top {} / {} Competitors):",
+                    board.results.len().min(5),
+                    board.count
+                );
+                println!("  ┌──────┬────────────────────────┬─────────┬───────────┬────────────┬──────┬────────────────────────────┐");
+                println!("  │ Rank │ Competitor             │ Score   │ isScore   │ Uniqueness │ Days │ University                 │");
+                println!("  ├──────┼────────────────────────┼─────────┼───────────┼────────────┼──────┼────────────────────────────┤");
+
+                for entry in board.results.iter().take(5) {
+                    let is_me = if let Some(ref prof) = user_profile {
+                        entry.user.id() == prof.id
+                    } else {
+                        false
+                    };
+
+                    let rank_badge = match entry.rank {
+                        1 => "🥇 #1".yellow().bold(),
+                        2 => "🥈 #2".bright_white().bold(),
+                        3 => "🥉 #3".bright_yellow().bold(),
+                        r => format!("   #{}", r).normal(),
+                    };
+
+                    let comp_name = if is_me {
+                        format!("{} (YOU)", entry.user.display_name()).green().bold()
+                    } else {
+                        entry.user.display_name().normal()
+                    };
+
+                    let uni_short = entry.university.as_deref().unwrap_or("—");
+                    let uni_display = if uni_short.len() > 26 {
+                        format!("{}...", &uni_short[..23])
+                    } else {
+                        uni_short.to_string()
+                    };
+
+                    println!(
+                        "  │ {:<4} │ {:<22} │ {:>7.2} │ {:>9.1} │ {:>10.2} │ {:>4} │ {:<26} │",
+                        rank_badge,
+                        comp_name,
+                        entry.score,
+                        entry.is_score,
+                        entry.uniqueness_score,
+                        entry.days_of_submission,
+                        uni_display
+                    );
+                }
+                println!("  └──────┴────────────────────────┴─────────┴───────────┴────────────┴──────┴────────────────────────────┘");
+            }
+        }
+    }
+
+    if !found_board {
+        println!("  ℹ️  No active competition leaderboard entry found.");
+    }
+
+    // Also display portfolio summary if portfolio_os.json exists
+    let port_path = "portfolio_os.json";
+    if Path::new(port_path).exists() {
+        if let Ok(port_data) = fs::read_to_string(port_path) {
+            if let Ok(os_alphas) = serde_json::from_str::<Vec<PortfolioAlpha>>(&port_data) {
+                println!(
+                    "\n  📊 Active OS Portfolio: {} Alphas tracked in {}",
+                    os_alphas.len().to_string().bold().green(),
+                    json_path_display(port_path)
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn json_path_display(p: &str) -> colored::ColoredString {
+    p.bold()
+}
+
 
 async fn cmd_check(alpha_id: String) -> Result<()> {
     println!(
@@ -785,5 +1004,293 @@ async fn cmd_sim(
     } else {
         println!("  {} No Alpha ID returned from simulation.", "⚠️".yellow());
     }
+    Ok(())
+}
+
+async fn cmd_radar(
+    region: String,
+    top: usize,
+    filter: Option<String>,
+    green_only: bool,
+) -> Result<()> {
+    println!(
+        "{}",
+        "═════════════════════════════════════════════════════════════════════════".cyan()
+    );
+    println!(
+        "{}",
+        "  AlphaFind Quant Engine — Live Dynamic Crowd Census Radar"
+            .bold()
+            .cyan()
+    );
+    println!(
+        "{}",
+        "═════════════════════════════════════════════════════════════════════════".cyan()
+    );
+
+    let client = get_main_client()?;
+    println!("  Connecting to WorldQuant BRAIN API (Region: {})...", region.yellow());
+
+    let datasets = client.fetch_all_datasets(&region).await?;
+    println!(
+        "  {} Fetched {} datasets from WorldQuant BRAIN Production API.",
+        "✅".green(),
+        datasets.len().to_string().bold().green()
+    );
+
+    // Load previous snapshot if exists for delta tracking
+    let data_dir = Path::new("data");
+    let _ = fs::create_dir_all(data_dir);
+    let snapshot_file = data_dir.join("census_snapshots.json");
+
+    let prev_snapshot: Option<CensusSnapshot> = if snapshot_file.exists() {
+        fs::read_to_string(&snapshot_file)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+    } else {
+        None
+    };
+
+    let mut prev_map: HashMap<String, (i64, i64)> = HashMap::new();
+    if let Some(ref prev) = prev_snapshot {
+        println!(
+            "  Loaded previous snapshot from {}. Calculating crowd migration velocity...",
+            prev.timestamp.cyan()
+        );
+        for d in &prev.datasets {
+            let sub_name = d.subcategory.as_ref().and_then(|s| s.name.as_deref()).unwrap_or("");
+            let key = format!("{}:{}", d.id, sub_name);
+            prev_map.insert(key, (d.user_count.unwrap_or(0), d.alpha_count.unwrap_or(0)));
+        }
+    }
+
+    // Save current snapshot
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let current_snapshot = CensusSnapshot {
+        timestamp: format!("Unix Epoch {}", secs),
+        region: region.clone(),
+        total_datasets: datasets.len(),
+        datasets: datasets.clone(),
+    };
+    if let Ok(json_str) = serde_json::to_string_pretty(&current_snapshot) {
+        let _ = fs::write(&snapshot_file, json_str);
+    }
+
+    // Filter datasets
+    let mut filtered: Vec<&DatasetEntry> = datasets.iter().collect();
+    if let Some(ref f) = filter {
+        let f_lower = f.to_lowercase();
+        filtered.retain(|d| {
+            d.id.to_lowercase().contains(&f_lower)
+                || d.name.as_deref().unwrap_or("").to_lowercase().contains(&f_lower)
+                || d.subcategory.as_ref().and_then(|s| s.name.as_deref()).unwrap_or("").to_lowercase().contains(&f_lower)
+        });
+    }
+
+    if green_only {
+        filtered.retain(|d| d.user_count.unwrap_or(0) < 300);
+    }
+
+    // Sort Green Sanctuaries (lowest userCount first)
+    let mut green_sanctuaries = filtered.clone();
+    green_sanctuaries.sort_by_key(|d| d.user_count.unwrap_or(0));
+
+    println!("\n  🟢 GREEN SANCTUARIES (Uncrowded / High Uniqueness Potential):");
+    println!("  ┌──────────────┬───────────────────────────┬──────────────┬──────────────┬──────────────┬────────────┐");
+    println!("  │ Dataset ID   │ Subcategory               │ Users (Live) │ Alphas (Live)│ Fields Count │ Status     │");
+    println!("  ├──────────────┼───────────────────────────┼──────────────┼──────────────┼──────────────┼────────────┤");
+
+    for d in green_sanctuaries.iter().take(top) {
+        let u_cnt = d.user_count.unwrap_or(0);
+        let a_cnt = d.alpha_count.unwrap_or(0);
+        let f_cnt = d.field_count.unwrap_or(0);
+        let subcat = d.subcategory.as_ref().and_then(|s| s.name.as_deref()).unwrap_or("General");
+        let sub_display = if subcat.len() > 25 { format!("{}...", &subcat[..22]) } else { subcat.to_string() };
+
+        let status = if u_cnt <= 50 {
+            "PRISTINE".green().bold()
+        } else if u_cnt <= 300 {
+            "SAFE".green()
+        } else {
+            "MODERATE".yellow()
+        };
+
+        let key = format!("{}:{}", d.id, subcat);
+        let delta_str = if let Some(&(p_u, _)) = prev_map.get(&key) {
+            let du = u_cnt - p_u;
+            if du > 0 {
+                format!(" (+{})", du).yellow().to_string()
+            } else {
+                "".to_string()
+            }
+        } else {
+            "".to_string()
+        };
+
+        let u_str = format!("{}{}", u_cnt, delta_str);
+
+        println!(
+            "  │ {:<12} │ {:<25} │ {:>12} │ {:>12} │ {:>12} │ {:<10} │",
+            d.id.cyan(),
+            sub_display,
+            u_str,
+            a_cnt,
+            f_cnt,
+            status
+        );
+    }
+    println!("  └──────────────┴───────────────────────────┴──────────────┴──────────────┴──────────────┴────────────┘");
+
+    // Display Top Red Zones if not green_only
+    if !green_only {
+        let mut red_zones = filtered.clone();
+        red_zones.sort_by_key(|d| std::cmp::Reverse(d.user_count.unwrap_or(0)));
+
+        println!("\n  🔴 HIGH-CROWD RED ZONES (Crowded / Diluted Uniqueness - AVOID):");
+        println!("  ┌──────────────┬───────────────────────────┬──────────────┬──────────────┬──────────────┬────────────┐");
+        println!("  │ Dataset ID   │ Subcategory               │ Users (Live) │ Alphas (Live)│ Fields Count │ Status     │");
+        println!("  ├──────────────┼───────────────────────────┼──────────────┼──────────────┼──────────────┼────────────┤");
+
+        for d in red_zones.iter().take(top.min(8)) {
+            let u_cnt = d.user_count.unwrap_or(0);
+            let a_cnt = d.alpha_count.unwrap_or(0);
+            let f_cnt = d.field_count.unwrap_or(0);
+            let subcat = d.subcategory.as_ref().and_then(|s| s.name.as_deref()).unwrap_or("General");
+            let sub_display = if subcat.len() > 25 { format!("{}...", &subcat[..22]) } else { subcat.to_string() };
+
+            let status = if u_cnt >= 20000 {
+                "DANGER".red().bold()
+            } else if u_cnt >= 2000 {
+                "CROWDED".red()
+            } else {
+                "MODERATE".yellow()
+            };
+
+            println!(
+                "  │ {:<12} │ {:<25} │ {:>12} │ {:>12} │ {:>12} │ {:<10} │",
+                d.id.yellow(),
+                sub_display,
+                u_cnt,
+                a_cnt,
+                f_cnt,
+                status
+            );
+        }
+        println!("  └──────────────┴───────────────────────────┴──────────────┴──────────────┴──────────────┴────────────┘");
+    }
+
+    Ok(())
+}
+
+async fn cmd_impact(alpha_id: String) -> Result<()> {
+    println!(
+        "{}",
+        "═════════════════════════════════════════════════════════════════════════".cyan()
+    );
+    println!(
+        "{}",
+        format!("  AlphaFind Quant Engine — Portfolio Delta Impact [{}]", alpha_id)
+            .bold()
+            .cyan()
+    );
+    println!(
+        "{}",
+        "═════════════════════════════════════════════════════════════════════════".cyan()
+    );
+
+    let client = get_main_client()?;
+    println!("  Fetching candidate daily PnL for {}...", alpha_id.yellow());
+    let cand_pnl = client.fetch_daily_pnl(&alpha_id).await?;
+    println!("  Candidate PnL records: {} trading days.", cand_pnl.len());
+
+    // Load active OS alphas PnL cache
+    let cache_file = get_cache_dir().join("portfolio_pnl.json");
+    if !cache_file.exists() {
+        anyhow::bail!("portfolio_pnl.json not found! Run 'alphafind portfolio' first.");
+    }
+    let pnl_data = fs::read_to_string(&cache_file)?;
+    let pnl_cache: HashMap<String, HashMap<String, f64>> = serde_json::from_str(&pnl_data)?;
+
+    let impact = calculate_portfolio_impact(&alpha_id, &cand_pnl, &pnl_cache)
+        .context("Failed to compute portfolio merge impact (insufficient overlapping days)")?;
+
+    println!("\n  📊 PORTFOLIO MERGE SIMULATION IMPACT (1,236 Days):");
+    println!("  ─────────────────────────────────────────────────────────────────────────");
+    println!("    Active Alphas Count:       {} -> {} (+1 Alpha)", impact.baseline_alphas, impact.new_alphas);
+
+    let d_sharpe_styled = if impact.delta_sharpe >= 0.0 {
+        format!("+{:.4}", impact.delta_sharpe).green().bold().to_string()
+    } else {
+        format!("{:.4}", impact.delta_sharpe).red().bold().to_string()
+    };
+    println!(
+        "    Merged Portfolio Sharpe:   {:.4} -> {:.4} (Delta: {})",
+        impact.baseline_sharpe, impact.new_sharpe, d_sharpe_styled
+    );
+
+    let d_pnl_styled = if impact.delta_pnl >= 0.0 {
+        format!("+${:.2}", impact.delta_pnl).green().to_string()
+    } else {
+        format!("-${:.2}", impact.delta_pnl.abs()).red().to_string()
+    };
+    println!(
+        "    Annualized Merged PnL:     ${:.2} -> ${:.2} (Delta: {})",
+        impact.baseline_pnl, impact.new_pnl, d_pnl_styled
+    );
+
+    let d_vol_styled = if impact.delta_vol <= 0.0 {
+        format!("-${:.2} (Variance Collapsed)", impact.delta_vol.abs()).green().to_string()
+    } else {
+        format!("+${:.2}", impact.delta_vol).yellow().to_string()
+    };
+    println!(
+        "    Annualized Volatility:     ${:.2} -> ${:.2} (Delta: {})",
+        impact.baseline_vol, impact.new_vol, d_vol_styled
+    );
+
+    let d_corr_styled = if impact.delta_avg_corr <= 0.0 {
+        format!("{:.2}%", impact.delta_avg_corr * 100.0).green().to_string()
+    } else {
+        format!("+{:.2}%", impact.delta_avg_corr * 100.0).yellow().to_string()
+    };
+    println!(
+        "    Average Pairwise Corr:     {:.2}% -> {:.2}% (Delta: {})",
+        impact.baseline_avg_corr * 100.0, impact.new_avg_corr * 100.0, d_corr_styled
+    );
+
+    println!("  ─────────────────────────────────────────────────────────────────────────");
+    println!(
+        "    Max Pairwise Correlation:  {:+.2}% vs {}",
+        impact.max_pairwise_corr * 100.0,
+        impact.most_correlated_id.yellow()
+    );
+    println!(
+        "    Direct Avg Corr vs OS:     {:+.2}%",
+        impact.avg_pairwise_corr_vs_os * 100.0
+    );
+
+    let buffer_styled = if impact.safety_buffer_pct >= 10.0 {
+        format!("{:.2}% (HIGH SAFETY)", impact.safety_buffer_pct).green().bold().to_string()
+    } else if impact.safety_buffer_pct > 0.0 {
+        format!("{:.2}% (TIGHT SAFETY)", impact.safety_buffer_pct).yellow().bold().to_string()
+    } else {
+        format!("{:.2}% (VIOLATION)", impact.safety_buffer_pct).red().bold().to_string()
+    };
+    println!("    Safety Buffer to 70% Limit: {}", buffer_styled);
+    println!("  ─────────────────────────────────────────────────────────────────────────");
+
+    if impact.max_pairwise_corr > 0.70 {
+        println!("\n  {} REJECTED: Candidate violates 70% self-correlation ceiling.", "❌ [UNSUBMITTABLE]".red().bold());
+    } else if impact.delta_sharpe > 0.0 && impact.safety_buffer_pct >= 8.0 {
+        println!("\n  {} HIGH CONVICTION: Boosts portfolio Sharpe and preserves safety buffer!", "🌟 [RECOMMENDED]".green().bold());
+    } else if impact.delta_sharpe > 0.0 {
+        println!("\n  {} ACCEPTABLE: Boosts portfolio Sharpe but safety buffer is narrow.", "🟡 [CAUTION]".yellow().bold());
+    } else {
+        println!("\n  {} DILUTIVE: Candidate reduces portfolio Sharpe.", "⚠️ [SUBOPTIMAL]".yellow());
+    }
+
     Ok(())
 }
