@@ -331,7 +331,11 @@ impl BrainClient {
                         sleep(Duration::from_secs_f64(wait)).await;
                         continue;
                     }
-                    return Err(anyhow!("Failed to parse check response JSON: {}. Body: {}", e, text.chars().take(200).collect::<String>()));
+                    return Err(anyhow!(
+                        "Failed to parse check response JSON: {}. Body: {}",
+                        e,
+                        text.chars().take(200).collect::<String>()
+                    ));
                 }
             };
             let is_data = val.get("is").cloned().unwrap_or(val.clone());
@@ -742,4 +746,3 @@ impl BrainClient {
         }
     }
 }
-

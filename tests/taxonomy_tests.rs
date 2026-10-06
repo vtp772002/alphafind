@@ -181,7 +181,10 @@ fn test_factor_pillar_from_str_cross() {
 #[test]
 fn test_curated_candidates_cross_sanctuary() {
     let candidates = get_curated_candidates(Some(FactorPillar::CrossSanctuary), Some("TOP1000"));
-    assert!(!candidates.is_empty(), "Should generate cross-sanctuary candidates");
+    assert!(
+        !candidates.is_empty(),
+        "Should generate cross-sanctuary candidates"
+    );
     for c in &candidates {
         assert_eq!(c.pillar, "CROSS_SANCTUARY");
         assert_eq!(c.universe, "TOP1000");
