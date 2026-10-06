@@ -288,7 +288,11 @@ async fn cmd_sync() -> Result<()> {
     if let Ok(competitions) = client.fetch_competitions().await {
         for comp in &competitions {
             if let Some(lb) = &comp.leaderboard {
-                println!("\n  {} Live Leaderboard Status ({}):", "🏆".bold(), comp.name.yellow());
+                println!(
+                    "\n  {} Live Leaderboard Status ({}):",
+                    "🏆".bold(),
+                    comp.name.yellow()
+                );
                 if let Some(r) = lb.rank {
                     println!(
                         "    Rank: #{} | Score: {:.2} | isScore: {:.1} | Uniqueness: {:.2} | Days: {}/60",
@@ -416,7 +420,9 @@ async fn cmd_score() -> Result<()> {
                     };
 
                     let comp_name = if is_me {
-                        format!("{} (YOU)", entry.user.display_name()).green().bold()
+                        format!("{} (YOU)", entry.user.display_name())
+                            .green()
+                            .bold()
                     } else {
                         entry.user.display_name().normal()
                     };
@@ -468,7 +474,6 @@ async fn cmd_score() -> Result<()> {
 fn json_path_display(p: &str) -> colored::ColoredString {
     p.bold()
 }
-
 
 async fn cmd_check(alpha_id: String) -> Result<()> {
     println!(
@@ -1029,7 +1034,10 @@ async fn cmd_radar(
     );
 
     let client = get_main_client()?;
-    println!("  Connecting to WorldQuant BRAIN API (Region: {})...", region.yellow());
+    println!(
+        "  Connecting to WorldQuant BRAIN API (Region: {})...",
+        region.yellow()
+    );
 
     let datasets = client.fetch_all_datasets(&region).await?;
     println!(
@@ -1058,7 +1066,11 @@ async fn cmd_radar(
             prev.timestamp.cyan()
         );
         for d in &prev.datasets {
-            let sub_name = d.subcategory.as_ref().and_then(|s| s.name.as_deref()).unwrap_or("");
+            let sub_name = d
+                .subcategory
+                .as_ref()
+                .and_then(|s| s.name.as_deref())
+                .unwrap_or("");
             let key = format!("{}:{}", d.id, sub_name);
             prev_map.insert(key, (d.user_count.unwrap_or(0), d.alpha_count.unwrap_or(0)));
         }
@@ -1085,8 +1097,17 @@ async fn cmd_radar(
         let f_lower = f.to_lowercase();
         filtered.retain(|d| {
             d.id.to_lowercase().contains(&f_lower)
-                || d.name.as_deref().unwrap_or("").to_lowercase().contains(&f_lower)
-                || d.subcategory.as_ref().and_then(|s| s.name.as_deref()).unwrap_or("").to_lowercase().contains(&f_lower)
+                || d.name
+                    .as_deref()
+                    .unwrap_or("")
+                    .to_lowercase()
+                    .contains(&f_lower)
+                || d.subcategory
+                    .as_ref()
+                    .and_then(|s| s.name.as_deref())
+                    .unwrap_or("")
+                    .to_lowercase()
+                    .contains(&f_lower)
         });
     }
 
@@ -1107,8 +1128,16 @@ async fn cmd_radar(
         let u_cnt = d.user_count.unwrap_or(0);
         let a_cnt = d.alpha_count.unwrap_or(0);
         let f_cnt = d.field_count.unwrap_or(0);
-        let subcat = d.subcategory.as_ref().and_then(|s| s.name.as_deref()).unwrap_or("General");
-        let sub_display = if subcat.len() > 25 { format!("{}...", &subcat[..22]) } else { subcat.to_string() };
+        let subcat = d
+            .subcategory
+            .as_ref()
+            .and_then(|s| s.name.as_deref())
+            .unwrap_or("General");
+        let sub_display = if subcat.len() > 25 {
+            format!("{}...", &subcat[..22])
+        } else {
+            subcat.to_string()
+        };
 
         let status = if u_cnt <= 50 {
             "PRISTINE".green().bold()
@@ -1158,8 +1187,16 @@ async fn cmd_radar(
             let u_cnt = d.user_count.unwrap_or(0);
             let a_cnt = d.alpha_count.unwrap_or(0);
             let f_cnt = d.field_count.unwrap_or(0);
-            let subcat = d.subcategory.as_ref().and_then(|s| s.name.as_deref()).unwrap_or("General");
-            let sub_display = if subcat.len() > 25 { format!("{}...", &subcat[..22]) } else { subcat.to_string() };
+            let subcat = d
+                .subcategory
+                .as_ref()
+                .and_then(|s| s.name.as_deref())
+                .unwrap_or("General");
+            let sub_display = if subcat.len() > 25 {
+                format!("{}...", &subcat[..22])
+            } else {
+                subcat.to_string()
+            };
 
             let status = if u_cnt >= 20000 {
                 "DANGER".red().bold()
@@ -1192,9 +1229,12 @@ async fn cmd_impact(alpha_id: String) -> Result<()> {
     );
     println!(
         "{}",
-        format!("  AlphaFind Quant Engine — Portfolio Delta Impact [{}]", alpha_id)
-            .bold()
-            .cyan()
+        format!(
+            "  AlphaFind Quant Engine — Portfolio Delta Impact [{}]",
+            alpha_id
+        )
+        .bold()
+        .cyan()
     );
     println!(
         "{}",
@@ -1202,7 +1242,10 @@ async fn cmd_impact(alpha_id: String) -> Result<()> {
     );
 
     let client = get_main_client()?;
-    println!("  Fetching candidate daily PnL for {}...", alpha_id.yellow());
+    println!(
+        "  Fetching candidate daily PnL for {}...",
+        alpha_id.yellow()
+    );
     let cand_pnl = client.fetch_daily_pnl(&alpha_id).await?;
     println!("  Candidate PnL records: {} trading days.", cand_pnl.len());
 
@@ -1219,12 +1262,21 @@ async fn cmd_impact(alpha_id: String) -> Result<()> {
 
     println!("\n  📊 PORTFOLIO MERGE SIMULATION IMPACT (1,236 Days):");
     println!("  ─────────────────────────────────────────────────────────────────────────");
-    println!("    Active Alphas Count:       {} -> {} (+1 Alpha)", impact.baseline_alphas, impact.new_alphas);
+    println!(
+        "    Active Alphas Count:       {} -> {} (+1 Alpha)",
+        impact.baseline_alphas, impact.new_alphas
+    );
 
     let d_sharpe_styled = if impact.delta_sharpe >= 0.0 {
-        format!("+{:.4}", impact.delta_sharpe).green().bold().to_string()
+        format!("+{:.4}", impact.delta_sharpe)
+            .green()
+            .bold()
+            .to_string()
     } else {
-        format!("{:.4}", impact.delta_sharpe).red().bold().to_string()
+        format!("{:.4}", impact.delta_sharpe)
+            .red()
+            .bold()
+            .to_string()
     };
     println!(
         "    Merged Portfolio Sharpe:   {:.4} -> {:.4} (Delta: {})",
@@ -1242,7 +1294,9 @@ async fn cmd_impact(alpha_id: String) -> Result<()> {
     );
 
     let d_vol_styled = if impact.delta_vol <= 0.0 {
-        format!("-${:.2} (Variance Collapsed)", impact.delta_vol.abs()).green().to_string()
+        format!("-${:.2} (Variance Collapsed)", impact.delta_vol.abs())
+            .green()
+            .to_string()
     } else {
         format!("+${:.2}", impact.delta_vol).yellow().to_string()
     };
@@ -1252,13 +1306,19 @@ async fn cmd_impact(alpha_id: String) -> Result<()> {
     );
 
     let d_corr_styled = if impact.delta_avg_corr <= 0.0 {
-        format!("{:.2}%", impact.delta_avg_corr * 100.0).green().to_string()
+        format!("{:.2}%", impact.delta_avg_corr * 100.0)
+            .green()
+            .to_string()
     } else {
-        format!("+{:.2}%", impact.delta_avg_corr * 100.0).yellow().to_string()
+        format!("+{:.2}%", impact.delta_avg_corr * 100.0)
+            .yellow()
+            .to_string()
     };
     println!(
         "    Average Pairwise Corr:     {:.2}% -> {:.2}% (Delta: {})",
-        impact.baseline_avg_corr * 100.0, impact.new_avg_corr * 100.0, d_corr_styled
+        impact.baseline_avg_corr * 100.0,
+        impact.new_avg_corr * 100.0,
+        d_corr_styled
     );
 
     println!("  ─────────────────────────────────────────────────────────────────────────");
@@ -1273,23 +1333,44 @@ async fn cmd_impact(alpha_id: String) -> Result<()> {
     );
 
     let buffer_styled = if impact.safety_buffer_pct >= 10.0 {
-        format!("{:.2}% (HIGH SAFETY)", impact.safety_buffer_pct).green().bold().to_string()
+        format!("{:.2}% (HIGH SAFETY)", impact.safety_buffer_pct)
+            .green()
+            .bold()
+            .to_string()
     } else if impact.safety_buffer_pct > 0.0 {
-        format!("{:.2}% (TIGHT SAFETY)", impact.safety_buffer_pct).yellow().bold().to_string()
+        format!("{:.2}% (TIGHT SAFETY)", impact.safety_buffer_pct)
+            .yellow()
+            .bold()
+            .to_string()
     } else {
-        format!("{:.2}% (VIOLATION)", impact.safety_buffer_pct).red().bold().to_string()
+        format!("{:.2}% (VIOLATION)", impact.safety_buffer_pct)
+            .red()
+            .bold()
+            .to_string()
     };
     println!("    Safety Buffer to 70% Limit: {}", buffer_styled);
     println!("  ─────────────────────────────────────────────────────────────────────────");
 
     if impact.max_pairwise_corr > 0.70 {
-        println!("\n  {} REJECTED: Candidate violates 70% self-correlation ceiling.", "❌ [UNSUBMITTABLE]".red().bold());
+        println!(
+            "\n  {} REJECTED: Candidate violates 70% self-correlation ceiling.",
+            "❌ [UNSUBMITTABLE]".red().bold()
+        );
     } else if impact.delta_sharpe > 0.0 && impact.safety_buffer_pct >= 8.0 {
-        println!("\n  {} HIGH CONVICTION: Boosts portfolio Sharpe and preserves safety buffer!", "🌟 [RECOMMENDED]".green().bold());
+        println!(
+            "\n  {} HIGH CONVICTION: Boosts portfolio Sharpe and preserves safety buffer!",
+            "🌟 [RECOMMENDED]".green().bold()
+        );
     } else if impact.delta_sharpe > 0.0 {
-        println!("\n  {} ACCEPTABLE: Boosts portfolio Sharpe but safety buffer is narrow.", "🟡 [CAUTION]".yellow().bold());
+        println!(
+            "\n  {} ACCEPTABLE: Boosts portfolio Sharpe but safety buffer is narrow.",
+            "🟡 [CAUTION]".yellow().bold()
+        );
     } else {
-        println!("\n  {} DILUTIVE: Candidate reduces portfolio Sharpe.", "⚠️ [SUBOPTIMAL]".yellow());
+        println!(
+            "\n  {} DILUTIVE: Candidate reduces portfolio Sharpe.",
+            "⚠️ [SUBOPTIMAL]".yellow()
+        );
     }
 
     Ok(())

@@ -222,5 +222,3 @@ fn test_leaderboard_response_deserialization() {
     assert_eq!(resp.results[1].user.id(), "USR12345");
     assert_eq!(resp.results[1].score, 0.74);
 }
-
-

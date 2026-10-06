@@ -40,7 +40,8 @@ impl FactorPillar {
             Some(Self::FinancialHealthQuality)
         } else if upper.contains("RISK") || upper.contains("IDIO") {
             Some(Self::IdiosyncraticRisk)
-        } else if upper.contains("CROSS") || upper.contains("SANCTUARY") || upper.contains("HYBRID") {
+        } else if upper.contains("CROSS") || upper.contains("SANCTUARY") || upper.contains("HYBRID")
+        {
             Some(Self::CrossSanctuary)
         } else if upper.contains("SHORT") || upper.contains("SQUEEZE") {
             Some(Self::ShortInterest)

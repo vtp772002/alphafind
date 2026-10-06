@@ -410,5 +410,3 @@ pub struct PortfolioImpactResult {
     pub avg_pairwise_corr_vs_os: f64,
     pub safety_buffer_pct: f64,
 }
-
-

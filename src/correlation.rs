@@ -1,5 +1,5 @@
-use std::collections::{HashMap, HashSet};
 use crate::models::PortfolioImpactResult;
+use std::collections::{HashMap, HashSet};
 
 /// Computes the exact Pearson correlation between two daily PnL series over their shared trading days.
 pub fn pearson_correlation(
