@@ -1331,14 +1331,20 @@ async fn cmd_tune(
         Some(tuned) => {
             let st = tuned.details.is.as_ref().unwrap();
             println!("\n  🎉 TUNING SUCCESS!");
-            println!("    Tuned Strategy: {}", tuned.tuning_strategy.green().bold());
+            println!(
+                "    Tuned Strategy: {}",
+                tuned.tuning_strategy.green().bold()
+            );
             println!("    Alpha ID:       {}", tuned.details.id.yellow().bold());
             println!(
                 "    Fitness:        {:.2} -> {:.2}",
                 tuned.original_fitness, tuned.tuned_fitness
             );
             println!("    Sharpe:         {:.2}", st.sharpe.unwrap_or(0.0));
-            println!("    Turnover:       {:.1}%", st.turnover.unwrap_or(0.0) * 100.0);
+            println!(
+                "    Turnover:       {:.1}%",
+                st.turnover.unwrap_or(0.0) * 100.0
+            );
             println!(
                 "    Settings:       Decay={}, Neut={}",
                 tuned.settings.decay, tuned.settings.neutralization

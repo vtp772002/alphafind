@@ -36,10 +36,14 @@ pub enum NeutralizationShield {
 impl NeutralizationShield {
     pub fn badge(&self) -> colored::ColoredString {
         match self {
-            Self::Strong => "STRONG (SUBINDUSTRY — Eliminates industry/sector crowd beta)".green().bold(),
+            Self::Strong => "STRONG (SUBINDUSTRY — Eliminates industry/sector crowd beta)"
+                .green()
+                .bold(),
             Self::Moderate => "MODERATE (INDUSTRY)".yellow(),
             Self::Weak => "WEAK (SECTOR)".yellow(),
-            Self::Exposed => "EXPOSED (MARKET/NONE — Fully co-moves with crowd momentum)".red().bold(),
+            Self::Exposed => "EXPOSED (MARKET/NONE — Fully co-moves with crowd momentum)"
+                .red()
+                .bold(),
         }
     }
 }
@@ -55,10 +59,20 @@ pub enum UniquenessRisk {
 impl UniquenessRisk {
     pub fn badge(&self) -> colored::ColoredString {
         match self {
-            Self::Low => "🟢 LOW RISK (Sanctuary / High Uniqueness Potential)".green().bold(),
-            Self::Moderate => "🟡 MODERATE RISK (Acceptable if pairwise corr is negative)".yellow().bold(),
-            Self::High => "🟠 HIGH RISK (Crowded factor; risk of increasing uniquenessScore)".truecolor(255, 140, 0).bold(),
-            Self::Critical => "🔴 CRITICAL CROWD TRAP (Surges uniquenessScore, destroys leaderboard rank)".red().bold(),
+            Self::Low => "🟢 LOW RISK (Sanctuary / High Uniqueness Potential)"
+                .green()
+                .bold(),
+            Self::Moderate => "🟡 MODERATE RISK (Acceptable if pairwise corr is negative)"
+                .yellow()
+                .bold(),
+            Self::High => "🟠 HIGH RISK (Crowded factor; risk of increasing uniquenessScore)"
+                .truecolor(255, 140, 0)
+                .bold(),
+            Self::Critical => {
+                "🔴 CRITICAL CROWD TRAP (Surges uniquenessScore, destroys leaderboard rank)"
+                    .red()
+                    .bold()
+            }
         }
     }
 }
@@ -117,14 +131,6 @@ pub fn detect_dataset_and_pillar(expr: &str) -> (&'static str, &'static str) {
         || lower.contains("cash_flow")
     {
         ("fundamental6", "FINANCIAL_HEALTH_QUALITY")
-    } else if lower.contains("vwap")
-        || lower.contains("night_ret")
-        || lower.contains("day_ret")
-        || lower.contains("open")
-        || lower.contains("close")
-        || lower.contains("volume")
-    {
-        ("pv1", "MICROSTRUCTURE_VWAP")
     } else {
         ("pv1", "MICROSTRUCTURE_VWAP")
     }
@@ -240,7 +246,10 @@ pub fn evaluate_crowd_risk(
                 "🔴 ZERO BETA SHIELD: Neutralization '{}' preserves macro/sector crowd correlation.",
                 neut_clean
             ));
-            recommendations.push("Switch neutralization to SUBINDUSTRY to cancel common factor co-movement.".to_string());
+            recommendations.push(
+                "Switch neutralization to SUBINDUSTRY to cancel common factor co-movement."
+                    .to_string(),
+            );
             if u_clean == "TOP3000" && dataset_id == "option8" {
                 recommendations.push("Avoid TOP3000 for options! Shift to TOP500 or TOP1000 where crowd is 12x-37x smaller.".to_string());
             }
@@ -259,11 +268,15 @@ pub fn evaluate_crowd_risk(
                 "🟠 CROWD WARNING: {} active quants in '{}' combined with {} neutralization.",
                 users, dataset_id, neut_clean
             ));
-            recommendations.push("Shift neutralization to SUBINDUSTRY to avoid platform PnL co-movement.".to_string());
+            recommendations.push(
+                "Shift neutralization to SUBINDUSTRY to avoid platform PnL co-movement."
+                    .to_string(),
+            );
             UniquenessRisk::High
         }
         (CrowdTier::Crowded, _) => {
-            recommendations.push("Maintain SUBINDUSTRY neutralization to ensure factor purity.".to_string());
+            recommendations
+                .push("Maintain SUBINDUSTRY neutralization to ensure factor purity.".to_string());
             UniquenessRisk::Moderate
         }
         (CrowdTier::Moderate, NeutralizationShield::Exposed) => {
@@ -271,7 +284,8 @@ pub fn evaluate_crowd_risk(
                 "🟡 Neutralization is {}, which may dilute uniqueness if peers trade similar assets.",
                 neut_clean
             ));
-            recommendations.push("Evaluate if SUBINDUSTRY neutralization preserves Sharpe.".to_string());
+            recommendations
+                .push("Evaluate if SUBINDUSTRY neutralization preserves Sharpe.".to_string());
             UniquenessRisk::Moderate
         }
         (CrowdTier::Moderate, _) => UniquenessRisk::Low,

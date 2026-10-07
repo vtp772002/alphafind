@@ -172,7 +172,11 @@ impl<'a> FitnessAutoTuner<'a> {
 
             println!("  -> Testing Exponent P = {:.1}...", p);
 
-            let sim_id = match self.client.submit_simulation(&mod_expr, base_settings).await {
+            let sim_id = match self
+                .client
+                .submit_simulation(&mod_expr, base_settings)
+                .await
+            {
                 Ok(id) => id,
                 Err(_) => continue,
             };
@@ -256,7 +260,10 @@ impl<'a> FitnessAutoTuner<'a> {
 
         // 1. First test baseline
         println!("  Evaluating baseline simulation...");
-        let base_sim_id = self.client.submit_simulation(expression, base_settings).await?;
+        let base_sim_id = self
+            .client
+            .submit_simulation(expression, base_settings)
+            .await?;
         let base_poll = self.client.poll_simulation(&base_sim_id, 350, 5).await?;
         let base_aid = match base_poll.alpha {
             Some(id) => id,
@@ -373,7 +380,8 @@ impl<'a> FitnessAutoTuner<'a> {
                                 "     Neutralization {} -> [{}] Sharpe: {:.2} | Fit: {:.2}",
                                 alt_neut, aid, sh, fit
                             );
-                            if fit >= target_fitness && sh >= 1.25 && (0.01..=0.70).contains(&turn) {
+                            if fit >= target_fitness && sh >= 1.25 && (0.01..=0.70).contains(&turn)
+                            {
                                 return Ok(Some(TunedAlphaResult {
                                     details,
                                     expression: neut_expr,
@@ -390,7 +398,9 @@ impl<'a> FitnessAutoTuner<'a> {
         }
 
         // 5. Strategy D: Combined Optimal Decay + Exponent 4.4
-        println!("\n  [Phase 4] Testing Combined Hyperparameter Matrix (Decay +10 x Exponent 4.4)...");
+        println!(
+            "\n  [Phase 4] Testing Combined Hyperparameter Matrix (Decay +10 x Exponent 4.4)..."
+        );
         let mut comb_settings = base_settings.clone();
         comb_settings.decay = (base_settings.decay + 10).min(50);
         if let Some(comb_expr) = replace_last_signed_power_exponent(expression, 4.4) {
@@ -410,7 +420,10 @@ impl<'a> FitnessAutoTuner<'a> {
                                     "     Combined -> [{}] Sharpe: {:.2} | Fit: {:.2}",
                                     aid, sh, fit
                                 );
-                                if fit >= target_fitness && sh >= 1.25 && (0.01..=0.70).contains(&turn) {
+                                if fit >= target_fitness
+                                    && sh >= 1.25
+                                    && (0.01..=0.70).contains(&turn)
+                                {
                                     return Ok(Some(TunedAlphaResult {
                                         details,
                                         expression: comb_expr,
@@ -427,7 +440,10 @@ impl<'a> FitnessAutoTuner<'a> {
             }
         }
 
-        println!("  ⚠️ AutoTuner exhausted all search dimensions without reaching Fitness {:.2}.", target_fitness);
+        println!(
+            "  ⚠️ AutoTuner exhausted all search dimensions without reaching Fitness {:.2}.",
+            target_fitness
+        );
         Ok(None)
     }
 }
