@@ -190,24 +190,25 @@ impl MultiAccountScreener {
                 );
 
                 // Auto-tune if promising
-                let (final_aid, final_fit, final_sh, final_ret, final_turn, final_decay) =
+                let (final_aid, final_fit, final_sh, final_ret, final_turn, final_settings, final_expr) =
                     if fit < min_fitness && sh >= 1.25 && ret >= 0.05 && enable_tuning {
                         let tuner = FitnessAutoTuner::new(&client);
-                        if let Ok(Some(tuned)) = tuner.tune_decay(&cand.expression, &settings, min_fitness).await {
-                            let t_st = tuned.is.unwrap_or_default();
+                        if let Ok(Some(tuned)) = tuner.tune_hyperparameters(&cand.expression, &settings, min_fitness).await {
+                            let t_st = tuned.details.is.unwrap_or_default();
                             (
-                                tuned.id,
+                                tuned.details.id,
                                 t_st.fitness.unwrap_or(fit),
                                 t_st.sharpe.unwrap_or(sh),
                                 t_st.returns.unwrap_or(ret),
                                 t_st.turnover.unwrap_or(turn),
-                                tuned.settings.map(|s| s.decay).unwrap_or(settings.decay),
+                                tuned.settings,
+                                tuned.expression,
                             )
                         } else {
-                            (alpha_id, fit, sh, ret, turn, settings.decay)
+                            (alpha_id, fit, sh, ret, turn, settings.clone(), cand.expression.clone())
                         }
                     } else {
-                        (alpha_id, fit, sh, ret, turn, settings.decay)
+                        (alpha_id, fit, sh, ret, turn, settings.clone(), cand.expression.clone())
                     };
 
                 // Check submission criteria
@@ -226,10 +227,9 @@ impl MultiAccountScreener {
                     let _lock = transfer_lock.lock().await;
                     let (main_aid, main_fit, main_sh, main_turn, main_ret) = if !is_main {
                         println!("  [*] Transferring {} to MAIN Account for official 8/8 check...", final_aid);
-                        let mut main_sett = settings.clone();
-                        main_sett.decay = final_decay;
+                        let main_sett = final_settings.clone();
 
-                        let m_sim = main_client.submit_simulation(&cand.expression, &main_sett).await.ok()?;
+                        let m_sim = main_client.submit_simulation(&final_expr, &main_sett).await.ok()?;
                         let m_poll = main_client.poll_simulation(&m_sim, 350, 5).await.ok()?;
                         let m_aid = m_poll.alpha?;
                         let m_det = main_client.get_alpha_details(&m_aid).await.ok()?;
@@ -258,20 +258,18 @@ impl MultiAccountScreener {
                             .bold()
                         );
 
-                        let mut s = settings.clone();
-                        s.decay = final_decay;
-                        let sett_json = serde_json::to_string(&s).unwrap_or_default();
+                        let sett_json = serde_json::to_string(&final_settings).unwrap_or_default();
 
                         return Some(SubmittableAlphaRecord {
                             alpha_id: main_aid,
                             name: cand.name.clone(),
-                            universe: s.universe,
+                            universe: final_settings.universe,
                             sharpe: (main_sh * 100.0).round() / 100.0,
                             fitness: (main_fit * 100.0).round() / 100.0,
                             turnover: (main_turn * 1000.0).round() / 10.0,
                             annual_return: (main_ret * 1000.0).round() / 10.0,
                             submitted: false,
-                            expression: cand.expression.clone(),
+                            expression: final_expr,
                             settings: sett_json,
                         });
                     } else {

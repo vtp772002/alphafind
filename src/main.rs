@@ -5,8 +5,10 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
+use alphafind::autotuner::FitnessAutoTuner;
 use alphafind::client::BrainClient;
 use alphafind::correlation::{audit_candidate, calculate_portfolio_impact, simulate_portfolio};
+use alphafind::crowd::{evaluate_crowd_risk, print_crowd_risk_audit};
 use alphafind::models::{AlphaSettings, CensusSnapshot, DatasetEntry, PortfolioAlpha};
 use alphafind::screener::MultiAccountScreener;
 use alphafind::taxonomy::{get_curated_candidates, FactorPillar};
@@ -128,17 +130,44 @@ enum Commands {
         #[arg(short, long, default_value = "USA")]
         region: String,
 
+        /// Filter by Universe (e.g. TOP3000, TOP1000, TOP500, TOPSP500, TOP200)
+        #[arg(short, long)]
+        universe: Option<String>,
+
         /// Maximum results to show (default: 15)
         #[arg(short, long, default_value_t = 15)]
         top: usize,
 
-        /// Keyword filter (e.g. news, short, vwap, analyst, fundamental)
+        /// Keyword filter (e.g. news, short, vwap, analyst, fundamental, option)
         #[arg(short, long)]
         filter: Option<String>,
 
         /// Filter only Green Sanctuaries (userCount < 300)
         #[arg(long)]
         green_only: bool,
+    },
+
+    /// Hyperparameter AutoTuner: multi-dimensional sweep (decay, exponent, neutralization) to maximize Fitness >= 1.50
+    Tune {
+        /// FastExpr alpha formula
+        #[arg(short, long)]
+        expr: String,
+
+        /// Target Universe (default: TOP1000)
+        #[arg(short, long, default_value = "TOP1000")]
+        universe: String,
+
+        /// Target Fitness to achieve (default: 1.50)
+        #[arg(short, long, default_value_t = 1.50)]
+        target_fitness: f64,
+
+        /// Base decay parameter (default: 10)
+        #[arg(short, long, default_value_t = 10)]
+        decay: i32,
+
+        /// Base neutralization group (default: SUBINDUSTRY)
+        #[arg(short, long, default_value = "SUBINDUSTRY")]
+        neutralization: String,
     },
 
     /// Simulate exact portfolio merge impact (Delta Sharpe, PnL, Vol, Correlation) for a candidate Alpha
@@ -206,10 +235,18 @@ async fn main() -> Result<()> {
         } => cmd_sim(expr, universe, decay, neutralization, truncation).await,
         Commands::Radar {
             region,
+            universe,
             top,
             filter,
             green_only,
-        } => cmd_radar(region, top, filter, green_only).await,
+        } => cmd_radar(region, universe, top, filter, green_only).await,
+        Commands::Tune {
+            expr,
+            universe,
+            target_fitness,
+            decay,
+            neutralization,
+        } => cmd_tune(expr, universe, target_fitness, decay, neutralization).await,
         Commands::Impact { alpha_id } => cmd_impact(alpha_id).await,
     }
 }
@@ -613,7 +650,7 @@ async fn cmd_audit(alpha_id: String, label: Option<String>) -> Result<()> {
     let report = audit_candidate(&alpha_id, &cand_pnl, &pnl_cache);
 
     println!(
-        "\n  Pairwise Correlation Audit vs {} OS Alphas:",
+        "\n  📊 TIER 1: INTERNAL PORTFOLIO CORRELATION AUDIT (vs {} OS Alphas):",
         pnl_cache.len()
     );
     println!("  ─────────────────────────────────────────────────────────────────────────");
@@ -639,13 +676,13 @@ async fn cmd_audit(alpha_id: String, label: Option<String>) -> Result<()> {
 
     println!("  ─────────────────────────────────────────────────────────────────────────");
     println!(
-        "  MAX CORRELATION: {:+.4} ({:+.2}%) vs {}",
+        "  MAX INTERNAL CORRELATION: {:+.4} ({:+.2}%) vs {}",
         report.max_correlation,
         report.max_correlation * 100.0,
         report.most_correlated_id.yellow()
     );
     println!(
-        "  AVERAGE CORRELATION: {:+.4} ({:+.2}%)",
+        "  AVERAGE INTERNAL CORR:   {:+.4} ({:+.2}%)",
         report.avg_correlation,
         report.avg_correlation * 100.0
     );
@@ -663,6 +700,24 @@ async fn cmd_audit(alpha_id: String, label: Option<String>) -> Result<()> {
             "❌ [REJECTED]".red().bold()
         );
     }
+
+    // Tier 2: Platform Crowd & Uniqueness Risk Estimator
+    if let Ok(details) = client.get_alpha_details(&alpha_id).await {
+        let u = details
+            .settings
+            .as_ref()
+            .map(|s| s.universe.as_str())
+            .unwrap_or("TOP1000");
+        let neut = details
+            .settings
+            .as_ref()
+            .map(|s| s.neutralization.as_str())
+            .unwrap_or("SUBINDUSTRY");
+        let code = details.get_code().unwrap_or("");
+        let crowd_report = evaluate_crowd_risk(code, u, neut, None);
+        print_crowd_risk_audit(&crowd_report);
+    }
+
     Ok(())
 }
 
@@ -1014,6 +1069,7 @@ async fn cmd_sim(
 
 async fn cmd_radar(
     region: String,
+    universe_filter: Option<String>,
     top: usize,
     filter: Option<String>,
     green_only: bool,
@@ -1024,7 +1080,7 @@ async fn cmd_radar(
     );
     println!(
         "{}",
-        "  AlphaFind Quant Engine — Live Dynamic Crowd Census Radar"
+        "  AlphaFind Quant Engine — Live Dynamic Crowd Census Radar (2D Matrix)"
             .bold()
             .cyan()
     );
@@ -1071,7 +1127,8 @@ async fn cmd_radar(
                 .as_ref()
                 .and_then(|s| s.name.as_deref())
                 .unwrap_or("");
-            let key = format!("{}:{}", d.id, sub_name);
+            let u_name = d.universe.as_deref().unwrap_or("");
+            let key = format!("{}:{}:{}", d.id, u_name, sub_name);
             prev_map.insert(key, (d.user_count.unwrap_or(0), d.alpha_count.unwrap_or(0)));
         }
     }
@@ -1093,6 +1150,24 @@ async fn cmd_radar(
 
     // Filter datasets
     let mut filtered: Vec<&DatasetEntry> = datasets.iter().collect();
+
+    // Filter by Universe if provided
+    if let Some(ref uf) = universe_filter {
+        let uf_upper = uf.to_uppercase();
+        filtered.retain(|d| {
+            d.universe
+                .as_deref()
+                .map(|u| u.to_uppercase().contains(&uf_upper))
+                .unwrap_or(false)
+        });
+        println!(
+            "  Filtered by Universe: {} ({} matching dataset entries)",
+            uf.cyan().bold(),
+            filtered.len().to_string().yellow()
+        );
+    }
+
+    // Keyword filter
     if let Some(ref f) = filter {
         let f_lower = f.to_lowercase();
         filtered.retain(|d| {
@@ -1120,14 +1195,18 @@ async fn cmd_radar(
     green_sanctuaries.sort_by_key(|d| d.user_count.unwrap_or(0));
 
     println!("\n  🟢 GREEN SANCTUARIES (Uncrowded / High Uniqueness Potential):");
-    println!("  ┌──────────────┬───────────────────────────┬──────────────┬──────────────┬──────────────┬────────────┐");
-    println!("  │ Dataset ID   │ Subcategory               │ Users (Live) │ Alphas (Live)│ Fields Count │ Status     │");
-    println!("  ├──────────────┼───────────────────────────┼──────────────┼──────────────┼──────────────┼────────────┤");
+    println!("  ┌──────────────┬──────────┬───────────────────────────┬──────────────┬──────────────┬──────────┬────────────┐");
+    println!("  │ Dataset ID   │ Universe │ Subcategory               │ Users (Live) │ Alphas (Live)│ Coverage │ Status     │");
+    println!("  ├──────────────┼──────────┼───────────────────────────┼──────────────┼──────────────┼──────────┼────────────┤");
 
     for d in green_sanctuaries.iter().take(top) {
         let u_cnt = d.user_count.unwrap_or(0);
         let a_cnt = d.alpha_count.unwrap_or(0);
-        let f_cnt = d.field_count.unwrap_or(0);
+        let u_name = d.universe.as_deref().unwrap_or("—");
+        let cov_str = d
+            .coverage
+            .map(|c| format!("{:.1}%", c * 100.0))
+            .unwrap_or_else(|| "—".to_string());
         let subcat = d
             .subcategory
             .as_ref()
@@ -1147,7 +1226,7 @@ async fn cmd_radar(
             "MODERATE".yellow()
         };
 
-        let key = format!("{}:{}", d.id, subcat);
+        let key = format!("{}:{}:{}", d.id, u_name, subcat);
         let delta_str = if let Some(&(p_u, _)) = prev_map.get(&key) {
             let du = u_cnt - p_u;
             if du > 0 {
@@ -1162,16 +1241,17 @@ async fn cmd_radar(
         let u_str = format!("{}{}", u_cnt, delta_str);
 
         println!(
-            "  │ {:<12} │ {:<25} │ {:>12} │ {:>12} │ {:>12} │ {:<10} │",
+            "  │ {:<12} │ {:<8} │ {:<25} │ {:>12} │ {:>12} │ {:>8} │ {:<10} │",
             d.id.cyan(),
+            u_name.white(),
             sub_display,
             u_str,
             a_cnt,
-            f_cnt,
+            cov_str,
             status
         );
     }
-    println!("  └──────────────┴───────────────────────────┴──────────────┴──────────────┴──────────────┴────────────┘");
+    println!("  └──────────────┴──────────┴───────────────────────────┴──────────────┴──────────────┴──────────┴────────────┘");
 
     // Display Top Red Zones if not green_only
     if !green_only {
@@ -1179,14 +1259,18 @@ async fn cmd_radar(
         red_zones.sort_by_key(|d| std::cmp::Reverse(d.user_count.unwrap_or(0)));
 
         println!("\n  🔴 HIGH-CROWD RED ZONES (Crowded / Diluted Uniqueness - AVOID):");
-        println!("  ┌──────────────┬───────────────────────────┬──────────────┬──────────────┬──────────────┬────────────┐");
-        println!("  │ Dataset ID   │ Subcategory               │ Users (Live) │ Alphas (Live)│ Fields Count │ Status     │");
-        println!("  ├──────────────┼───────────────────────────┼──────────────┼──────────────┼──────────────┼────────────┤");
+        println!("  ┌──────────────┬──────────┬───────────────────────────┬──────────────┬──────────────┬──────────┬────────────┐");
+        println!("  │ Dataset ID   │ Universe │ Subcategory               │ Users (Live) │ Alphas (Live)│ Coverage │ Status     │");
+        println!("  ├──────────────┼──────────┼───────────────────────────┼──────────────┼──────────────┼──────────┼────────────┤");
 
         for d in red_zones.iter().take(top.min(8)) {
             let u_cnt = d.user_count.unwrap_or(0);
             let a_cnt = d.alpha_count.unwrap_or(0);
-            let f_cnt = d.field_count.unwrap_or(0);
+            let u_name = d.universe.as_deref().unwrap_or("—");
+            let cov_str = d
+                .coverage
+                .map(|c| format!("{:.1}%", c * 100.0))
+                .unwrap_or_else(|| "—".to_string());
             let subcat = d
                 .subcategory
                 .as_ref()
@@ -1207,18 +1291,71 @@ async fn cmd_radar(
             };
 
             println!(
-                "  │ {:<12} │ {:<25} │ {:>12} │ {:>12} │ {:>12} │ {:<10} │",
+                "  │ {:<12} │ {:<8} │ {:<25} │ {:>12} │ {:>12} │ {:>8} │ {:<10} │",
                 d.id.yellow(),
+                u_name.white(),
                 sub_display,
                 u_cnt,
                 a_cnt,
-                f_cnt,
+                cov_str,
                 status
             );
         }
-        println!("  └──────────────┴───────────────────────────┴──────────────┴──────────────┴──────────────┴────────────┘");
+        println!("  └──────────────┴──────────┴───────────────────────────┴──────────────┴──────────────┴──────────┴────────────┘");
     }
 
+    Ok(())
+}
+
+async fn cmd_tune(
+    expr: String,
+    universe: String,
+    target_fitness: f64,
+    decay: i32,
+    neutralization: String,
+) -> Result<()> {
+    let client = get_main_client()?;
+    let settings = AlphaSettings {
+        universe,
+        decay,
+        neutralization,
+        truncation: 0.065,
+        ..Default::default()
+    };
+    let tuner = FitnessAutoTuner::new(&client);
+    let res = tuner
+        .tune_hyperparameters(&expr, &settings, target_fitness)
+        .await?;
+
+    match res {
+        Some(tuned) => {
+            let st = tuned.details.is.as_ref().unwrap();
+            println!("\n  🎉 TUNING SUCCESS!");
+            println!("    Tuned Strategy: {}", tuned.tuning_strategy.green().bold());
+            println!("    Alpha ID:       {}", tuned.details.id.yellow().bold());
+            println!(
+                "    Fitness:        {:.2} -> {:.2}",
+                tuned.original_fitness, tuned.tuned_fitness
+            );
+            println!("    Sharpe:         {:.2}", st.sharpe.unwrap_or(0.0));
+            println!("    Turnover:       {:.1}%", st.turnover.unwrap_or(0.0) * 100.0);
+            println!(
+                "    Settings:       Decay={}, Neut={}",
+                tuned.settings.decay, tuned.settings.neutralization
+            );
+            println!("    Formula:        {}", tuned.expression.cyan());
+            println!(
+                "    URL:            https://platform.worldquantbrain.com/alpha/{}",
+                tuned.details.id
+            );
+        }
+        None => {
+            println!(
+                "\n  ⚠️ AutoTuner completed: Could not achieve target fitness >= {:.2}.",
+                target_fitness
+            );
+        }
+    }
     Ok(())
 }
 
