@@ -152,6 +152,18 @@ pub struct AlphaDetails {
     pub is: Option<InSampleStats>,
 }
 
+impl AlphaDetails {
+    pub fn get_code(&self) -> Option<&str> {
+        self.regular.as_ref().and_then(|r| {
+            if let Some(s) = r.as_str() {
+                Some(s)
+            } else {
+                r.get("code").and_then(|c| c.as_str())
+            }
+        })
+    }
+}
+
 /// Daily PnL records returned by /alphas/{id}/recordsets/daily-pnl
 #[derive(Debug, Clone, Deserialize)]
 pub struct DailyPnlResponse {
@@ -360,11 +372,34 @@ pub struct DatasetEntry {
     #[serde(default)]
     pub subcategory: Option<DatasetCategoryInfo>,
     #[serde(default)]
+    pub region: Option<String>,
+    #[serde(default)]
+    pub delay: Option<i32>,
+    #[serde(default)]
+    pub universe: Option<String>,
+    #[serde(default)]
+    pub date_coverage: Option<f64>,
+    #[serde(default)]
+    pub coverage: Option<f64>,
+    #[serde(default)]
+    pub value_score: Option<f64>,
+    #[serde(default)]
     pub user_count: Option<i64>,
     #[serde(default)]
     pub alpha_count: Option<i64>,
     #[serde(default)]
     pub field_count: Option<i64>,
+}
+
+/// Result of multi-dimensional hyperparameter autotuning
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TunedAlphaResult {
+    pub details: AlphaDetails,
+    pub expression: String,
+    pub settings: AlphaSettings,
+    pub original_fitness: f64,
+    pub tuned_fitness: f64,
+    pub tuning_strategy: String,
 }
 
 /// Response returned by /data-sets
