@@ -4,7 +4,8 @@ use alphafind::crowd::{
 
 #[test]
 fn test_detect_dataset_and_pillar_options() {
-    let expr = "ts_backfill(implied_volatility_call_90, 5) / ts_backfill(implied_volatility_call_30, 5)";
+    let expr =
+        "ts_backfill(implied_volatility_call_90, 5) / ts_backfill(implied_volatility_call_30, 5)";
     let (ds, pillar) = detect_dataset_and_pillar(expr);
     assert_eq!(ds, "option8");
     assert_eq!(pillar, "OPTIONS_VRP");

@@ -2,7 +2,8 @@ use alphafind::autotuner::{replace_last_signed_power_exponent, switch_neutraliza
 
 #[test]
 fn test_replace_last_signed_power_exponent() {
-    let expr = "signal = rank(close); group_neutralize(signed_power(signal, 1.5), densify(subindustry))";
+    let expr =
+        "signal = rank(close); group_neutralize(signed_power(signal, 1.5), densify(subindustry))";
     let updated = replace_last_signed_power_exponent(expr, 4.4);
     assert!(updated.is_some());
     let res = updated.unwrap();
