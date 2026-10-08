@@ -261,3 +261,55 @@ alphafind radar --filter news
 # View only uncrowded Green Sanctuaries
 alphafind radar --green-only
 ```
+
+---
+
+## 11. `alphafind matrix`
+
+2D Dynamic Cross-Dataset Co-occurrence Matrix and Hyper-Synergy Analyzer for formulas combining $K \ge 2$ datasets. Maps factor interactions, quant migration velocities ($\vec{v}$), and evaluates the Composite Hybrid Uniqueness Index (CHUI).
+
+### Usage
+```bash
+alphafind matrix [OPTIONS]
+```
+
+### Options
+| Flag | Short | Description | Default |
+|:---|:---:|:---|:---:|
+| `--universe <UNI>` | `-u` | Target universe (`TOP3000`, `TOP1000`, `TOP500`, `TOP200`) | `TOP200` |
+| `--expr <EXPR>` | `-e` | FASTEXPR formula to analyze for $K \ge 2$ synergy & roles | None |
+| `--region <REGION>` | `-r` | Target region | `USA` |
+
+### Examples
+```bash
+# Display 2D Co-occurrence Heatmap for TOP3000
+alphafind matrix --universe TOP3000
+
+# Evaluate a specific multi-dataset alpha formula on the heatmap
+alphafind matrix --universe TOP3000 --expr "raw_60 = ...; signal = (0.42 * s_idio + 0.25 * s_curve) * (1.0 + 0.85 * dual_short); ..."
+```
+
+---
+
+## 12. `alphafind tune`
+
+Hyperparameter AutoTuner: autonomous multi-dimensional sweep across signal decay, outer non-linear power exponent, and neutralization groups to conquer WorldQuant BRAIN Fitness thresholds ($\ge 1.50$).
+
+### Usage
+```bash
+alphafind tune [OPTIONS] --expr "<FASTEXPR>"
+```
+
+### Options
+| Flag | Short | Description | Default |
+|:---|:---:|:---|:---:|
+| `--expr <EXPR>` | `-e` | FASTEXPR alpha formula to tune | Required |
+| `--universe <UNI>` | `-u` | Target universe | `TOP1000` |
+| `--target-fitness <FIT>` | | Target Fitness to achieve | `1.50` |
+| `--decay <DECAY>` | `-d` | Base decay parameter | `10` |
+| `--neutralization <NEUT>`| `-n` | Base neutralization (`SUBINDUSTRY`, `MARKET`, `SECTOR`)| `SUBINDUSTRY` |
+
+### Example
+```bash
+alphafind tune --universe TOP3000 --target-fitness 1.50 --decay 16 --expr "raw_60 = ...; sig_neut = group_neutralize(signal, densify(subindustry)); trade_when(abs(sig_neut) > 0.015, signed_power(sig_neut, 2.8), -1)"
+```

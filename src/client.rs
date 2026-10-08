@@ -227,23 +227,31 @@ impl BrainClient {
 
             match res {
                 Ok(resp) => {
-                    if resp.status().as_u16() == 429 {
+                    let status = resp.status();
+                    if status.as_u16() == 429 {
                         sleep(Duration::from_secs(8)).await;
                         continue;
                     }
 
-                    if let Ok(sim_resp) = resp.json::<SimulationResponse>().await {
-                        if let Some(ref st) = sim_resp.status {
-                            if st == "COMPLETE" || (st == "WARNING" && sim_resp.alpha.is_some()) {
-                                return Ok(sim_resp);
+                    match resp.json::<SimulationResponse>().await {
+                        Ok(sim_resp) => {
+                            if let Some(ref st) = sim_resp.status {
+                                if st == "COMPLETE" || (st == "WARNING" && sim_resp.alpha.is_some()) {
+                                    return Ok(sim_resp);
+                                }
+                                if st == "ERROR" {
+                                    let msg = sim_resp
+                                        .message
+                                        .clone()
+                                        .or(sim_resp.error.clone())
+                                        .unwrap_or_else(|| "Simulation failed".to_string());
+                                    return Err(anyhow!("Simulation ERROR: {}", msg));
+                                }
                             }
-                            if st == "ERROR" {
-                                let msg = sim_resp
-                                    .message
-                                    .clone()
-                                    .or(sim_resp.error.clone())
-                                    .unwrap_or_else(|| "Simulation failed".to_string());
-                                return Err(anyhow!("Simulation ERROR: {}", msg));
+                        }
+                        Err(e) => {
+                            if status.is_client_error() || status.is_server_error() {
+                                return Err(anyhow!("Simulation polling HTTP {}: {}", status, e));
                             }
                         }
                     }

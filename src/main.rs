@@ -9,6 +9,9 @@ use alphafind::autotuner::FitnessAutoTuner;
 use alphafind::client::BrainClient;
 use alphafind::correlation::{audit_candidate, calculate_portfolio_impact, simulate_portfolio};
 use alphafind::crowd::{evaluate_crowd_risk, print_crowd_risk_audit};
+use alphafind::matrix::{
+    analyze_formula_hyper_synergy, build_dynamic_matrix, print_dynamic_matrix,
+};
 use alphafind::models::{AlphaSettings, CensusSnapshot, DatasetEntry, PortfolioAlpha};
 use alphafind::screener::MultiAccountScreener;
 use alphafind::taxonomy::{get_curated_candidates, FactorPillar};
@@ -175,6 +178,25 @@ enum Commands {
         /// Candidate Alpha ID (e.g., vR2lzJor)
         alpha_id: String,
     },
+
+    /// 2D Cross-Dataset Co-occurrence Matrix & Multi-Dataset Hyper-Synergy Analyzer (K >= 2)
+    Matrix {
+        /// Target Universe (default: TOP200)
+        #[arg(short, long, default_value = "TOP200")]
+        universe: String,
+
+        /// Optional FastExpr formula to evaluate its K >= 2 multi-dataset synergy
+        #[arg(short, long)]
+        expr: Option<String>,
+
+        /// Filter only pristine sanctuary interactions (HUI >= 0.65)
+        #[arg(long)]
+        green_only: bool,
+
+        /// Target Region (default: USA)
+        #[arg(short, long, default_value = "USA")]
+        region: String,
+    },
 }
 
 fn get_main_client() -> Result<BrainClient> {
@@ -248,6 +270,12 @@ async fn main() -> Result<()> {
             neutralization,
         } => cmd_tune(expr, universe, target_fitness, decay, neutralization).await,
         Commands::Impact { alpha_id } => cmd_impact(alpha_id).await,
+        Commands::Matrix {
+            universe,
+            expr,
+            green_only,
+            region,
+        } => cmd_matrix(universe, expr, green_only, region).await,
     }
 }
 
@@ -1513,6 +1541,190 @@ async fn cmd_impact(alpha_id: String) -> Result<()> {
         println!(
             "\n  {} DILUTIVE: Candidate reduces portfolio Sharpe.",
             "⚠️ [SUBOPTIMAL]".yellow()
+        );
+    }
+
+    Ok(())
+}
+
+async fn cmd_matrix(
+    universe: String,
+    expr: Option<String>,
+    green_only: bool,
+    region: String,
+) -> Result<()> {
+    println!(
+        "{}",
+        "═════════════════════════════════════════════════════════════════════════".cyan()
+    );
+    println!(
+        "{}",
+        "  AlphaFind Quant Engine — 2D Dynamic Cross-Dataset Co-occurrence Matrix"
+            .bold()
+            .cyan()
+    );
+    println!(
+        "{}",
+        "═════════════════════════════════════════════════════════════════════════".cyan()
+    );
+
+    let client = get_main_client()?;
+    println!(
+        "  Fetching dynamic platform dataset census from BRAIN API (Region: {})...",
+        region.cyan()
+    );
+
+    let datasets = match client.fetch_all_datasets(&region).await {
+        Ok(ds) => ds,
+        Err(e) => {
+            println!(
+                "  ⚠️ Warning: Live API fetch failed ({}), falling back to cached snapshot.",
+                e
+            );
+            let snapshot_file = Path::new("data").join("census_snapshots.json");
+            if let Ok(content) = fs::read_to_string(&snapshot_file) {
+                if let Ok(snap) = serde_json::from_str::<CensusSnapshot>(&content) {
+                    snap.datasets
+                } else {
+                    anyhow::bail!("No cached census snapshot available");
+                }
+            } else {
+                anyhow::bail!("No cached census snapshot available");
+            }
+        }
+    };
+
+    println!(
+        "  {} Analyzed {} platform dataset configurations.",
+        "✅".green(),
+        datasets.len().to_string().bold().green()
+    );
+
+    let data_dir = Path::new("data");
+    let snapshot_file = data_dir.join("census_snapshots.json");
+    let prev_snapshot: Option<CensusSnapshot> = if snapshot_file.exists() {
+        fs::read_to_string(&snapshot_file)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+    } else {
+        None
+    };
+
+    let report = build_dynamic_matrix(&datasets, prev_snapshot.as_ref(), &universe);
+    print_dynamic_matrix(&report, green_only);
+
+    if let Some(ref formula) = expr {
+        println!(
+            "\n  {}",
+            "═════════════════════════════════════════════════════════════════════════".cyan()
+        );
+        println!(
+            "  {}",
+            "  Multi-Dataset Formula Hyper-Synergy Analysis (K >= 2)"
+                .bold()
+                .cyan()
+        );
+        println!(
+            "  {}",
+            "═════════════════════════════════════════════════════════════════════════".cyan()
+        );
+
+        let analysis =
+            analyze_formula_hyper_synergy(formula, &universe, &datasets, prev_snapshot.as_ref());
+
+        println!("\n  {} Formula Architecture Assessment:", "🧬".bold());
+        println!(
+            "    Target Universe:            {}",
+            analysis.universe.yellow().bold()
+        );
+        println!(
+            "    Detected Datasets Count:    {} Datasets",
+            analysis.detected_k.to_string().cyan().bold()
+        );
+        println!(
+            "    Fusion Architecture Pattern: {}",
+            analysis.fusion_pattern.badge()
+        );
+
+        println!(
+            "\n  {} Participating Factor Pillars Breakdown (K = {}):",
+            "🏛️".bold(),
+            analysis.detected_k
+        );
+        println!("  ┌────────┬──────────────────────────────────────────┬──────────────┬──────────────┬────────────┐");
+        println!("  │ Pillar │ Economic Architecture Role               │ Live Quants  │ Live Alphas  │ Crowd Tier │");
+        println!("  ├────────┼──────────────────────────────────────────┼──────────────┼──────────────┼────────────┤");
+
+        for (pillar, role, stat) in &analysis.participating_pillars {
+            println!(
+                "  │ {:<6} │ {:<40} │ {:>12} │ {:>12} │ {:<10} │",
+                pillar.cyan().bold(),
+                role.badge(),
+                stat.live_users,
+                stat.live_alphas,
+                stat.status
+            );
+        }
+        println!("  └────────┴──────────────────────────────────────────┴──────────────┴──────────────┴────────────┘");
+
+        let chui_styled = if analysis.composite_uniqueness_index >= 0.85 {
+            format!("{:.3}", analysis.composite_uniqueness_index)
+                .green()
+                .bold()
+        } else if analysis.composite_uniqueness_index >= 0.70 {
+            format!("{:.3}", analysis.composite_uniqueness_index).green()
+        } else if analysis.composite_uniqueness_index >= 0.50 {
+            format!("{:.3}", analysis.composite_uniqueness_index).yellow()
+        } else {
+            format!("{:.3}", analysis.composite_uniqueness_index)
+                .red()
+                .bold()
+        };
+
+        println!(
+            "\n  {} Dynamic Composite Hybrid Uniqueness Index (CHUI): {}",
+            "🎯".bold(),
+            chui_styled
+        );
+        println!(
+            "  {} Platform Uniqueness Verdict: {}",
+            "⚖️".bold(),
+            analysis.uniqueness_verdict
+        );
+
+        if !analysis.dynamic_migration_warnings.is_empty() {
+            println!(
+                "\n  {} Dynamic Crowd Migration Warnings:",
+                "🚨".red().bold()
+            );
+            for w in &analysis.dynamic_migration_warnings {
+                println!("    {}", w.yellow());
+            }
+        }
+
+        if !analysis.economic_recommendations.is_empty() {
+            println!("\n  {} Economic Architecture Recommendations:", "💡".bold());
+            for r in &analysis.economic_recommendations {
+                println!("    👉 {}", r.green());
+            }
+        }
+    } else {
+        println!(
+            "\n  {} Top Pristine Multi-Dataset Synergy Pathways for {}:",
+            "🌟".bold(),
+            universe.yellow().bold()
+        );
+        println!(
+            "    1. RISK x SHORT x MICRO  -> (model51 Anchor x Short Squeeze Catalyst x VWAP Dislocation)"
+        );
+        println!(
+            "    2. NEWS18 x SHORT x MICRO -> (RavenPack Novelty x Borrow Squeeze x Reversal Dampening)"
+        );
+        println!(
+            "    3. RISK x ANL x MICRO    -> (Idiosyncratic Risk x Consensus Revision Drift x Liquidity Shock)"
+        );
+        println!(
+            "\n  💡 Tip: Run with --expr \"<fastexpr>\" to evaluate any multi-dataset alpha formula!"
         );
     }
 

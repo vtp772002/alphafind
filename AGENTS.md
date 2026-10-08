@@ -154,5 +154,7 @@ To maintain strict context window hygiene and avoid duplicate bloat, refer to sp
 | **Factor Pillars & Field Schemas** | [`src/taxonomy.rs`](src/taxonomy.rs) & `data/` | 6 Economic factor pillars (Analyst Consensus, Options/VRP, Microstructure VWAP, Financial Health/Quality, Idiosyncratic Risk, Short Interest). |
 | **Portfolio Analytics & Audit Engine** | [`src/correlation.rs`](src/correlation.rs) | Microsecond Pearson audits, disk-cached PnLs, and merged Sharpe simulator (`alphafind audit`, `alphafind portfolio`). |
 | **Core Distributed Simulation Engine** | [`src/screener.rs`](src/screener.rs) | 9-worker distributed screening across 3 accounts with auto-transfer lock (`alphafind screen`). |
+| **Multi-Dataset Co-occurrence Matrix** | [`src/matrix.rs`](src/matrix.rs) | 2D dynamic interaction heatmap, quant velocity tracking, and CHUI evaluation (`alphafind matrix`). |
+| **Hyperparameter AutoTuner** | [`src/autotuner.rs`](src/autotuner.rs) | Multi-dimensional grid sweep (decay, exponent, neutralization) for Fitness $\ge 1.50$ (`alphafind tune`). |
 | **Official Submission & Check CLI** | [`src/main.rs`](src/main.rs) | Unified native binary CLI for 8/8 PASS verification and submission dispatch (`alphafind submit`, `alphafind check`). |
 | **Ephemeral Sandbox** | `scratch/` (Git-ignored) | Disposable workspace for session research scripts, purged post-discovery. |

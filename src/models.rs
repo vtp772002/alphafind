@@ -96,7 +96,7 @@ pub struct SimulationPayload<'a> {
 #[derive(Debug, Clone, Deserialize)]
 pub struct SimulationResponse {
     pub id: Option<String>,
-    pub location: Option<String>,
+    pub location: Option<serde_json::Value>,
     pub status: Option<String>,
     pub alpha: Option<String>,
     pub message: Option<String>,
