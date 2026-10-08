@@ -236,7 +236,8 @@ impl BrainClient {
                     match resp.json::<SimulationResponse>().await {
                         Ok(sim_resp) => {
                             if let Some(ref st) = sim_resp.status {
-                                if st == "COMPLETE" || (st == "WARNING" && sim_resp.alpha.is_some()) {
+                                if st == "COMPLETE" || (st == "WARNING" && sim_resp.alpha.is_some())
+                                {
                                     return Ok(sim_resp);
                                 }
                                 if st == "ERROR" {
