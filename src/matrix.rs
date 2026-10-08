@@ -218,9 +218,9 @@ pub fn classify_pillar_role(
             if lower.contains("trade_when")
                 || lower.contains("* (1 +")
                 || lower.contains("* (0.")
-                || lower.contains("s_idio")
-                || lower.contains("raw_60")
-                || lower.contains("fund_")
+                || lower.contains("* (1.0 +")
+                || lower.contains("* rank")
+                || lower.contains("* catalyst")
             {
                 DatasetRole::RiskCatalyst
             } else {
@@ -229,11 +229,11 @@ pub fn classify_pillar_role(
         }
 
         FactorPillar::MicrostructureVwap => {
-            if lower.contains("delta_damp")
-                || lower.contains("- 0.04 *")
-                || lower.contains("- 0.05 *")
+            if lower.contains("ts_delta")
                 || lower.contains("reversal")
                 || lower.contains("vwap / close")
+                || lower.contains("friction")
+                || lower.contains("hedge")
             {
                 DatasetRole::FrictionHedge
             } else {
@@ -256,14 +256,17 @@ pub fn detect_fusion_pattern(expr: &str, num_datasets: usize) -> FusionPattern {
     // Check for hierarchical conditioning markers:
     // 1. Non-linear threshold gating: trade_when(...)
     // 2. Multiplicative event scaling: * (1 + gamma * ...)
-    // 3. Friction subtraction: - delta_damp, - reversal, - 0.04 * signed_power(...)
+    // 3. Friction subtraction: - reversal, - ts_delta, - hedge
     let has_trade_when = lower.contains("trade_when");
-    let has_multiplicative_scale =
-        lower.contains("* (1 +") || lower.contains("* (0.") || lower.contains("* (0.8 +");
-    let has_friction_hedge = lower.contains("- delta_damp")
-        || lower.contains("- reversal")
-        || lower.contains("- 0.04 *")
-        || lower.contains("- 0.05 *");
+    let has_multiplicative_scale = lower.contains("* (1 +")
+        || lower.contains("* (0.")
+        || lower.contains("* (1.0 +")
+        || lower.contains("* (0.8 +");
+    let has_friction_hedge = lower.contains("- reversal")
+        || lower.contains("- ts_delta")
+        || lower.contains("- friction")
+        || lower.contains("- hedge")
+        || lower.contains("- 0.");
 
     if has_trade_when || has_multiplicative_scale || has_friction_hedge {
         FusionPattern::HierarchicalConditioning

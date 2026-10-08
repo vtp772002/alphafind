@@ -108,11 +108,11 @@ alphafind sim [OPTIONS] --expr <EXPRESSION>
 ### Example
 ```bash
 alphafind sim \
-  --expr "term_slope = ts_backfill(implied_volatility_call_90 / implied_volatility_call_30, 5); group_neutralize(signed_power(rank(ts_decay_linear(term_slope, 14)) - 0.5, 4.4), densify(market))" \
+  --expr "signal = rank(vwap / close - 1) * (1 + rank(volume / adv20)); group_neutralize(signal, densify(subindustry))" \
   --universe TOP1000 \
-  --decay 32 \
-  --neutralization MARKET \
-  --truncation 0.065
+  --decay 5 \
+  --neutralization SUBINDUSTRY \
+  --truncation 0.05
 ```
 
 ---
@@ -206,9 +206,9 @@ alphafind submit [OPTIONS] <ALPHA_ID>
 ### Example
 ```bash
 alphafind submit <ALPHA_ID> \
-  --name "US_D1_TOP1000_OPT_TermSlope_VRP_Dec32" \
-  --color PURPLE \
-  --tags "OPTIONS,VOLATILITY,TOP1000,VRP"
+  --name "US_D1_TOP1000_PV_VwapReversal_Dec5" \
+  --color BLUE \
+  --tags "PRICE_VOLUME,VWAP,TOP1000"
 ```
 
 ---
@@ -285,8 +285,8 @@ alphafind matrix [OPTIONS]
 # Display 2D Co-occurrence Heatmap for TOP3000
 alphafind matrix --universe TOP3000
 
-# Evaluate a specific multi-dataset alpha formula on the heatmap
-alphafind matrix --universe TOP3000 --expr "raw_60 = ...; signal = (0.42 * s_idio + 0.25 * s_curve) * (1.0 + 0.85 * dual_short); ..."
+# Evaluate a multi-dataset alpha formula on the heatmap
+alphafind matrix --universe TOP3000 --expr "f1 = rank(vwap / close - 1); f2 = rank(volume / adv20); signal = f1 * (1 + f2); group_neutralize(signal, densify(subindustry))"
 ```
 
 ---
@@ -311,5 +311,5 @@ alphafind tune [OPTIONS] --expr "<FASTEXPR>"
 
 ### Example
 ```bash
-alphafind tune --universe TOP3000 --target-fitness 1.50 --decay 16 --expr "raw_60 = ...; sig_neut = group_neutralize(signal, densify(subindustry)); trade_when(abs(sig_neut) > 0.015, signed_power(sig_neut, 2.8), -1)"
+alphafind tune --universe TOP1000 --target-fitness 1.50 --decay 10 --expr "signal = rank(vwap / close - 1); sig_neut = group_neutralize(signal, densify(subindustry)); signed_power(sig_neut, 2.0)"
 ```
