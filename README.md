@@ -113,11 +113,16 @@ alphafind screen --pillar OPTIONS --universe TOP1000 --min-fitness 1.50
 |:---|:---|:---|
 | **`auth`** | `alphafind auth` | Authenticate all configured BRAIN accounts concurrently |
 | **`sync`** | `alphafind sync` | Synchronize active Out-of-Sample portfolio into local cache |
+| **`score`** | `alphafind score` | View live user status, rank, and official BRAIN leaderboard scores |
 | **`portfolio`** | `alphafind portfolio` | Simulate merged multi-alpha Out-of-Sample portfolio Sharpe & risk |
 | **`sim`** | `alphafind sim --expr "..."` | Simulate an individual FastExpr formula backtest directly |
 | **`screen`** | `alphafind screen --pillar <P>` | Launch distributed candidate screening with async concurrency |
+| **`matrix`** | `alphafind matrix --universe TOP3000` | 2D dynamic co-occurrence heatmap & multi-dataset hyper-synergy |
+| **`tune`** | `alphafind tune --expr "..."` | Multi-dimensional autotuner (decay, exponent) for Fitness $\ge 1.50$ |
+| **`radar`** | `alphafind radar` | Live dynamic platform crowd census radar across 150 datasets |
 | **`check`** | `alphafind check <ALPHA_ID>` | Verify the 8 mandatory In-Sample platform submission checks |
 | **`audit`** | `alphafind audit <ALPHA_ID>` | Run 1,236-day Pearson correlation audit against active portfolio |
+| **`impact`** | `alphafind impact <ALPHA_ID>` | Simulate portfolio merge impact (Delta Sharpe, PnL, Vol, Buffer) |
 | **`submit`** | `alphafind submit <ALPHA_ID>` | Submit an Alpha to Out-of-Sample (OS) after 8/8 PASS verification |
 
 👉 **For exhaustive options, flags, and workflow examples, see [CLI Command Reference](docs/CLI_REFERENCE.md).**
