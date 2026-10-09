@@ -41,6 +41,43 @@
      - **The temporary script in `scratch/` MUST BE DELETED IMMEDIATELY before concluding the session.**
    - No throwaway `hunt_*.py`, `tune_*.py`, `test_*.py`, or temporary `.json` files are ever permitted to persist in Git.
 
+### Rule 3: Strict Pre-Push and Post-Push Sanitization Charter (Bảo Mật Tuyệt Đối IP Định Lượng)
+
+> [!CAUTION]
+> **MANDATORY ANTI-LEAK SECURITY DIRECTIVE:**
+> WorldQuant BRAIN Alpha IDs, pending submission formulas, and In-Sample metrics are proprietary intellectual property.
+> Publishing them on GitHub enables competing quants to front-run submissions and directly destroys `uniquenessScore`.
+> Every agent MUST adhere to this two-stage sanitization gatekeeper before and after any Git push.
+
+#### A. Pre-Push Sanitization Protocol (Trước khi Push — Bắt buộc 100%)
+1. **Zero-Alpha-IP Policy in Tracked Files**:
+   - **Absolute Ban on Real Alpha IDs**: Never include live 8-character platform Alpha IDs (e.g., use dummy placeholders like `<ALPHA_ID>` or `XXXXXXXX`) in source code (`src/`), tests (`tests/`), docs (`docs/`), or commit messages.
+   - **Abstract Skeletons Only**: Any code generating formula blueprints or examples (e.g. `src/forecast.rs`) MUST use parameterized abstract placeholders (e.g., `<ANCHOR_FIELD>`, `<CATALYST_FIELD>`, `<WEIGHT>`, `<POWER>`, `<GROUP>`) instead of concrete dataset fields and production weights.
+   - **No Pending Candidate Performance Stats**: Never publish exact Sharpe, Return, or Fitness numbers tied to unsubmitted candidates in docs, commit messages, or release notes.
+2. **Pre-Staging & Git Status Audit**:
+   - Verify that `.env`, `submittable_alphas.csv`, `portfolio_os.json`, `STRATEGIC_ROADMAP.md`, and `scratch/*` remain untracked and in `.gitignore`.
+   - Never use `git add .` or `git add -A` blindly. Stage only specific, audited source files (`git add src/...`).
+3. **Automated Gatekeeper Execution**:
+   - Run `./scripts/sanitize_check.sh` before running `git push` (enforced automatically via `.git/hooks/pre-push`).
+   - If the script detects any Alpha ID leak or tracked sensitive file, the push is **ABORTED IMMEDIATELY**.
+4. **Commit & Release Notes Review**:
+   - Commit messages must strictly follow semantic commit style (`feat:`, `fix:`, `refactor:`) without mentioning candidate Alpha IDs or raw formulas.
+   - GitHub Release notes (`gh release create` / `gh release edit`) must describe high-level architectural features only.
+
+#### B. Post-Push Sanitization Protocol (Sau khi Push — Kiểm tra trong vòng 60s)
+1. **Live Remote Release & Commit Audit**:
+   - Immediately after pushing or creating a release, inspect live GitHub state:
+     - Run `gh release view <tag>` to verify no sensitive Alpha IDs or metrics appear in the published release body.
+     - Verify GitHub Actions CI status via `gh run list --limit 1`.
+2. **Emergency Containment Protocol (SLA < 3 Phút khi phát hiện rò rỉ)**:
+   - If any Alpha ID, proprietary formula, or sensitive metric is detected on GitHub:
+     - **Step 1 (Immediate Release Scrub)**: Run `gh release edit <tag> --notes "Sanitized Release"` to purge the public release text.
+     - **Step 2 (Source Code Scrub & Push)**: Sanitize the code, commit `fix(security): sanitize ...`, push to `main`, and force-update the release tag (`git tag -fa <tag> && git push origin <tag> --force`).
+     - **Step 3 (Mark Candidate as COMPROMISED — Vô hiệu hóa)**:
+       - **BẤT KỲ ALPHA CANDIDATE NÀO BỊ LỘ TRÊN GITHUB ĐỀU BỊ ĐÁNH DẤU LÀ "COMPROMISED" (BỊ LỘ).**
+       - **TUYỆT ĐỐI KHÔNG NỘP NGUYÊN BẢN ALPHA ĐÓ LÊN BRAIN NỮA.**
+       - Bắt buộc kích hoạt tái tạo / đột biến tham số (mutate decay, power, weights) để tạo candidate mới trước khi submit nhằm bảo vệ `uniquenessScore`.
+
 ---
 
 ## 1. Quantitative Doctrine & Portfolio Math
