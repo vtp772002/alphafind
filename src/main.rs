@@ -9,6 +9,7 @@ use alphafind::autotuner::FitnessAutoTuner;
 use alphafind::client::BrainClient;
 use alphafind::correlation::{audit_candidate, calculate_portfolio_impact, simulate_portfolio};
 use alphafind::crowd::{evaluate_crowd_risk, print_crowd_risk_audit};
+use alphafind::forecast::{generate_inverse_blueprint, print_blueprint_report};
 use alphafind::matrix::{
     analyze_formula_hyper_synergy, build_dynamic_matrix, print_dynamic_matrix,
 };
@@ -197,6 +198,17 @@ enum Commands {
         #[arg(short, long, default_value = "USA")]
         region: String,
     },
+
+    /// Inverse Portfolio Optimization & Factor Gap Forecasting for next optimal alpha
+    Blueprint {
+        /// Target Universe filter (optional: TOP3000, TOP1000, TOP500, TOP200)
+        #[arg(short, long)]
+        universe: Option<String>,
+
+        /// Export generated FastExpr candidate templates to a file
+        #[arg(long)]
+        export: Option<String>,
+    },
 }
 
 fn get_main_client() -> Result<BrainClient> {
@@ -276,6 +288,7 @@ async fn main() -> Result<()> {
             green_only,
             region,
         } => cmd_matrix(universe, expr, green_only, region).await,
+        Commands::Blueprint { universe, export } => cmd_blueprint(universe, export).await,
     }
 }
 
@@ -1726,6 +1739,59 @@ async fn cmd_matrix(
         println!(
             "\n  💡 Tip: Run with --expr \"<fastexpr>\" to evaluate any multi-dataset alpha formula!"
         );
+    }
+
+    Ok(())
+}
+
+async fn cmd_blueprint(universe: Option<String>, export: Option<String>) -> Result<()> {
+    // 1. Load active OS portfolio
+    let port_path = "portfolio_os.json";
+    if !Path::new(port_path).exists() {
+        anyhow::bail!("portfolio_os.json not found! Run 'alphafind sync' first.");
+    }
+    let port_data = fs::read_to_string(port_path)?;
+    let os_alphas: Vec<PortfolioAlpha> = serde_json::from_str(&port_data)?;
+
+    // 2. Load cached baseline PnLs
+    let cache_file = get_cache_dir().join("portfolio_pnl.json");
+    let pnl_cache: HashMap<String, HashMap<String, f64>> = if cache_file.exists() {
+        fs::read_to_string(&cache_file)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    } else {
+        HashMap::new()
+    };
+
+    // 3. Generate inverse blueprint report
+    let report = generate_inverse_blueprint(
+        &os_alphas,
+        &pnl_cache,
+        universe.as_deref(),
+    );
+
+    // 4. Print master report
+    print_blueprint_report(&report);
+
+    // 5. Optional file export
+    if let Some(export_path) = export {
+        let mut out = String::new();
+        out.push_str("# AlphaFind Inverse Portfolio Optimization & Forecast Blueprint\n\n");
+        out.push_str(&format!("Generated for: {} Out-of-Sample Alphas\n\n", report.active_alpha_count));
+        for (i, arch) in report.top_archetypes.iter().enumerate() {
+            out.push_str(&format!("## Archetype #{}: {} [{}]\n", i + 1, arch.name, arch.target_universe));
+            out.push_str(&format!("- Primary Factor: {} x {}\n", arch.primary_pillar, arch.secondary_catalyst));
+            out.push_str(&format!("- Datasets: Anchor: {} | Catalyst: {}\n", arch.anchor_dataset, arch.catalyst_dataset));
+            out.push_str(&format!("- Optimal Settings: Universe: {}, Decay: {}, Neutralization: {}, Power: {:.1}, Truncation: {:.3}\n",
+                arch.target_universe, arch.recommended_decay, arch.recommended_neutralization, arch.recommended_power, arch.recommended_truncation));
+            out.push_str(&format!("- Economic Rationale: {}\n", arch.economic_rationale));
+            out.push_str("```python\n");
+            out.push_str(&arch.fast_expr_skeleton);
+            out.push_str("\n```\n\n");
+        }
+        fs::write(&export_path, out)?;
+        println!("  💾 Successfully exported blueprint skeletons to {}\n", export_path.green().bold());
     }
 
     Ok(())

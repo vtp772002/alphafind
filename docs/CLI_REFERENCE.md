@@ -313,3 +313,32 @@ alphafind tune [OPTIONS] --expr "<FASTEXPR>"
 ```bash
 alphafind tune --universe TOP1000 --target-fitness 1.50 --decay 10 --expr "signal = rank(vwap / close - 1); sig_neut = group_neutralize(signal, densify(subindustry)); signed_power(sig_neut, 2.0)"
 ```
+
+---
+
+## 13. `alphafind blueprint`
+
+**Inverse Portfolio Optimization & Factor Gap Forecasting**: Performs structural audit on active Out-of-Sample portfolio (45 alphas) across economic factor pillars, universes, and temporal decay frequencies ("sound"). Forecasts exact target archetypes to collapse portfolio covariance ($\overline{\rho} \le 0.10$) and suppress platform `uniquenessScore` toward $\le 0.00$.
+
+### Usage
+```bash
+alphafind blueprint [OPTIONS]
+```
+
+### Options
+| Flag | Short | Description | Default |
+|:---|:---:|:---|:---:|
+| `--universe <UNI>` | `-u` | Target universe filter (`TOP3000`, `TOP1000`, `TOP500`, `TOP200`) | None |
+| `--export <PATH>` | | Export generated FastExpr candidate skeletons to markdown file | None |
+
+### Examples
+```bash
+# Generate master inverse portfolio blueprint report
+alphafind blueprint
+
+# Focus blueprint on under-represented TOP200 universe
+alphafind blueprint --universe TOP200
+
+# Export generated archetypes to a markdown file
+alphafind blueprint --universe TOP3000 --export blueprints_day27.md
+```
