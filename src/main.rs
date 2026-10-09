@@ -1765,11 +1765,7 @@ async fn cmd_blueprint(universe: Option<String>, export: Option<String>) -> Resu
     };
 
     // 3. Generate inverse blueprint report
-    let report = generate_inverse_blueprint(
-        &os_alphas,
-        &pnl_cache,
-        universe.as_deref(),
-    );
+    let report = generate_inverse_blueprint(&os_alphas, &pnl_cache, universe.as_deref());
 
     // 4. Print master report
     print_blueprint_report(&report);
@@ -1778,20 +1774,40 @@ async fn cmd_blueprint(universe: Option<String>, export: Option<String>) -> Resu
     if let Some(export_path) = export {
         let mut out = String::new();
         out.push_str("# AlphaFind Inverse Portfolio Optimization & Forecast Blueprint\n\n");
-        out.push_str(&format!("Generated for: {} Out-of-Sample Alphas\n\n", report.active_alpha_count));
+        out.push_str(&format!(
+            "Generated for: {} Out-of-Sample Alphas\n\n",
+            report.active_alpha_count
+        ));
         for (i, arch) in report.top_archetypes.iter().enumerate() {
-            out.push_str(&format!("## Archetype #{}: {} [{}]\n", i + 1, arch.name, arch.target_universe));
-            out.push_str(&format!("- Primary Factor: {} x {}\n", arch.primary_pillar, arch.secondary_catalyst));
-            out.push_str(&format!("- Datasets: Anchor: {} | Catalyst: {}\n", arch.anchor_dataset, arch.catalyst_dataset));
+            out.push_str(&format!(
+                "## Archetype #{}: {} [{}]\n",
+                i + 1,
+                arch.name,
+                arch.target_universe
+            ));
+            out.push_str(&format!(
+                "- Primary Factor: {} x {}\n",
+                arch.primary_pillar, arch.secondary_catalyst
+            ));
+            out.push_str(&format!(
+                "- Datasets: Anchor: {} | Catalyst: {}\n",
+                arch.anchor_dataset, arch.catalyst_dataset
+            ));
             out.push_str(&format!("- Optimal Settings: Universe: {}, Decay: {}, Neutralization: {}, Power: {:.1}, Truncation: {:.3}\n",
                 arch.target_universe, arch.recommended_decay, arch.recommended_neutralization, arch.recommended_power, arch.recommended_truncation));
-            out.push_str(&format!("- Economic Rationale: {}\n", arch.economic_rationale));
+            out.push_str(&format!(
+                "- Economic Rationale: {}\n",
+                arch.economic_rationale
+            ));
             out.push_str("```python\n");
             out.push_str(&arch.fast_expr_skeleton);
             out.push_str("\n```\n\n");
         }
         fs::write(&export_path, out)?;
-        println!("  💾 Successfully exported blueprint skeletons to {}\n", export_path.green().bold());
+        println!(
+            "  💾 Successfully exported blueprint skeletons to {}\n",
+            export_path.green().bold()
+        );
     }
 
     Ok(())

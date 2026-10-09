@@ -76,17 +76,38 @@ pub struct InverseBlueprintReport {
 pub fn classify_alpha_pillar(expr: &str) -> FactorPillar {
     let lower = expr.to_lowercase();
 
-    if lower.contains("unsystematic_risk") || lower.contains("term_curve") || lower.contains("raw_60") {
+    if lower.contains("unsystematic_risk")
+        || lower.contains("term_curve")
+        || lower.contains("raw_60")
+    {
         FactorPillar::IdiosyncraticRisk
-    } else if lower.contains("shares_sold_short") || lower.contains("shorted_shares") || lower.contains("short_cov") {
+    } else if lower.contains("shares_sold_short")
+        || lower.contains("shorted_shares")
+        || lower.contains("short_cov")
+    {
         FactorPillar::ShortInterest
-    } else if lower.contains("implied_volatility") || lower.contains("historical_volatility") || lower.contains("pcr_vol") {
+    } else if lower.contains("implied_volatility")
+        || lower.contains("historical_volatility")
+        || lower.contains("pcr_vol")
+    {
         FactorPillar::OptionsVrp
-    } else if lower.contains("nws12") || lower.contains("composite_sentiment") || lower.contains("earnings_evaluation") || lower.contains("snt_social") {
+    } else if lower.contains("nws12")
+        || lower.contains("composite_sentiment")
+        || lower.contains("earnings_evaluation")
+        || lower.contains("snt_social")
+    {
         FactorPillar::NewsEvent
-    } else if lower.contains("vwap / close") || lower.contains("night_ret") || lower.contains("day_ret") {
+    } else if lower.contains("vwap / close")
+        || lower.contains("night_ret")
+        || lower.contains("day_ret")
+    {
         FactorPillar::MicrostructureVwap
-    } else if lower.contains("actual_eps") || lower.contains("operating_income") || lower.contains("cashflow_op") || lower.contains("revenue") || lower.contains("ebitda") {
+    } else if lower.contains("actual_eps")
+        || lower.contains("operating_income")
+        || lower.contains("cashflow_op")
+        || lower.contains("revenue")
+        || lower.contains("ebitda")
+    {
         FactorPillar::FinancialHealthQuality
     } else {
         FactorPillar::AnalystConsensus
@@ -148,7 +169,11 @@ pub fn generate_inverse_blueprint(
     for p in &all_pillars {
         let p_str = p.as_str().to_string();
         let count = pillar_counts.get(&p_str).cloned().unwrap_or(0);
-        let share_pct = if n > 0 { (count as f64 / n as f64) * 100.0 } else { 0.0 };
+        let share_pct = if n > 0 {
+            (count as f64 / n as f64) * 100.0
+        } else {
+            0.0
+        };
 
         // Average correlation of this pillar's alphas against the whole portfolio
         let mut sum_corr = 0.0;
@@ -172,12 +197,17 @@ pub fn generate_inverse_blueprint(
             }
         }
 
-        let avg_corr = if n_pairs > 0 { sum_corr / n_pairs as f64 } else { 0.15 };
+        let avg_corr = if n_pairs > 0 {
+            sum_corr / n_pairs as f64
+        } else {
+            0.15
+        };
 
         let (status, rec) = if count <= 3 {
             (
                 "🟢 CRITICAL DEFICIT (PRIME OPPORTUNITY)".to_string(),
-                "URGENT EXPANSION: Maximize allocation to collapse portfolio covariance.".to_string(),
+                "URGENT EXPANSION: Maximize allocation to collapse portfolio covariance."
+                    .to_string(),
             )
         } else if count <= 6 {
             (
@@ -212,7 +242,11 @@ pub fn generate_inverse_blueprint(
 
     for u in u_list {
         let count = universe_counts.get(u).cloned().unwrap_or(0);
-        let share_pct = if n > 0 { (count as f64 / n as f64) * 100.0 } else { 0.0 };
+        let share_pct = if n > 0 {
+            (count as f64 / n as f64) * 100.0
+        } else {
+            0.0
+        };
 
         let status = if count <= 7 {
             "🟢 UNDER-REPRESENTED (PRIME TARGET)"
@@ -309,7 +343,8 @@ pub fn generate_inverse_blueprint(
         active_alpha_count: n,
         baseline_merged_sharpe: 3.77,
         baseline_avg_corr: 0.2179,
-        target_leaderboard_gap: "Target: Drop uniquenessScore from 0.53 to <= 0.00 & Push isScore > 20,000".to_string(),
+        target_leaderboard_gap:
+            "Target: Drop uniquenessScore from 0.53 to <= 0.00 & Push isScore > 20,000".to_string(),
         pillar_gaps,
         universe_gaps,
         temporal_sound,
@@ -320,7 +355,12 @@ pub fn generate_inverse_blueprint(
 /// Formats and prints the master Inverse Blueprint Report to console
 pub fn print_blueprint_report(report: &InverseBlueprintReport) {
     println!("\n═════════════════════════════════════════════════════════════════════════");
-    println!("  {}", "AlphaFind Quant Engine — Inverse Portfolio Optimization & Blueprint".bold().yellow());
+    println!(
+        "  {}",
+        "AlphaFind Quant Engine — Inverse Portfolio Optimization & Blueprint"
+            .bold()
+            .yellow()
+    );
     println!("═════════════════════════════════════════════════════════════════════════");
     println!(
         "  Active Out-of-Sample Portfolio: {} Alphas | Baseline Merged Sharpe: {:.2} | Avg Corr: {:.2}%",
@@ -328,7 +368,10 @@ pub fn print_blueprint_report(report: &InverseBlueprintReport) {
         report.baseline_merged_sharpe,
         report.baseline_avg_corr * 100.0
     );
-    println!("  Strategic Mission: {}", report.target_leaderboard_gap.green().bold());
+    println!(
+        "  Strategic Mission: {}",
+        report.target_leaderboard_gap.green().bold()
+    );
     println!("  ─────────────────────────────────────────────────────────────────────────");
 
     // 1. Pillar Exposure Deficits
@@ -356,10 +399,7 @@ pub fn print_blueprint_report(report: &InverseBlueprintReport) {
     for u in &report.universe_gaps {
         println!(
             "  │ {:<8} │ {:>4} │ {:>6.1}% │ {:<32} │",
-            u.universe,
-            u.count,
-            u.share_pct,
-            u.status
+            u.universe, u.count, u.share_pct, u.status
         );
     }
     println!("  └──────────┴──────┴─────────┴──────────────────────────────────┘");
@@ -367,7 +407,10 @@ pub fn print_blueprint_report(report: &InverseBlueprintReport) {
     // 3. Temporal Sound & Frequency Profile
     println!("\n  🎵 TIER 3: TEMPORAL 'SOUND' & FREQUENCY SPECTRUM PROFILE:");
     println!("  ─────────────────────────────────────────────────────────────────────────");
-    println!("    Current Average Decay:       {:.1} days", report.temporal_sound.avg_decay);
+    println!(
+        "    Current Average Decay:       {:.1} days",
+        report.temporal_sound.avg_decay
+    );
     println!(
         "    Decay Band Breakdown:        Fast (<10d): {} | Medium (10-25d): {} | Slow (>25d): {}",
         report.temporal_sound.fast_band_count,
@@ -376,8 +419,18 @@ pub fn print_blueprint_report(report: &InverseBlueprintReport) {
     );
     println!(
         "    Optimal Target Decay Band:   {} to {} days",
-        report.temporal_sound.recommended_decay_band.0.to_string().cyan(),
-        report.temporal_sound.recommended_decay_band.1.to_string().cyan()
+        report
+            .temporal_sound
+            .recommended_decay_band
+            .0
+            .to_string()
+            .cyan(),
+        report
+            .temporal_sound
+            .recommended_decay_band
+            .1
+            .to_string()
+            .cyan()
     );
     println!(
         "    Optimal Turnover Sweet Spot: {:.1}% to {:.1}% (Maximizes Fitness Denominator)",
@@ -397,20 +450,34 @@ pub fn print_blueprint_report(report: &InverseBlueprintReport) {
             arch.name.bold().green(),
             arch.target_universe.cyan()
         );
-        println!("  ├─ Economic Pillar:      {} x {}", arch.primary_pillar.bold(), arch.secondary_catalyst);
-        println!("  ├─ Data Anchors:         Anchor: {} | Catalyst: {}", arch.anchor_dataset.yellow(), arch.catalyst_dataset.yellow());
+        println!(
+            "  ├─ Economic Pillar:      {} x {}",
+            arch.primary_pillar.bold(),
+            arch.secondary_catalyst
+        );
+        println!(
+            "  ├─ Data Anchors:         Anchor: {} | Catalyst: {}",
+            arch.anchor_dataset.yellow(),
+            arch.catalyst_dataset.yellow()
+        );
         println!("  ├─ Target 'Sound':       Decay: {} | Neutralization: {} | Exponent: {:.1} | Trunc: {:.3}",
             arch.recommended_decay, arch.recommended_neutralization.green(), arch.recommended_power, arch.recommended_truncation
         );
         println!("  ├─ Projected Impact:     Expected Internal Corr: {:+.2}% | Uniqueness Pressure: {:+.3}",
             arch.projected_internal_corr * 100.0, arch.projected_uniqueness_delta
         );
-        println!("  ├─ Rationale:            {}", arch.economic_rationale.white());
+        println!(
+            "  ├─ Rationale:            {}",
+            arch.economic_rationale.white()
+        );
         println!("  └─ FastExpr Skeleton:");
         println!("     {}", arch.fast_expr_skeleton.italic().bright_black());
     }
 
     println!("\n  ═════════════════════════════════════════════════════════════════════════");
-    println!("  {} Run screening with targeted parameters to mine tomorrow's Day 27 Alpha!", "💡 [OPERATIONAL DIRECTIVE]".green().bold());
+    println!(
+        "  {} Run screening with targeted parameters to mine tomorrow's Day 27 Alpha!",
+        "💡 [OPERATIONAL DIRECTIVE]".green().bold()
+    );
     println!("═════════════════════════════════════════════════════════════════════════\n");
 }
