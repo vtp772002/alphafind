@@ -1582,9 +1582,9 @@ async fn cmd_impact(alpha_id: String) -> Result<()> {
                     comps
                         .iter()
                         .find_map(|c| c.leaderboard.as_ref().and_then(|lb| lb.uniqueness_score))
-                        .unwrap_or(0.54)
+                        .unwrap_or(0.50)
                 } else {
-                    0.54
+                    0.50
                 };
 
                 if let Some(shadow) =
@@ -1650,9 +1650,9 @@ async fn cmd_shadow(candidate: Option<String>, anchor: Option<f64>) -> Result<()
         comps
             .iter()
             .find_map(|c| c.leaderboard.as_ref().and_then(|lb| lb.uniqueness_score))
-            .unwrap_or(0.54)
+            .unwrap_or(0.50)
     } else {
-        0.54
+        0.50
     };
 
     let shadow = calibrate_shadow_portfolio(&os_alphas, &pnl_cache, Some(live_anchor))
