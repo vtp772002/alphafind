@@ -342,3 +342,39 @@ alphafind blueprint --universe TOP200
 # Export generated archetypes to a markdown file
 alphafind blueprint --universe TOP3000 --export blueprints_day27.md
 ```
+
+---
+
+## 14. `alphafind shadow`
+
+**Synthetic Crowd Shadow Portfolio & Adversarial Uniqueness Optimizer**: Synthesizes the master platform crowd PnL curve calibrated against live API ground truth (`uniquenessScore: 0.54`). Decomposes crowd factor exposure across Fundamental, Analyst, Options, and Momentum. Audits which portfolio alphas drive crowd co-movement, and projects the exact phase shift ($\Delta \text{uniquenessScore}$) for candidate alphas.
+
+### Usage
+```bash
+alphafind shadow [OPTIONS]
+```
+
+### Options
+| Flag | Short | Description | Default |
+|:---|:---:|:---|:---:|
+| `--candidate <ID>` | `-c` | Candidate Alpha ID to simulate exact crowd phase shift ($\Delta \text{uniqueness}$) | None |
+| `--anchor <VAL>` | | Override ground truth anchor correlation | Live API value (0.54) |
+
+### Phase Shift Verdicts
+* 💎 **ADVERSARIAL HEDGE** ($\Delta \text{uniqueness} \le -0.003$ or $\rho_{\text{crowd}} < -0.15$): Directly counters crowd momentum, collapsing platform correlation.
+* 🟢 **ORTHOGONAL SANCTUARY** ($\Delta \text{uniqueness} \le -0.001$ or $\rho_{\text{crowd}} \le 0.15$): Safely diversifies away crowd co-movement.
+* 🟡 **NEUTRAL BUFFER** ($\Delta \text{uniqueness} \le +0.001$): Marginal correlation impact.
+* 🔴 **CROWD CLONE** ($\Delta \text{uniqueness} > +0.001$): Strongly co-moves with crowd; increases uniquenessScore (unsubmittable).
+
+### Examples
+```bash
+# Audit active portfolio against Synthetic Crowd Shadow
+alphafind shadow
+
+# Simulate adversarial impact for a candidate Alpha
+alphafind shadow --candidate <ALPHA_ID>
+
+# Override anchor with custom calibration
+alphafind shadow --anchor 0.50
+```
+

@@ -6,4 +6,5 @@ pub mod forecast;
 pub mod matrix;
 pub mod models;
 pub mod screener;
+pub mod shadow;
 pub mod taxonomy;
