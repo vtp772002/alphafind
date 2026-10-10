@@ -15,6 +15,10 @@ use alphafind::matrix::{
 };
 use alphafind::models::{AlphaSettings, CensusSnapshot, DatasetEntry, PortfolioAlpha};
 use alphafind::screener::MultiAccountScreener;
+use alphafind::shadow::{
+    audit_portfolio_crowd_exposure, calibrate_shadow_portfolio, print_shadow_audit_report,
+    print_uniqueness_impact_report, project_uniqueness_impact,
+};
 use alphafind::taxonomy::{get_curated_candidates, FactorPillar};
 
 #[derive(Parser)]
@@ -209,6 +213,17 @@ enum Commands {
         #[arg(long)]
         export: Option<String>,
     },
+
+    /// Synthetic Crowd Shadow Portfolio & Adversarial Uniqueness Optimizer
+    Shadow {
+        /// Optional candidate Alpha ID to simulate its exact crowd phase shift (Delta uniqueness)
+        #[arg(short, long)]
+        candidate: Option<String>,
+
+        /// Override anchor uniqueness correlation (default: live API value or 0.54)
+        #[arg(long)]
+        anchor: Option<f64>,
+    },
 }
 
 fn get_main_client() -> Result<BrainClient> {
@@ -289,6 +304,7 @@ async fn main() -> Result<()> {
             region,
         } => cmd_matrix(universe, expr, green_only, region).await,
         Commands::Blueprint { universe, export } => cmd_blueprint(universe, export).await,
+        Commands::Shadow { candidate, anchor } => cmd_shadow(candidate, anchor).await,
     }
 }
 
@@ -1555,6 +1571,107 @@ async fn cmd_impact(alpha_id: String) -> Result<()> {
             "\n  {} DILUTIVE: Candidate reduces portfolio Sharpe.",
             "⚠️ [SUBOPTIMAL]".yellow()
         );
+    }
+
+    // Adversarial Crowd Uniqueness Simulation
+    let port_path = "portfolio_os.json";
+    if Path::new(port_path).exists() {
+        if let Ok(port_data) = fs::read_to_string(port_path) {
+            if let Ok(os_alphas) = serde_json::from_str::<Vec<PortfolioAlpha>>(&port_data) {
+                let live_anchor = if let Ok(comps) = client.fetch_competitions().await {
+                    comps
+                        .iter()
+                        .find_map(|c| c.leaderboard.as_ref().and_then(|lb| lb.uniqueness_score))
+                        .unwrap_or(0.54)
+                } else {
+                    0.54
+                };
+
+                if let Some(shadow) =
+                    calibrate_shadow_portfolio(&os_alphas, &pnl_cache, Some(live_anchor))
+                {
+                    if let Some(uniq_report) = project_uniqueness_impact(
+                        &alpha_id, &cand_pnl, &os_alphas, &pnl_cache, &shadow,
+                    ) {
+                        print_uniqueness_impact_report(&uniq_report);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn cmd_shadow(candidate: Option<String>, anchor: Option<f64>) -> Result<()> {
+    let client = get_main_client()?;
+    let port_path = "portfolio_os.json";
+    if !Path::new(port_path).exists() {
+        anyhow::bail!("portfolio_os.json not found! Run 'alphafind sync' first.");
+    }
+    let port_data = fs::read_to_string(port_path)?;
+    let os_alphas: Vec<PortfolioAlpha> = serde_json::from_str(&port_data)?;
+
+    let cache_file = get_cache_dir().join("portfolio_pnl.json");
+    let mut pnl_cache: HashMap<String, HashMap<String, f64>> = if cache_file.exists() {
+        fs::read_to_string(&cache_file)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    } else {
+        HashMap::new()
+    };
+
+    let mut missing_ids = Vec::new();
+    for a in &os_alphas {
+        if !pnl_cache.contains_key(&a.id) {
+            missing_ids.push(a.id.clone());
+        }
+    }
+
+    if !missing_ids.is_empty() {
+        println!(
+            "  Fetching PnL for {} active OS alphas not in cache...",
+            missing_ids.len()
+        );
+        for id in missing_ids {
+            if let Ok(pnl) = client.fetch_daily_pnl(&id).await {
+                pnl_cache.insert(id, pnl);
+            }
+        }
+        if let Ok(serialized) = serde_json::to_string(&pnl_cache) {
+            let _ = fs::write(&cache_file, &serialized);
+        }
+    }
+
+    let live_anchor = if let Some(a) = anchor {
+        a
+    } else if let Ok(comps) = client.fetch_competitions().await {
+        comps
+            .iter()
+            .find_map(|c| c.leaderboard.as_ref().and_then(|lb| lb.uniqueness_score))
+            .unwrap_or(0.54)
+    } else {
+        0.54
+    };
+
+    let shadow = calibrate_shadow_portfolio(&os_alphas, &pnl_cache, Some(live_anchor))
+        .context("Failed to calibrate Synthetic Crowd Shadow Portfolio (insufficient overlapping trading days)")?;
+
+    let audit_report = audit_portfolio_crowd_exposure(&os_alphas, &pnl_cache, &shadow);
+    print_shadow_audit_report(&audit_report, &shadow);
+
+    if let Some(ref cand_id) = candidate {
+        println!(
+            "  Simulating Adversarial Crowd Impact for Candidate ID: {}...",
+            cand_id.yellow()
+        );
+        let cand_pnl = client.fetch_daily_pnl(cand_id).await?;
+        if let Some(impact) =
+            project_uniqueness_impact(cand_id, &cand_pnl, &os_alphas, &pnl_cache, &shadow)
+        {
+            print_uniqueness_impact_report(&impact);
+        }
     }
 
     Ok(())
