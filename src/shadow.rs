@@ -43,7 +43,7 @@ impl UniquenessPhaseVerdict {
 /// Master Synthetic Crowd Shadow Portfolio representing aggregate platform quant PnL
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrowdShadowPortfolio {
-    /// Official ground truth correlation with user portfolio (0.54)
+    /// Ground truth correlation anchor with user portfolio
     pub anchor_uniqueness: f64,
     /// Number of common trading days in the backtest time series
     pub n_trading_days: usize,
@@ -77,7 +77,7 @@ pub struct PortfolioCrowdAuditReport {
 }
 
 /// Calibrates the Synthetic Crowd Shadow Portfolio against user's active portfolio PnLs.
-/// Uses the official ground truth anchor (0.54) to synthesize the master crowd PnL curve.
+/// Uses the ground truth anchor to synthesize the master crowd PnL curve.
 pub fn calibrate_shadow_portfolio(
     portfolio_alphas: &[PortfolioAlpha],
     os_pnls: &HashMap<String, HashMap<String, f64>>,
@@ -87,7 +87,7 @@ pub fn calibrate_shadow_portfolio(
         return None;
     }
 
-    let target_rho = target_anchor_corr.unwrap_or(0.54);
+    let target_rho = target_anchor_corr.unwrap_or(0.50);
 
     // 1. Determine common dates across all active alphas
     let mut date_sets: Vec<HashSet<String>> = Vec::new();

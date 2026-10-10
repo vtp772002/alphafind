@@ -347,7 +347,7 @@ alphafind blueprint --universe TOP3000 --export blueprints_day27.md
 
 ## 14. `alphafind shadow`
 
-**Synthetic Crowd Shadow Portfolio & Adversarial Uniqueness Optimizer**: Synthesizes the master platform crowd PnL curve calibrated against live API ground truth (`uniquenessScore: 0.54`). Decomposes crowd factor exposure across Fundamental, Analyst, Options, and Momentum. Audits which portfolio alphas drive crowd co-movement, and projects the exact phase shift ($\Delta \text{uniquenessScore}$) for candidate alphas.
+**Synthetic Crowd Shadow Portfolio & Adversarial Uniqueness Optimizer**: Synthesizes the master platform crowd PnL curve calibrated against live API ground truth anchor. Decomposes crowd factor exposure across Fundamental, Analyst, Options, and Momentum. Audits which portfolio alphas drive crowd co-movement, and projects the exact phase shift ($\Delta \text{uniquenessScore}$) for candidate alphas.
 
 ### Usage
 ```bash
@@ -358,7 +358,7 @@ alphafind shadow [OPTIONS]
 | Flag | Short | Description | Default |
 |:---|:---:|:---|:---:|
 | `--candidate <ID>` | `-c` | Candidate Alpha ID to simulate exact crowd phase shift ($\Delta \text{uniqueness}$) | None |
-| `--anchor <VAL>` | | Override ground truth anchor correlation | Live API value (0.54) |
+| `--anchor <VAL>` | | Override ground truth anchor correlation | Live API value |
 
 ### Phase Shift Verdicts
 * 💎 **ADVERSARIAL HEDGE** ($\Delta \text{uniqueness} \le -0.003$ or $\rho_{\text{crowd}} < -0.15$): Directly counters crowd momentum, collapsing platform correlation.
