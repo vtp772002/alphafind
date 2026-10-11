@@ -10,6 +10,10 @@ use alphafind::client::BrainClient;
 use alphafind::correlation::{audit_candidate, calculate_portfolio_impact, simulate_portfolio};
 use alphafind::crowd::{evaluate_crowd_risk, print_crowd_risk_audit};
 use alphafind::forecast::{generate_inverse_blueprint, print_blueprint_report};
+use alphafind::health::{
+    evaluate_portfolio_health, print_detailed_alpha_table, print_health_report,
+    print_single_alpha_diagnostic,
+};
 use alphafind::matrix::{
     analyze_formula_hyper_synergy, build_dynamic_matrix, print_dynamic_matrix,
 };
@@ -224,6 +228,21 @@ enum Commands {
         #[arg(long)]
         anchor: Option<f64>,
     },
+
+    /// Diagnose active OS portfolio health, alpha decay ratios, half-life, and marginal Sharpe impact
+    Health {
+        /// Optional specific Alpha ID to inspect in depth
+        #[arg(short, long)]
+        alpha_id: Option<String>,
+
+        /// Export full diagnostic JSON report to a file
+        #[arg(long)]
+        export: Option<String>,
+
+        /// Show full table of all active alphas
+        #[arg(short, long)]
+        all: bool,
+    },
 }
 
 fn get_main_client() -> Result<BrainClient> {
@@ -305,6 +324,11 @@ async fn main() -> Result<()> {
         } => cmd_matrix(universe, expr, green_only, region).await,
         Commands::Blueprint { universe, export } => cmd_blueprint(universe, export).await,
         Commands::Shadow { candidate, anchor } => cmd_shadow(candidate, anchor).await,
+        Commands::Health {
+            alpha_id,
+            export,
+            all,
+        } => cmd_health(alpha_id, export, all).await,
     }
 }
 
@@ -1923,6 +1947,88 @@ async fn cmd_blueprint(universe: Option<String>, export: Option<String>) -> Resu
         fs::write(&export_path, out)?;
         println!(
             "  💾 Successfully exported blueprint skeletons to {}\n",
+            export_path.green().bold()
+        );
+    }
+
+    Ok(())
+}
+
+async fn cmd_health(alpha_id: Option<String>, export: Option<String>, all: bool) -> Result<()> {
+    let port_path = "portfolio_os.json";
+    if !Path::new(port_path).exists() {
+        anyhow::bail!("portfolio_os.json not found! Run 'alphafind sync' first.");
+    }
+    let port_data = fs::read_to_string(port_path)?;
+    let os_alphas: Vec<PortfolioAlpha> = serde_json::from_str(&port_data)?;
+
+    let cache_file = get_cache_dir().join("portfolio_pnl.json");
+    let mut pnl_cache: HashMap<String, HashMap<String, f64>> = if cache_file.exists() {
+        fs::read_to_string(&cache_file)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    } else {
+        HashMap::new()
+    };
+
+    let mut missing_ids = Vec::new();
+    for a in &os_alphas {
+        if !pnl_cache.contains_key(&a.id) {
+            missing_ids.push(a.id.clone());
+        }
+    }
+
+    if !missing_ids.is_empty() {
+        if let Ok(client) = get_main_client() {
+            println!(
+                "  Fetching PnL for {} active OS alphas not in cache...",
+                missing_ids.len()
+            );
+            for id in missing_ids {
+                if let Ok(pnl) = client.fetch_daily_pnl(&id).await {
+                    pnl_cache.insert(id, pnl);
+                }
+            }
+            if let Ok(serialized) = serde_json::to_string(&pnl_cache) {
+                let _ = fs::write(&cache_file, &serialized);
+            }
+        }
+    }
+
+    // Try calibrating crowd shadow portfolio for crowd co-movement metrics
+    let shadow = calibrate_shadow_portfolio(&os_alphas, &pnl_cache, None);
+
+    let report = evaluate_portfolio_health(&os_alphas, &pnl_cache, shadow.as_ref()).context(
+        "Failed to evaluate portfolio health (insufficient data or overlapping trading days < 60)",
+    )?;
+
+    print_health_report(&report);
+
+    if all {
+        print_detailed_alpha_table(&report.all_alpha_diagnostics);
+    }
+
+    if let Some(ref target_id) = alpha_id {
+        if let Some(target_diag) = report
+            .all_alpha_diagnostics
+            .iter()
+            .find(|a| a.alpha_id.eq_ignore_ascii_case(target_id))
+        {
+            print_single_alpha_diagnostic(target_diag);
+        } else {
+            println!(
+                "  ⚠️  Alpha ID '{}' not found in active Out-of-Sample portfolio.",
+                target_id.yellow()
+            );
+        }
+    }
+
+    if let Some(ref export_path) = export {
+        let serialized = serde_json::to_string_pretty(&report)?;
+        fs::write(export_path, serialized)?;
+        println!(
+            "  💾 Full Master Portfolio Health Report exported to: {}\n",
             export_path.green().bold()
         );
     }
