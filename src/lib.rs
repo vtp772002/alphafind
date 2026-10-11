@@ -3,6 +3,7 @@ pub mod client;
 pub mod correlation;
 pub mod crowd;
 pub mod forecast;
+pub mod health;
 pub mod matrix;
 pub mod models;
 pub mod screener;
