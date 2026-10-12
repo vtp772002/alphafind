@@ -27,7 +27,7 @@ pub async fn cmd_auth() -> Result<()> {
         "═════════════════════════════════════════════════════════════════════════".cyan()
     );
 
-    let screener = MultiAccountScreener::from_env(3)?;
+    let screener = MultiAccountScreener::from_env(3, false)?;
     screener.authenticate_all().await?;
     Ok(())
 }
