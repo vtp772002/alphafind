@@ -367,8 +367,6 @@ pub fn build_dynamic_matrix(
 
         let status_str = if !counts_reported {
             "FALLBACK COUNTS"
-        } else if live_u <= 50 && delta_u <= 5 {
-            "LOW COUNT"
         } else if live_u <= 300 && delta_u <= 20 {
             "LOW COUNT"
         } else if live_u <= 2000 {
