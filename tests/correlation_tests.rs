@@ -23,8 +23,9 @@ fn generate_pnl(n: usize, seed: f64) -> HashMap<String, f64> {
 fn test_pearson_perfect_positive_correlation() {
     let x = generate_pnl(100, 1.0);
     let y = x.clone();
-    let (corr, days) = pearson_correlation(&x, &y);
+    let (corr_opt, days) = pearson_correlation(&x, &y);
     assert_eq!(days, 100);
+    let corr = corr_opt.expect("Expected Some(1.0) for perfect positive correlation");
     assert!(
         (corr - 1.0).abs() < 1e-10,
         "Perfect self-correlation should be 1.0, got {}",
@@ -36,8 +37,9 @@ fn test_pearson_perfect_positive_correlation() {
 fn test_pearson_perfect_negative_correlation() {
     let x = generate_pnl(100, 1.0);
     let y: HashMap<String, f64> = x.iter().map(|(k, v)| (k.clone(), -v)).collect();
-    let (corr, days) = pearson_correlation(&x, &y);
+    let (corr_opt, days) = pearson_correlation(&x, &y);
     assert_eq!(days, 100);
+    let corr = corr_opt.expect("Expected Some(-1.0) for perfect negative correlation");
     assert!(
         (corr + 1.0).abs() < 1e-10,
         "Perfect negative correlation should be -1.0, got {}",
@@ -46,25 +48,25 @@ fn test_pearson_perfect_negative_correlation() {
 }
 
 #[test]
-fn test_pearson_insufficient_days_returns_zero() {
+fn test_pearson_insufficient_days_fails_closed() {
     let x = make_pnl(&[("2020-01-01", 1.0), ("2020-01-02", 2.0)]);
     let y = make_pnl(&[("2020-01-01", 3.0), ("2020-01-02", 4.0)]);
     let (corr, days) = pearson_correlation(&x, &y);
     assert_eq!(days, 2);
-    assert_eq!(corr, 0.0, "Should return 0 when less than 30 common days");
+    assert!(corr.is_none(), "Should fail-closed (return None) when less than 30 common days");
 }
 
 #[test]
-fn test_pearson_no_overlap_returns_zero() {
+fn test_pearson_no_overlap_fails_closed() {
     let x = make_pnl(&[("2020-01-01", 1.0)]);
     let y = make_pnl(&[("2020-02-01", 1.0)]);
     let (corr, days) = pearson_correlation(&x, &y);
     assert_eq!(days, 0);
-    assert_eq!(corr, 0.0);
+    assert!(corr.is_none(), "Should fail-closed (return None) when no overlap");
 }
 
 #[test]
-fn test_pearson_constant_series_returns_zero() {
+fn test_pearson_constant_series_fails_closed() {
     let n = 50;
     let x: HashMap<String, f64> = (0..n)
         .map(|i| (format!("2020-01-{:02}", i + 1), 5.0))
@@ -77,8 +79,8 @@ fn test_pearson_constant_series_returns_zero() {
         .map(|k| (k.clone(), 5.0))
         .collect();
     let (corr, _days) = pearson_correlation(&common, &y);
-    // Constant series has zero variance, should return 0
-    assert_eq!(corr, 0.0, "Constant series should have 0 correlation");
+    // Constant series has zero variance, must fail-closed as None
+    assert!(corr.is_none(), "Constant series has zero variance, should return None");
 }
 
 #[test]
@@ -91,9 +93,12 @@ fn test_audit_candidate_basic() {
     let report = audit_candidate("candidate", &cand, &os_pnls);
     assert_eq!(report.candidate_id, "candidate");
     assert_eq!(report.pairwise_results.len(), 2);
-    // Max correlation should be between -1 and 1
-    assert!(report.max_correlation >= -1.0 && report.max_correlation <= 1.0);
-    assert!(report.avg_correlation >= -1.0 && report.avg_correlation <= 1.0);
+    assert_eq!(report.valid_comparisons, 2);
+    assert_eq!(report.insufficient_overlap_count, 0);
+    let max = report.max_correlation.expect("Should have valid max correlation");
+    let avg = report.avg_correlation.expect("Should have valid avg correlation");
+    assert!((-1.0..=1.0).contains(&max));
+    assert!((-1.0..=1.0).contains(&avg));
 }
 
 #[test]
@@ -106,16 +111,37 @@ fn test_audit_skips_self() {
     let report = audit_candidate("candidate", &cand, &os_pnls);
     // Should skip "candidate" from OS portfolio, only compare with alpha_A
     assert_eq!(report.pairwise_results.len(), 1);
+    assert_eq!(report.valid_comparisons, 1);
 }
 
 #[test]
-fn test_audit_empty_portfolio() {
+fn test_audit_empty_portfolio_fails_closed() {
     let cand = generate_pnl(200, 1.0);
     let os_pnls = HashMap::new();
 
     let report = audit_candidate("candidate", &cand, &os_pnls);
     assert_eq!(report.pairwise_results.len(), 0);
-    assert_eq!(report.avg_correlation, 0.0);
+    assert_eq!(report.valid_comparisons, 0);
+    assert!(report.max_correlation.is_none());
+    assert!(report.avg_correlation.is_none());
+    // Crucial fail-closed guarantees: cannot claim compliant or orthogonal without data!
+    assert!(!report.is_brain_compliant);
+    assert!(!report.is_true_orthogonal);
+}
+
+#[test]
+fn test_audit_insufficient_overlap_fails_closed() {
+    let cand = make_pnl(&[("2020-01-01", 1.0), ("2020-01-02", 2.0)]);
+    let mut os_pnls = HashMap::new();
+    os_pnls.insert("alpha_short_history".to_string(), make_pnl(&[("2020-01-01", 3.0), ("2020-01-02", 4.0)]));
+
+    let report = audit_candidate("candidate", &cand, &os_pnls);
+    assert_eq!(report.pairwise_results.len(), 0);
+    assert_eq!(report.valid_comparisons, 0);
+    assert_eq!(report.insufficient_overlap_count, 1);
+    assert!(report.max_correlation.is_none());
+    assert!(!report.is_brain_compliant);
+    assert!(!report.is_true_orthogonal);
 }
 
 #[test]

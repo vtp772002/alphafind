@@ -366,6 +366,62 @@ fn get_cache_dir() -> std::path::PathBuf {
     cache_dir
 }
 
+/// Loads the local PnL cache along with its age and freshness information.
+fn load_pnl_cache() -> (HashMap<String, HashMap<String, f64>>, Option<std::time::Duration>) {
+    let cache_file = get_cache_dir().join("portfolio_pnl.json");
+    if !cache_file.exists() {
+        return (HashMap::new(), None);
+    }
+
+    let age = fs::metadata(&cache_file)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| std::time::SystemTime::now().duration_since(t).ok());
+
+    let pnl_cache = fs::read_to_string(&cache_file)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+
+    (pnl_cache, age)
+}
+
+/// Prints cache age and alerts if cache is stale (>24h).
+fn print_cache_status(age: Option<std::time::Duration>, count: usize) {
+    match age {
+        Some(d) => {
+            let secs = d.as_secs();
+            let age_str = if secs < 60 {
+                format!("{}s ago", secs)
+            } else if secs < 3600 {
+                format!("{:.1}m ago", secs as f64 / 60.0)
+            } else {
+                format!("{:.1}h ago", secs as f64 / 3600.0)
+            };
+
+            if secs > 24 * 3600 {
+                println!(
+                    "  {} Local PnL cache was updated {} ({} alphas cached, exceeds 24h freshness recommended in AGENTS.md). Run 'alphafind portfolio' to refresh.",
+                    "⚠️  [CACHE STALE]".yellow().bold(),
+                    age_str.yellow(),
+                    count
+                );
+            } else {
+                println!(
+                    "  ℹ️  Local PnL cache: {} alphas loaded (cached {})",
+                    count,
+                    age_str.cyan()
+                );
+            }
+        }
+        None => {
+            if count > 0 {
+                println!("  ℹ️  Local PnL cache: {} alphas loaded", count);
+            }
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -797,15 +853,9 @@ async fn cmd_audit(alpha_id: String, label: Option<String>) -> Result<()> {
     let os_alphas: Vec<PortfolioAlpha> = serde_json::from_str(&port_data)?;
 
     // Load or fetch cached baseline PnLs
+    let (mut pnl_cache, cache_age) = load_pnl_cache();
     let cache_file = get_cache_dir().join("portfolio_pnl.json");
-    let mut pnl_cache: HashMap<String, HashMap<String, f64>> = if cache_file.exists() {
-        fs::read_to_string(&cache_file)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
-    } else {
-        HashMap::new()
-    };
+    print_cache_status(cache_age, pnl_cache.len());
 
     let mut missing_ids = Vec::new();
     for a in &os_alphas {
@@ -861,19 +911,30 @@ async fn cmd_audit(alpha_id: String, label: Option<String>) -> Result<()> {
     }
 
     println!("  ─────────────────────────────────────────────────────────────────────────");
-    println!(
-        "  MAX INTERNAL CORRELATION: {:+.4} ({:+.2}%) vs {}",
-        report.max_correlation,
-        report.max_correlation * 100.0,
-        report.most_correlated_id.yellow()
-    );
-    println!(
-        "  AVERAGE INTERNAL CORR:   {:+.4} ({:+.2}%)",
-        report.avg_correlation,
-        report.avg_correlation * 100.0
-    );
+    let max_str = match report.max_correlation {
+        Some(m) => format!("{:+.4} ({:+.2}%)", m, m * 100.0),
+        None => "N/A (insufficient overlap)".to_string(),
+    };
+    let avg_str = match report.avg_correlation {
+        Some(a) => format!("{:+.4} ({:+.2}%)", a, a * 100.0),
+        None => "N/A".to_string(),
+    };
+    let partner = report.most_correlated_id.as_deref().unwrap_or("none");
+    println!("  MAX INTERNAL CORRELATION: {} vs {}", max_str, partner.yellow());
+    println!("  AVERAGE INTERNAL CORR:   {}", avg_str);
+    if report.insufficient_overlap_count > 0 {
+        println!(
+            "  INSUFFICIENT OVERLAP:    {} alphas skipped (<30 common days)",
+            report.insufficient_overlap_count.to_string().yellow()
+        );
+    }
 
-    if report.is_true_orthogonal {
+    if report.valid_comparisons == 0 {
+        println!(
+            "\n  {} No active OS alphas had >= 30 common trading days. Compliance cannot be confirmed (fail-closed).",
+            "⚠️  [INSUFFICIENT DATA]".yellow().bold()
+        );
+    } else if report.is_true_orthogonal {
         println!("\n  {} Candidate is 100% TRUE ORTHOGONAL (rho <= 0.15). Maximum portfolio diversification value!", "🌟 [EXCELLENT]".green().bold());
     } else if report.is_brain_compliant {
         println!(
@@ -917,15 +978,9 @@ async fn cmd_portfolio() -> Result<()> {
     let port_data = fs::read_to_string(port_path)?;
     let os_alphas: Vec<PortfolioAlpha> = serde_json::from_str(&port_data)?;
 
+    let (mut pnl_cache, cache_age) = load_pnl_cache();
     let cache_file = get_cache_dir().join("portfolio_pnl.json");
-    let mut pnl_cache: HashMap<String, HashMap<String, f64>> = if cache_file.exists() {
-        fs::read_to_string(&cache_file)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
-    } else {
-        HashMap::new()
-    };
+    print_cache_status(cache_age, pnl_cache.len());
 
     let mut missing_ids = Vec::new();
     for a in &os_alphas {
@@ -1567,12 +1622,11 @@ async fn cmd_impact(alpha_id: String) -> Result<()> {
     println!("  Candidate PnL records: {} trading days.", cand_pnl.len());
 
     // Load active OS alphas PnL cache
-    let cache_file = get_cache_dir().join("portfolio_pnl.json");
-    if !cache_file.exists() {
-        anyhow::bail!("portfolio_pnl.json not found! Run 'alphafind portfolio' first.");
+    let (pnl_cache, cache_age) = load_pnl_cache();
+    if pnl_cache.is_empty() {
+        anyhow::bail!("portfolio_pnl.json not found or empty! Run 'alphafind portfolio' first.");
     }
-    let pnl_data = fs::read_to_string(&cache_file)?;
-    let pnl_cache: HashMap<String, HashMap<String, f64>> = serde_json::from_str(&pnl_data)?;
+    print_cache_status(cache_age, pnl_cache.len());
 
     let impact = calculate_portfolio_impact(&alpha_id, &cand_pnl, &pnl_cache)
         .context("Failed to compute portfolio merge impact (insufficient overlapping days)")?;
@@ -2085,11 +2139,10 @@ async fn cmd_shadow(
         );
     let total_sample_weight: f64 = allocation_weights.values().sum();
 
+    let (mut pnl_cache, cache_age) = load_pnl_cache();
     let pnl_cache_path = get_cache_dir().join("portfolio_pnl.json");
-    let mut pnl_cache: HashMap<String, HashMap<String, f64>> = fs::read_to_string(&pnl_cache_path)
-        .ok()
-        .and_then(|contents| serde_json::from_str(&contents).ok())
-        .unwrap_or_default();
+    print_cache_status(cache_age, pnl_cache.len());
+
     if let (Some(alpha_id), Some(pnl)) = (candidate_alpha_id.as_ref(), candidate_pnl.as_ref()) {
         pnl_cache.insert(alpha_id.clone(), pnl.clone());
     }
@@ -2415,15 +2468,19 @@ async fn cmd_shadow(
 
     match (usage_weighted_pnl.as_ref(), profile_pnl.as_ref()) {
         (Some(proxy), Some(profile_series)) => {
-            let (baseline_proxy_corr, common_days) =
+            let (baseline_proxy_corr_opt, common_days) =
                 pearson_correlation(profile_series, &proxy.pnl);
             println!(
                 "  Usage-weighted local PnL basket: {} Alpha samples across {} dataset configurations; {} common days.",
                 proxy.sample_alpha_count, proxy.sample_dataset_count, common_days
             );
+            let baseline_corr_str = match baseline_proxy_corr_opt {
+                Some(c) => format!("{:.3}", c),
+                None => "N/A (insufficient data)".to_string(),
+            };
             println!(
-                "  Equal-weight profile vs usage-weighted local basket: {:.3} correlation.",
-                baseline_proxy_corr
+                "  Equal-weight profile vs usage-weighted local basket: {} correlation.",
+                baseline_corr_str
             );
 
             if let Some(alpha_id) = candidate_alpha_id.as_ref() {
@@ -2675,15 +2732,8 @@ async fn cmd_blueprint(universe: Option<String>, export: Option<String>) -> Resu
     let os_alphas: Vec<PortfolioAlpha> = serde_json::from_str(&port_data)?;
 
     // 2. Load cached baseline PnLs
-    let cache_file = get_cache_dir().join("portfolio_pnl.json");
-    let pnl_cache: HashMap<String, HashMap<String, f64>> = if cache_file.exists() {
-        fs::read_to_string(&cache_file)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
-    } else {
-        HashMap::new()
-    };
+    let (pnl_cache, cache_age) = load_pnl_cache();
+    print_cache_status(cache_age, pnl_cache.len());
 
     // 3. Generate inverse blueprint report
     let report = generate_inverse_blueprint(&os_alphas, &pnl_cache, universe.as_deref());
@@ -2742,15 +2792,9 @@ async fn cmd_health(alpha_id: Option<String>, export: Option<String>, all: bool)
     let port_data = fs::read_to_string(port_path)?;
     let os_alphas: Vec<PortfolioAlpha> = serde_json::from_str(&port_data)?;
 
+    let (mut pnl_cache, cache_age) = load_pnl_cache();
     let cache_file = get_cache_dir().join("portfolio_pnl.json");
-    let mut pnl_cache: HashMap<String, HashMap<String, f64>> = if cache_file.exists() {
-        fs::read_to_string(&cache_file)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
-    } else {
-        HashMap::new()
-    };
+    print_cache_status(cache_age, pnl_cache.len());
 
     let mut missing_ids = Vec::new();
     for a in &os_alphas {

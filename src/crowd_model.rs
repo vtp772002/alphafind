@@ -144,8 +144,11 @@ pub fn project_proxy_correlation(
                 .map(|value| ((*date).clone(), *value))
         })
         .collect();
-    let (baseline_proxy_corr, _) = pearson_correlation(&baseline_common, &local_proxy_common);
-    let (projected_proxy_corr, _) = pearson_correlation(&projected_common, &local_proxy_common);
+    let (baseline_proxy_corr_opt, _) = pearson_correlation(&baseline_common, &local_proxy_common);
+    let (projected_proxy_corr_opt, _) = pearson_correlation(&projected_common, &local_proxy_common);
+
+    let baseline_proxy_corr = baseline_proxy_corr_opt?;
+    let projected_proxy_corr = projected_proxy_corr_opt?;
 
     let correlation_delta = projected_proxy_corr - baseline_proxy_corr;
 

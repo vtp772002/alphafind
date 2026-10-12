@@ -59,13 +59,24 @@ else
     RANGE="HEAD~1..HEAD"
 fi
 
-DIFF_CONTENT=$(git diff "$RANGE" 2>/dev/null || git diff --cached 2>/dev/null || true)
+# Check only added lines in diff to prevent false positives when removing an ID
+DIFF_ADDED=$(git diff "$RANGE" 2>/dev/null | grep -E "^\+[^+]" || git diff --cached 2>/dev/null | grep -E "^\+[^+]" || true)
 
-if [ -n "$DIFF_CONTENT" ] && [ ${#ALPHA_IDS[@]} -gt 0 ]; then
+if [ -n "$DIFF_ADDED" ] && [ ${#ALPHA_IDS[@]} -gt 0 ]; then
     for aid in "${ALPHA_IDS[@]}"; do
-        if echo "$DIFF_CONTENT" | grep -q "$aid"; then
-            echo -e "${RED}❌ ERROR: Alpha ID '$aid' detected in outgoing commits/diff!${NC}"
+        if echo "$DIFF_ADDED" | grep -q "$aid"; then
+            echo -e "${RED}❌ ERROR: Alpha ID '$aid' detected in added lines of outgoing commits/diff!${NC}"
             echo "   Never include real platform Alpha IDs in tracked code, tests, or docs."
+            exit 1
+        fi
+    done
+fi
+
+# Also check currently tracked files
+if [ ${#ALPHA_IDS[@]} -gt 0 ]; then
+    for aid in "${ALPHA_IDS[@]}"; do
+        if git grep -q "$aid" 2>/dev/null; then
+            echo -e "${RED}❌ ERROR: Alpha ID '$aid' detected in tracked source files!${NC}"
             exit 1
         fi
     done

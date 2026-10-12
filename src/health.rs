@@ -210,10 +210,11 @@ pub fn evaluate_portfolio_health(
                     continue;
                 }
                 if let Some(other_pnl) = os_pnls.get(&other.id) {
-                    let (r, _) = pearson_correlation(pnl, other_pnl);
-                    if r > max_corr {
-                        max_corr = r;
-                        most_corr_id = other.id.clone();
+                    if let (Some(r), _) = pearson_correlation(pnl, other_pnl) {
+                        if r > max_corr {
+                            max_corr = r;
+                            most_corr_id = other.id.clone();
+                        }
                     }
                 }
             }
@@ -246,9 +247,8 @@ pub fn evaluate_portfolio_health(
             };
 
             // Crowd co-movement from shadow portfolio if available
-            let crowd_corr = shadow_opt.map(|shadow| {
-                let (r, _) = pearson_correlation(pnl, &shadow.shadow_pnl);
-                r
+            let crowd_corr = shadow_opt.and_then(|shadow| {
+                pearson_correlation(pnl, &shadow.shadow_pnl).0
             });
 
             all_reports.push(AlphaHealthReport {

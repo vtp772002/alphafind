@@ -248,8 +248,9 @@ pub fn project_uniqueness_impact(
     }
 
     // 1. Candidate correlation with Crowd
-    let (cand_crowd_corr, common_days) =
+    let (cand_crowd_corr_opt, common_days) =
         pearson_correlation(candidate_pnl, &shadow_portfolio.shadow_pnl);
+    let cand_crowd_corr = cand_crowd_corr_opt?;
     if common_days < 30 {
         return None;
     }
@@ -284,7 +285,8 @@ pub fn project_uniqueness_impact(
     }
 
     // 3. Candidate correlation with internal portfolio
-    let (cand_internal_corr, _) = pearson_correlation(candidate_pnl, &user_merged_pnl);
+    let (cand_internal_corr_opt, _) = pearson_correlation(candidate_pnl, &user_merged_pnl);
+    let cand_internal_corr = cand_internal_corr_opt.unwrap_or(0.0);
 
     // 4. Build New Combined Portfolio: P_new = (N * P_user + P_cand) / (N + 1)
     let mut new_merged_pnl = HashMap::new();
@@ -297,8 +299,9 @@ pub fn project_uniqueness_impact(
     }
 
     // 5. Correlation with the synthetic local comparison series
-    let (projected_uniqueness, _) =
+    let (projected_uniqueness_opt, _) =
         pearson_correlation(&new_merged_pnl, &shadow_portfolio.shadow_pnl);
+    let projected_uniqueness = projected_uniqueness_opt?;
     let current_uniqueness = shadow_portfolio.anchor_uniqueness;
     let delta_uniqueness = projected_uniqueness - current_uniqueness;
 
@@ -349,22 +352,23 @@ pub fn audit_portfolio_crowd_exposure(
 
     for alpha in portfolio_alphas {
         if let Some(pnl) = os_pnls.get(&alpha.id) {
-            let (corr, days) = pearson_correlation(pnl, &shadow_portfolio.shadow_pnl);
-            if days >= 30 {
-                let name = alpha
-                    .name
-                    .clone()
-                    .unwrap_or_else(|| "Unknown Alpha".to_string());
-                alpha_corrs.push((alpha.id.clone(), name, corr));
+            if let (Some(corr), days) = pearson_correlation(pnl, &shadow_portfolio.shadow_pnl) {
+                if days >= 30 {
+                    let name = alpha
+                        .name
+                        .clone()
+                        .unwrap_or_else(|| "Unknown Alpha".to_string());
+                    alpha_corrs.push((alpha.id.clone(), name, corr));
 
-                let cat = alpha
-                    .category
-                    .as_deref()
-                    .unwrap_or("MOMENTUM")
-                    .to_uppercase();
-                let entry = pillar_sums.entry(cat).or_insert((0.0, 0));
-                entry.0 += corr;
-                entry.1 += 1;
+                    let cat = alpha
+                        .category
+                        .as_deref()
+                        .unwrap_or("MOMENTUM")
+                        .to_uppercase();
+                    let entry = pillar_sums.entry(cat).or_insert((0.0, 0));
+                    entry.0 += corr;
+                    entry.1 += 1;
+                }
             }
         }
     }

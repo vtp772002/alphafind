@@ -12,6 +12,7 @@ pub struct AccountWorker {
     pub client: BrainClient,
     pub role: String,
     pub is_main: bool,
+    pub semaphore: Arc<tokio::sync::Semaphore>,
 }
 
 /// Coordinates distributed alpha screening across multiple authenticated BRAIN accounts.
@@ -27,6 +28,7 @@ impl MultiAccountScreener {
     pub fn from_env(workers_per_account: usize) -> Result<Self> {
         dotenvy::dotenv().ok();
 
+        let concurrency = workers_per_account.max(1);
         let main_email = std::env::var("MAIN_ACCOUNT_EMAIL")
             .or_else(|_| std::env::var("WQ_BRAIN_EMAIL"))
             .context("Missing MAIN_ACCOUNT_EMAIL in .env")?;
@@ -41,6 +43,7 @@ impl MultiAccountScreener {
             client: main_client.clone(),
             role: "MAIN".to_string(),
             is_main: true,
+            semaphore: Arc::new(tokio::sync::Semaphore::new(concurrency)),
         });
 
         // Load Secondary / Worker Sessions (for collaborative team research pooling)
@@ -59,6 +62,7 @@ impl MultiAccountScreener {
                             client,
                             role: format!("WORKER_{idx}"),
                             is_main: false,
+                            semaphore: Arc::new(tokio::sync::Semaphore::new(concurrency)),
                         });
                     }
                     idx += 1;
@@ -70,7 +74,7 @@ impl MultiAccountScreener {
         Ok(Self {
             main_client,
             accounts,
-            workers_per_account,
+            workers_per_account: concurrency,
             transfer_lock: Arc::new(Mutex::new(())),
         })
     }
@@ -105,188 +109,245 @@ impl MultiAccountScreener {
         Ok(())
     }
 
-    /// Screens a batch of candidate alphas across configured sessions.
-    /// The current implementation creates one task per candidate; this is not a concurrency limit.
+    /// Screens a batch of candidate alphas across configured sessions using a bounded worker queue.
+    /// In-flight simulations per account are strictly bounded by `workers_per_account`.
     pub async fn screen_batch(
         &self,
         candidates: Vec<CandidateAlpha>,
         min_fitness: f64,
         enable_tuning: bool,
     ) -> Result<Vec<SubmittableAlphaRecord>> {
+        if candidates.is_empty() {
+            return Ok(Vec::new());
+        }
+
         let total_workers = self.accounts.len() * self.workers_per_account;
         println!("\n{}", "=".repeat(85));
         println!(
             "{}",
             format!(
-                "🚀 DISTRIBUTED SCREENING: {} Candidates across {} Workers ({} Accounts)",
+                "🚀 DISTRIBUTED SCREENING: {} Candidates across bounded {} Workers ({} Accounts, max {}/acc)",
                 candidates.len(),
                 total_workers,
-                self.accounts.len()
+                self.accounts.len(),
+                self.workers_per_account
             )
             .bold()
             .cyan()
         );
         println!("{}", "=".repeat(85));
 
-        let mut qualified_alphas = Vec::new();
-        let mut tasks = Vec::new();
+        // Bounded work queue: candidates are pushed and consumed by workers
+        let (tx, rx) = tokio::sync::mpsc::channel::<CandidateAlpha>(candidates.len());
+        for cand in candidates {
+            let _ = tx.send(cand).await;
+        }
+        drop(tx); // Close queue so workers terminate when all candidates are consumed
 
-        for (idx, cand) in candidates.into_iter().enumerate() {
-            // Assign candidate to an account in round-robin fashion
-            let acc_idx = idx % self.accounts.len();
-            let acc = &self.accounts[acc_idx];
-            let client = acc.client.clone();
-            let main_client = self.main_client.clone();
-            let is_main = acc.is_main;
-            let role = acc.role.clone();
-            let transfer_lock = self.transfer_lock.clone();
+        let rx = Arc::new(tokio::sync::Mutex::new(rx));
+        let results = Arc::new(tokio::sync::Mutex::new(Vec::new()));
+        let mut worker_tasks = Vec::new();
 
-            tasks.push(tokio::spawn(async move {
-                let settings = cand.to_settings();
-                println!(
-                    "[{}] Dispatching '{}' on {}...",
-                    role.cyan(),
-                    cand.name,
-                    settings.universe
-                );
+        for acc in &self.accounts {
+            for worker_slot in 0..self.workers_per_account {
+                let rx = rx.clone();
+                let results = results.clone();
+                let client = acc.client.clone();
+                let main_client = self.main_client.clone();
+                let is_main = acc.is_main;
+                let role = format!("{}-w{}", acc.role, worker_slot + 1);
+                let semaphore = acc.semaphore.clone();
+                let transfer_lock = self.transfer_lock.clone();
 
-                let sim_res = client.submit_simulation(&cand.expression, &settings).await;
-                let sim_id = match sim_res {
-                    Ok(id) => id,
-                    Err(e) => {
-                        println!("  {} [{}] Failed: {}", "❌".red(), cand.name, e);
-                        return None;
-                    }
-                };
+                worker_tasks.push(tokio::spawn(async move {
+                    loop {
+                        let cand = {
+                            let mut queue = rx.lock().await;
+                            queue.recv().await
+                        };
 
-                let poll_res = client.poll_simulation(&sim_id, 350, 5).await;
-                let alpha_id = match poll_res {
-                    Ok(r) => match r.alpha {
-                        Some(a) => a,
-                        None => return None,
-                    },
-                    Err(e) => {
-                        println!("  {} [{}] Poll error: {}", "❌".red(), cand.name, e);
-                        return None;
-                    }
-                };
+                        let cand = match cand {
+                            Some(c) => c,
+                            None => break, // Queue exhausted
+                        };
 
-                let details = client.get_alpha_details(&alpha_id).await.ok()?;
-                let stats = details.is?;
+                        // Acquire semaphore permit to strictly bound concurrent in-flight simulations on this account
+                        let _permit = match semaphore.acquire().await {
+                            Ok(p) => p,
+                            Err(_) => break,
+                        };
 
-                let sh = stats.sharpe.unwrap_or(0.0);
-                let fit = stats.fitness.unwrap_or(0.0);
-                let ret = stats.returns.unwrap_or(0.0);
-                let turn = stats.turnover.unwrap_or(0.0);
+                        // Polite rate-limiting between dispatches
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-                println!(
-                    "  {} [{}] [{}] Sharpe: {:.2} | Fit: {:.2} | Ret: {:.1}% | Turn: {:.1}%",
-                    "📊 Result:".bold(),
-                    alpha_id.yellow(),
-                    cand.name,
-                    sh,
-                    fit,
-                    ret * 100.0,
-                    turn * 100.0
-                );
-
-                // Auto-tune if promising
-                let (final_aid, final_fit, final_sh, final_ret, final_turn, final_settings, final_expr) =
-                    if fit < min_fitness && sh >= 1.25 && ret >= 0.05 && enable_tuning {
-                        let tuner = FitnessAutoTuner::new(&client);
-                        if let Ok(Some(tuned)) = tuner.tune_hyperparameters(&cand.expression, &settings, min_fitness).await {
-                            let t_st = tuned.details.is.unwrap_or_default();
-                            (
-                                tuned.details.id,
-                                t_st.fitness.unwrap_or(fit),
-                                t_st.sharpe.unwrap_or(sh),
-                                t_st.returns.unwrap_or(ret),
-                                t_st.turnover.unwrap_or(turn),
-                                tuned.settings,
-                                tuned.expression,
-                            )
-                        } else {
-                            (alpha_id, fit, sh, ret, turn, settings.clone(), cand.expression.clone())
-                        }
-                    } else {
-                        (alpha_id, fit, sh, ret, turn, settings.clone(), cand.expression.clone())
-                    };
-
-                // Check submission criteria
-                if final_fit >= min_fitness && final_sh >= 1.25 && (0.01..=0.70).contains(&final_turn) {
-                    println!(
-                        "{}",
-                        format!(
-                            "  🎯 [HIGH-CONVICTION] Alpha {} qualified! (Fit: {:.2} >= {:.2})",
-                            final_aid, final_fit, min_fitness
-                        )
-                        .green()
-                        .bold()
-                    );
-
-                    // Transfer lock to Main Account verification
-                    let _lock = transfer_lock.lock().await;
-                    let (main_aid, main_fit, main_sh, main_turn, main_ret) = if !is_main {
-                        println!("  [*] Transferring {} to MAIN Account for official 8/8 check...", final_aid);
-                        let main_sett = final_settings.clone();
-
-                        let m_sim = main_client.submit_simulation(&final_expr, &main_sett).await.ok()?;
-                        let m_poll = main_client.poll_simulation(&m_sim, 350, 5).await.ok()?;
-                        let m_aid = m_poll.alpha?;
-                        let m_det = main_client.get_alpha_details(&m_aid).await.ok()?;
-                        let m_st = m_det.is?;
-                        (
-                            m_aid,
-                            m_st.fitness.unwrap_or(final_fit),
-                            m_st.sharpe.unwrap_or(final_sh),
-                            m_st.turnover.unwrap_or(final_turn),
-                            m_st.returns.unwrap_or(final_ret),
-                        )
-                    } else {
-                        (final_aid, final_fit, final_sh, final_turn, final_ret)
-                    };
-
-                    // Run official check on Main
-                    let (check_pass, check_msg, _) = main_client.check_submission(&main_aid, 45).await.ok()?;
-                    if check_pass {
+                        let settings = cand.to_settings();
                         println!(
-                            "{}",
-                            format!(
-                                "  🌟 [OFFICIAL 8/8 PASS] Alpha {} on MAIN is 100% Submittable!\n  URL: https://platform.worldquantbrain.com/alpha/{}",
-                                main_aid, main_aid
-                            )
-                            .green()
-                            .bold()
+                            "[{}] Dispatching '{}' on {}...",
+                            role.cyan(),
+                            cand.name,
+                            settings.universe
                         );
 
-                        let sett_json = serde_json::to_string(&final_settings).unwrap_or_default();
+                        let sim_res = client.submit_simulation(&cand.expression, &settings).await;
+                        let sim_id = match sim_res {
+                            Ok(id) => id,
+                            Err(e) => {
+                                println!("  {} [{}] Failed: {}", "❌".red(), cand.name, e);
+                                continue;
+                            }
+                        };
 
-                        return Some(SubmittableAlphaRecord {
-                            alpha_id: main_aid,
-                            name: cand.name.clone(),
-                            universe: final_settings.universe,
-                            sharpe: (main_sh * 100.0).round() / 100.0,
-                            fitness: (main_fit * 100.0).round() / 100.0,
-                            turnover: (main_turn * 1000.0).round() / 10.0,
-                            annual_return: (main_ret * 1000.0).round() / 10.0,
-                            submitted: false,
-                            expression: final_expr,
-                            settings: sett_json,
-                        });
-                    } else {
-                        println!("  {} [Check Failed on Main] {}: {}", "⚠️".yellow(), main_aid, check_msg);
+                        let poll_res = client.poll_simulation(&sim_id, 350, 5).await;
+                        let alpha_id = match poll_res {
+                            Ok(r) => match r.alpha {
+                                Some(a) => a,
+                                None => continue,
+                            },
+                            Err(e) => {
+                                println!("  {} [{}] Poll error: {}", "❌".red(), cand.name, e);
+                                continue;
+                            }
+                        };
+
+                        let details = match client.get_alpha_details(&alpha_id).await {
+                            Ok(d) => d,
+                            Err(_) => continue,
+                        };
+                        let stats = match details.is {
+                            Some(s) => s,
+                            None => continue,
+                        };
+
+                        let sh = stats.sharpe.unwrap_or(0.0);
+                        let fit = stats.fitness.unwrap_or(0.0);
+                        let ret = stats.returns.unwrap_or(0.0);
+                        let turn = stats.turnover.unwrap_or(0.0);
+
+                        println!(
+                            "  {} [{}] [{}] Sharpe: {:.2} | Fit: {:.2} | Ret: {:.1}% | Turn: {:.1}%",
+                            "📊 Result:".bold(),
+                            alpha_id.yellow(),
+                            cand.name,
+                            sh,
+                            fit,
+                            ret * 100.0,
+                            turn * 100.0
+                        );
+
+                        // Auto-tune if promising
+                        let (final_aid, final_fit, final_sh, final_ret, final_turn, final_settings, final_expr) =
+                            if fit < min_fitness && sh >= 1.25 && ret >= 0.05 && enable_tuning {
+                                let tuner = FitnessAutoTuner::new(&client);
+                                if let Ok(Some(tuned)) = tuner.tune_hyperparameters(&cand.expression, &settings, min_fitness).await {
+                                    let t_st = tuned.details.is.unwrap_or_default();
+                                    (
+                                        tuned.details.id,
+                                        t_st.fitness.unwrap_or(fit),
+                                        t_st.sharpe.unwrap_or(sh),
+                                        t_st.returns.unwrap_or(ret),
+                                        t_st.turnover.unwrap_or(turn),
+                                        tuned.settings,
+                                        tuned.expression,
+                                    )
+                                } else {
+                                    (alpha_id, fit, sh, ret, turn, settings.clone(), cand.expression.clone())
+                                }
+                            } else {
+                                (alpha_id, fit, sh, ret, turn, settings.clone(), cand.expression.clone())
+                            };
+
+                        // Check submission criteria
+                        if final_fit >= min_fitness && final_sh >= 1.25 && (0.01..=0.70).contains(&final_turn) {
+                            println!(
+                                "{}",
+                                format!(
+                                    "  🎯 [HIGH-CONVICTION] Alpha {} qualified! (Fit: {:.2} >= {:.2})",
+                                    final_aid, final_fit, min_fitness
+                                )
+                                .green()
+                                .bold()
+                            );
+
+                            let (main_aid, main_fit, main_sh, main_turn, main_ret) = if !is_main {
+                                let _lock = transfer_lock.lock().await;
+                                println!("  [*] Transferring {} to MAIN Account for official check...", final_aid);
+                                let main_sett = final_settings.clone();
+
+                                let m_sim = match main_client.submit_simulation(&final_expr, &main_sett).await {
+                                    Ok(s) => s,
+                                    Err(_) => continue,
+                                };
+                                let m_poll = match main_client.poll_simulation(&m_sim, 350, 5).await {
+                                    Ok(p) => p,
+                                    Err(_) => continue,
+                                };
+                                let m_aid = match m_poll.alpha {
+                                    Some(a) => a,
+                                    None => continue,
+                                };
+                                let m_det = match main_client.get_alpha_details(&m_aid).await {
+                                    Ok(d) => d,
+                                    Err(_) => continue,
+                                };
+                                let m_st = match m_det.is {
+                                    Some(s) => s,
+                                    None => continue,
+                                };
+                                (
+                                    m_aid,
+                                    m_st.fitness.unwrap_or(final_fit),
+                                    m_st.sharpe.unwrap_or(final_sh),
+                                    m_st.turnover.unwrap_or(final_turn),
+                                    m_st.returns.unwrap_or(final_ret),
+                                )
+                            } else {
+                                (final_aid, final_fit, final_sh, final_turn, final_ret)
+                            };
+
+                            let (check_pass, check_msg, _) = match main_client.check_submission(&main_aid, 45).await {
+                                Ok(res) => res,
+                                Err(_) => continue,
+                            };
+                            if check_pass {
+                                println!(
+                                    "{}",
+                                    format!(
+                                        "  🌟 [OFFICIAL PASS] Alpha {} on MAIN is 100% Submittable!\n  URL: https://platform.worldquantbrain.com/alpha/{}",
+                                        main_aid, main_aid
+                                    )
+                                    .green()
+                                    .bold()
+                                );
+
+                                let sett_json = serde_json::to_string(&final_settings).unwrap_or_default();
+
+                                let mut res = results.lock().await;
+                                res.push(SubmittableAlphaRecord {
+                                    alpha_id: main_aid,
+                                    name: cand.name.clone(),
+                                    universe: final_settings.universe,
+                                    sharpe: (main_sh * 100.0).round() / 100.0,
+                                    fitness: (main_fit * 100.0).round() / 100.0,
+                                    turnover: (main_turn * 1000.0).round() / 10.0,
+                                    annual_return: (main_ret * 1000.0).round() / 10.0,
+                                    submitted: false,
+                                    expression: final_expr,
+                                    settings: sett_json,
+                                });
+                            } else {
+                                println!("  {} [Check Failed on Main] {}: {}", "⚠️".yellow(), main_aid, check_msg);
+                            }
+                        }
                     }
-                }
-
-                None
-            }));
-        }
-
-        for t in tasks {
-            if let Ok(Some(record)) = t.await {
-                qualified_alphas.push(record);
+                }));
             }
         }
+
+        for t in worker_tasks {
+            let _ = t.await;
+        }
+
+        let qualified_alphas = results.lock().await.clone();
 
         if !qualified_alphas.is_empty() {
             Self::save_to_submittable_file(&qualified_alphas)?;

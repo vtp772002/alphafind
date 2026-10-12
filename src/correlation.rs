@@ -2,17 +2,19 @@ use crate::models::PortfolioImpactResult;
 use std::collections::{HashMap, HashSet};
 
 /// Computes the exact Pearson correlation between two daily PnL series over their shared trading days.
+/// Returns `(Some(corr), common_days)` when at least 30 overlapping days exist and neither series has zero variance.
+/// Returns `(None, common_days)` when overlap is insufficient (<30 days) or series is constant (fail-closed per AGENTS.md).
 pub fn pearson_correlation(
     x_dict: &HashMap<String, f64>,
     y_dict: &HashMap<String, f64>,
-) -> (f64, usize) {
+) -> (Option<f64>, usize) {
     let x_keys: HashSet<&String> = x_dict.keys().collect();
     let y_keys: HashSet<&String> = y_dict.keys().collect();
     let common: Vec<&&String> = x_keys.intersection(&y_keys).collect();
     let n = common.len();
 
     if n < 30 {
-        return (0.0, n);
+        return (None, n);
     }
 
     let n_f64 = n as f64;
@@ -40,58 +42,73 @@ pub fn pearson_correlation(
     }
 
     let denom = (var_x * var_y).sqrt();
-    let corr = if denom > 1e-12 { cov / denom } else { 0.0 };
-
-    (corr, n)
+    if denom > 1e-12 {
+        let corr = (cov / denom).clamp(-1.0, 1.0);
+        (Some(corr), n)
+    } else {
+        (None, n)
+    }
 }
 
 /// Audit report against Out-of-Sample portfolio
 #[derive(Debug, Clone)]
 pub struct CorrelationAuditReport {
     pub candidate_id: String,
-    pub max_correlation: f64,
-    pub avg_correlation: f64,
-    pub most_correlated_id: String,
+    pub max_correlation: Option<f64>,
+    pub avg_correlation: Option<f64>,
+    pub most_correlated_id: Option<String>,
     pub pairwise_results: Vec<(String, f64, usize)>, // (alpha_id, corr, common_days)
-    pub is_brain_compliant: bool,                    // <= 0.70
-    pub is_true_orthogonal: bool,                    // <= 0.15
+    pub insufficient_overlap_count: usize,
+    pub valid_comparisons: usize,
+    pub is_brain_compliant: bool,                    // <= 0.70 with valid comparisons
+    pub is_true_orthogonal: bool,                    // <= 0.15 with valid comparisons
 }
 
-/// Audits a candidate Alpha's PnL against an entire portfolio of active OS Alphas
+/// Audits a candidate Alpha's PnL against an entire portfolio of active OS Alphas in a fail-closed manner.
 pub fn audit_candidate(
     candidate_id: &str,
     cand_pnl: &HashMap<String, f64>,
     os_pnls: &HashMap<String, HashMap<String, f64>>,
 ) -> CorrelationAuditReport {
-    let mut max_corr = -1.0;
-    let mut most_corr_id = String::new();
+    let mut max_corr: Option<f64> = None;
+    let mut most_corr_id = None;
     let mut sum_corr = 0.0;
     let mut valid_comparisons = 0;
+    let mut insufficient_overlap_count = 0;
     let mut pairwise = Vec::new();
 
     for (os_id, os_pnl) in os_pnls {
         if os_id == candidate_id {
             continue;
         }
-        let (corr, days) = pearson_correlation(cand_pnl, os_pnl);
-        if days >= 30 {
-            if corr > max_corr {
-                max_corr = corr;
-                most_corr_id = os_id.clone();
+        let (corr_opt, days) = pearson_correlation(cand_pnl, os_pnl);
+        match corr_opt {
+            Some(corr) => {
+                if max_corr.is_none_or(|m| corr > m) {
+                    max_corr = Some(corr);
+                    most_corr_id = Some(os_id.clone());
+                }
+                sum_corr += corr;
+                valid_comparisons += 1;
+                pairwise.push((os_id.clone(), corr, days));
             }
-            sum_corr += corr;
-            valid_comparisons += 1;
-            pairwise.push((os_id.clone(), corr, days));
+            None => {
+                insufficient_overlap_count += 1;
+            }
         }
     }
 
     pairwise.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
     let avg_corr = if valid_comparisons > 0 {
-        sum_corr / (valid_comparisons as f64)
+        Some(sum_corr / (valid_comparisons as f64))
     } else {
-        0.0
+        None
     };
+
+    // Fail-closed: Cannot claim compliance or orthogonality without valid comparisons
+    let is_brain_compliant = max_corr.is_some_and(|m| m <= 0.70);
+    let is_true_orthogonal = max_corr.is_some_and(|m| m <= 0.15);
 
     CorrelationAuditReport {
         candidate_id: candidate_id.to_string(),
@@ -99,8 +116,10 @@ pub fn audit_candidate(
         avg_correlation: avg_corr,
         most_correlated_id: most_corr_id,
         pairwise_results: pairwise,
-        is_brain_compliant: max_corr <= 0.70,
-        is_true_orthogonal: max_corr <= 0.15,
+        insufficient_overlap_count,
+        valid_comparisons,
+        is_brain_compliant,
+        is_true_orthogonal,
     }
 }
 
@@ -168,9 +187,10 @@ pub fn simulate_portfolio(pnls: &[&HashMap<String, f64>]) -> Option<PortfolioMer
     let mut count_pairs = 0;
     for i in 0..pnls.len() {
         for j in (i + 1)..pnls.len() {
-            let (r, _) = pearson_correlation(pnls[i], pnls[j]);
-            sum_rho += r;
-            count_pairs += 1;
+            if let (Some(r), _) = pearson_correlation(pnls[i], pnls[j]) {
+                sum_rho += r;
+                count_pairs += 1;
+            }
         }
     }
     let rho_bar = if count_pairs > 0 {
@@ -227,14 +247,15 @@ pub fn calculate_portfolio_impact(
         if os_id == candidate_id {
             continue;
         }
-        let (corr, days) = pearson_correlation(candidate_pnl, pnl);
-        if days >= 30 {
-            if corr > max_corr {
-                max_corr = corr;
-                most_corr_id = os_id.clone();
+        if let (Some(corr), days) = pearson_correlation(candidate_pnl, pnl) {
+            if days >= 30 {
+                if corr > max_corr {
+                    max_corr = corr;
+                    most_corr_id = os_id.clone();
+                }
+                sum_corr += corr;
+                valid_pairs += 1;
             }
-            sum_corr += corr;
-            valid_pairs += 1;
         }
     }
 
