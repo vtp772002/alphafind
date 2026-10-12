@@ -72,8 +72,9 @@ fn test_calibrate_shadow_portfolio_exact_correlation() {
         user_merged.insert(d.clone(), sum / (pnls.len() as f64));
     }
 
-    let (corr, days) = pearson_correlation(&user_merged, &shadow.shadow_pnl);
+    let (corr_opt, days) = pearson_correlation(&user_merged, &shadow.shadow_pnl);
     assert_eq!(days, 120);
+    let corr = corr_opt.expect("Expected valid correlation for 120 overlapping days");
     assert!(
         (corr - 0.54).abs() < 1e-4,
         "Expected calibrated correlation ~0.54, got {:.6}",

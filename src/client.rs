@@ -666,20 +666,43 @@ impl BrainClient {
         }
     }
 
-    /// Fetches all active Out-of-Sample alphas in the user's portfolio.
+    /// Fetches all user's alphas matching the filter, automatically iterating through all pages.
+    pub async fn fetch_user_alphas_paginated(&self, base_filter: &str) -> Result<Vec<serde_json::Value>> {
+        let mut all_results = Vec::new();
+        let mut offset = 0;
+        let limit = 100;
+
+        loop {
+            let query = format!("{}&limit={}&offset={}", base_filter, limit, offset);
+            let page = self.fetch_user_alphas(&query).await?;
+            let page_len = page.len();
+            if page_len == 0 {
+                break;
+            }
+            all_results.extend(page);
+            if page_len < limit {
+                break;
+            }
+            offset += limit;
+        }
+
+        Ok(all_results)
+    }
+
+    /// Fetches all active Out-of-Sample alphas in the user's portfolio with full pagination.
     pub async fn fetch_active_portfolio(&self) -> Result<Vec<PortfolioAlpha>> {
-        let queries = [
-            "stage=OS&limit=100",
-            "status=ACTIVE&limit=100",
-            "status=SUBMITTED&limit=100",
-            "status=UNPROCESSED&limit=100",
+        let filters = [
+            "stage=OS",
+            "status=ACTIVE",
+            "status=SUBMITTED",
+            "status=UNPROCESSED",
         ];
 
         let mut seen = std::collections::HashSet::new();
         let mut portfolio = Vec::new();
 
-        for q in queries {
-            if let Ok(alphas) = self.fetch_user_alphas(q).await {
+        for f in filters {
+            if let Ok(alphas) = self.fetch_user_alphas_paginated(f).await {
                 for item in alphas {
                     if let Some(aid) = item.get("id").and_then(|v| v.as_str()) {
                         let is_os = item.get("stage").and_then(|s| s.as_str()) == Some("OS")

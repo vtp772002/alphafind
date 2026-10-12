@@ -185,10 +185,11 @@ pub fn generate_inverse_blueprint(
                     for other in alphas {
                         if other.id != a.id {
                             if let Some(pnl_b) = pnls.get(&other.id) {
-                                let (r, days) = pearson_correlation(pnl_a, pnl_b);
-                                if days >= 30 {
-                                    sum_corr += r;
-                                    n_pairs += 1;
+                                if let (Some(r), days) = pearson_correlation(pnl_a, pnl_b) {
+                                    if days >= 30 {
+                                        sum_corr += r;
+                                        n_pairs += 1;
+                                    }
                                 }
                             }
                         }
