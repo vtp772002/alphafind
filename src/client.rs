@@ -167,13 +167,24 @@ pub struct BrainClient {
     email: String,
     auth_value: String,
     authenticated: Arc<AtomicBool>,
+    base_url: String,
 }
 
 impl BrainClient {
-    /// Creates a new BRAIN API client with the given credentials.
+    /// Creates a new BRAIN API client with the given credentials using the official BASE_URL.
     pub fn new(email: impl Into<String>, password: impl Into<String>) -> Result<Self> {
+        Self::with_base_url(email, password, BASE_URL)
+    }
+
+    /// Creates a new BRAIN API client with a custom base URL (for mock testing and staging).
+    pub fn with_base_url(
+        email: impl Into<String>,
+        password: impl Into<String>,
+        base_url: impl Into<String>,
+    ) -> Result<Self> {
         let email = email.into();
         let password = password.into();
+        let base_url = base_url.into();
 
         let creds = format!("{}:{}", email, password);
         let encoded = base64::engine::general_purpose::STANDARD.encode(creds.as_bytes());
@@ -195,7 +206,13 @@ impl BrainClient {
             email,
             auth_value,
             authenticated: Arc::new(AtomicBool::new(false)),
+            base_url,
         })
+    }
+
+    /// Returns the base URL for this client session.
+    pub fn base_url(&self) -> &str {
+        &self.base_url
     }
 
     /// Returns the email address for this client session.
@@ -223,7 +240,7 @@ impl BrainClient {
             return Ok(());
         }
 
-        let url = format!("{}/authentication", BASE_URL);
+        let url = format!("{}/authentication", self.base_url);
 
         for attempt in 0..4 {
             let headers = self.auth_headers_json()?;
@@ -283,7 +300,7 @@ impl BrainClient {
     ) -> Result<String> {
         self.authenticate().await?;
 
-        let url = format!("{}/simulations", BASE_URL);
+        let url = format!("{}/simulations", self.base_url);
         let payload = SimulationPayload {
             sim_type: "REGULAR",
             settings,
@@ -360,10 +377,12 @@ impl BrainClient {
         let url = if sim_url_or_id.starts_with("http") {
             let parsed = reqwest::Url::parse(sim_url_or_id)
                 .context("Invalid simulation URL format")?;
-            if parsed.scheme() != "https" || parsed.host_str() != Some("api.worldquantbrain.com") {
+            let base_parsed = reqwest::Url::parse(&self.base_url)
+                .context("Invalid configured base URL")?;
+            if parsed.scheme() != base_parsed.scheme() || parsed.host_str() != base_parsed.host_str() {
                 return Err(anyhow!(
                     "Security violation: Rejected follow-up URL outside configured BRAIN host ({}): {}",
-                    BASE_URL,
+                    self.base_url,
                     sim_url_or_id
                 ));
             }
@@ -373,7 +392,7 @@ impl BrainClient {
             if !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
                 return Err(anyhow!("Invalid simulation ID format: {}", id));
             }
-            format!("{}/simulations/{}", BASE_URL, id)
+            format!("{}/simulations/{}", self.base_url, id)
         };
 
         let start = std::time::Instant::now();
@@ -431,7 +450,7 @@ impl BrainClient {
     pub async fn get_alpha_details(&self, alpha_id: &str) -> Result<AlphaDetails> {
         self.authenticate().await?;
 
-        let url = format!("{}/alphas/{}", BASE_URL, alpha_id);
+        let url = format!("{}/alphas/{}", self.base_url, alpha_id);
         let headers = self.auth_headers()?;
 
         let res = self
@@ -454,7 +473,7 @@ impl BrainClient {
     ) -> Result<(bool, String, InSampleStats)> {
         self.authenticate().await?;
 
-        let url = format!("{}/alphas/{}/check", BASE_URL, alpha_id);
+        let url = format!("{}/alphas/{}/check", self.base_url, alpha_id);
 
         for _attempt in 0..max_attempts {
             let headers = self.auth_headers()?;
@@ -530,7 +549,7 @@ impl BrainClient {
     pub async fn fetch_daily_pnl(&self, alpha_id: &str) -> Result<HashMap<String, f64>> {
         self.authenticate().await?;
 
-        let url = format!("{}/alphas/{}/recordsets/daily-pnl", BASE_URL, alpha_id);
+        let url = format!("{}/alphas/{}/recordsets/daily-pnl", self.base_url, alpha_id);
 
         for attempt in 0..5 {
             let headers = self.auth_headers()?;
@@ -580,7 +599,7 @@ impl BrainClient {
     pub async fn submit_alpha(&self, alpha_id: &str) -> Result<(bool, String)> {
         self.authenticate().await?;
 
-        let url = format!("{}/alphas/{}/submit", BASE_URL, alpha_id);
+        let url = format!("{}/alphas/{}/submit", self.base_url, alpha_id);
         let headers = self.auth_headers_json()?;
 
         let resp = self
@@ -612,7 +631,7 @@ impl BrainClient {
     ) -> Result<bool> {
         self.authenticate().await?;
 
-        let url = format!("{}/alphas/{}", BASE_URL, alpha_id);
+        let url = format!("{}/alphas/{}", self.base_url, alpha_id);
 
         let mut payload = serde_json::Map::new();
         if let Some(n) = name {
@@ -645,7 +664,7 @@ impl BrainClient {
     pub async fn fetch_user_alphas(&self, query: &str) -> Result<Vec<serde_json::Value>> {
         self.authenticate().await?;
 
-        let url = format!("{}/users/self/alphas?{}", BASE_URL, query);
+        let url = format!("{}/users/self/alphas?{}", self.base_url, query);
         let headers = self.auth_headers()?;
 
         let resp = self
@@ -782,7 +801,7 @@ impl BrainClient {
     pub async fn fetch_user_profile(&self) -> Result<UserProfile> {
         self.authenticate().await?;
 
-        let url = format!("{}/users/self", BASE_URL);
+        let url = format!("{}/users/self", self.base_url);
         let headers = self.auth_headers()?;
 
         let resp = self
@@ -801,7 +820,7 @@ impl BrainClient {
     pub async fn fetch_competitions(&self) -> Result<Vec<CompetitionEntry>> {
         self.authenticate().await?;
 
-        let url = format!("{}/users/self/competitions", BASE_URL);
+        let url = format!("{}/users/self/competitions", self.base_url);
         let headers = self.auth_headers()?;
 
         let resp = self
@@ -828,7 +847,7 @@ impl BrainClient {
 
         let url = format!(
             "{}/competitions/{}/boards/leader?limit={}&offset=0",
-            BASE_URL, competition_id, limit
+            self.base_url, competition_id, limit
         );
         let headers = self.auth_headers()?;
 
@@ -855,7 +874,7 @@ impl BrainClient {
     ) -> Result<Option<DataFieldEntry>> {
         self.authenticate().await?;
 
-        let url = format!("{}/data-fields", BASE_URL);
+        let url = format!("{}/data-fields", self.base_url);
         let delay_string = delay.to_string();
         for attempt in 0..5 {
             let headers = self.auth_headers()?;
@@ -917,7 +936,7 @@ impl BrainClient {
         loop {
             let url = format!(
                 "{}/data-sets?region={}&limit={}&offset={}",
-                BASE_URL, region, limit, offset
+                self.base_url, region, limit, offset
             );
 
             let mut fetched_page = false;

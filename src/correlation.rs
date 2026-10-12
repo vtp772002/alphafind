@@ -10,7 +10,10 @@ pub fn pearson_correlation(
 ) -> (Option<f64>, usize) {
     let x_keys: HashSet<&String> = x_dict.keys().collect();
     let y_keys: HashSet<&String> = y_dict.keys().collect();
-    let common: Vec<&&String> = x_keys.intersection(&y_keys).collect();
+    let common: Vec<&&String> = x_keys
+        .intersection(&y_keys)
+        .filter(|&&d| x_dict[d].is_finite() && y_dict[d].is_finite())
+        .collect();
     let n = common.len();
 
     if n < 30 {
@@ -43,8 +46,12 @@ pub fn pearson_correlation(
 
     let denom = (var_x * var_y).sqrt();
     if denom > 1e-12 {
-        let corr = (cov / denom).clamp(-1.0, 1.0);
-        (Some(corr), n)
+        let corr = cov / denom;
+        if corr.is_finite() {
+            (Some(corr.clamp(-1.0, 1.0)), n)
+        } else {
+            (None, n)
+        }
     } else {
         (None, n)
     }
@@ -140,10 +147,18 @@ pub fn simulate_portfolio(pnls: &[&HashMap<String, f64>]) -> Option<PortfolioMer
         return None;
     }
 
-    // Find common dates across all alphas
-    let mut common_dates: HashSet<String> = pnls[0].keys().cloned().collect();
+    // Find common dates across all alphas where values are finite
+    let mut common_dates: HashSet<String> = pnls[0]
+        .iter()
+        .filter(|(_, &v)| v.is_finite())
+        .map(|(k, _)| k.clone())
+        .collect();
     for p in &pnls[1..] {
-        let current_keys: HashSet<String> = p.keys().cloned().collect();
+        let current_keys: HashSet<String> = p
+            .iter()
+            .filter(|(_, &v)| v.is_finite())
+            .map(|(k, _)| k.clone())
+            .collect();
         common_dates = common_dates.intersection(&current_keys).cloned().collect();
     }
 

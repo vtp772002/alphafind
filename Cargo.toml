@@ -17,3 +17,7 @@ dotenvy = "0.15"
 colored = "2.1"
 anyhow = "1.0"
 base64 = "0.22"
+
+[dev-dependencies]
+wiremock = "0.6"
+
