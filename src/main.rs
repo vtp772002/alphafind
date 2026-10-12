@@ -273,7 +273,17 @@ async fn main() -> Result<()> {
             workers,
             no_tune,
             single_account,
-        } => cmd_screen(pillar, universe, min_fitness, workers, no_tune, single_account).await,
+        } => {
+            cmd_screen(
+                pillar,
+                universe,
+                min_fitness,
+                workers,
+                no_tune,
+                single_account,
+            )
+            .await
+        }
         Commands::Sim {
             expr,
             universe,
