@@ -93,6 +93,10 @@ enum Commands {
         /// Disable automatic decay parameter sweeps
         #[arg(long)]
         no_tune: bool,
+
+        /// Run strictly on MAIN account only (single-account mode)
+        #[arg(long, short = 's')]
+        single_account: bool,
     },
 
     /// Simulate a single Alpha expression directly on MAIN account
@@ -268,7 +272,8 @@ async fn main() -> Result<()> {
             min_fitness,
             workers,
             no_tune,
-        } => cmd_screen(pillar, universe, min_fitness, workers, no_tune).await,
+            single_account,
+        } => cmd_screen(pillar, universe, min_fitness, workers, no_tune, single_account).await,
         Commands::Sim {
             expr,
             universe,

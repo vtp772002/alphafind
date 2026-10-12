@@ -19,6 +19,7 @@ pub async fn cmd_screen(
     min_fitness: f64,
     workers: usize,
     no_tune: bool,
+    single_account: bool,
 ) -> Result<()> {
     println!(
         "{}",
@@ -35,7 +36,7 @@ pub async fn cmd_screen(
         "═════════════════════════════════════════════════════════════════════════".cyan()
     );
 
-    let screener = MultiAccountScreener::from_env(workers)?;
+    let screener = MultiAccountScreener::from_env(workers, single_account)?;
     let factor_pillar = pillar.as_deref().and_then(FactorPillar::from_str);
 
     let candidates = get_curated_candidates(factor_pillar, Some(&universe));

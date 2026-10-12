@@ -25,7 +25,7 @@ pub struct MultiAccountScreener {
 
 impl MultiAccountScreener {
     /// Creates a multi-account screener by loading credentials from environment variables.
-    pub fn from_env(workers_per_account: usize) -> Result<Self> {
+    pub fn from_env(workers_per_account: usize, single_account: bool) -> Result<Self> {
         dotenvy::dotenv().ok();
 
         let concurrency = workers_per_account.max(1);
@@ -46,28 +46,34 @@ impl MultiAccountScreener {
             semaphore: Arc::new(tokio::sync::Semaphore::new(concurrency)),
         });
 
-        // Load Secondary / Worker Sessions (for collaborative team research pooling)
-        let mut idx = 1;
-        loop {
-            let s_email = std::env::var(format!("SECONDARY_ACCOUNT_{idx}_EMAIL"))
-                .or_else(|_| std::env::var(format!("SCOUT_ACCOUNT_{idx}_EMAIL")))
-                .or_else(|_| std::env::var(format!("WQ_BRAIN_EMAIL_ACC{}", idx + 1)));
-            let s_pass = std::env::var(format!("SECONDARY_ACCOUNT_{idx}_PASSWORD"))
-                .or_else(|_| std::env::var(format!("SCOUT_ACCOUNT_{idx}_PASSWORD")))
-                .or_else(|_| std::env::var(format!("WQ_BRAIN_PASSWORD_ACC{}", idx + 1)));
-            match (s_email, s_pass) {
-                (Ok(email), Ok(pass)) => {
-                    if let Ok(client) = BrainClient::new(&email, &pass) {
-                        accounts.push(AccountWorker {
-                            client,
-                            role: format!("WORKER_{idx}"),
-                            is_main: false,
-                            semaphore: Arc::new(tokio::sync::Semaphore::new(concurrency)),
-                        });
+        let env_single = std::env::var("ALPHAFIND_SINGLE_ACCOUNT")
+            .map(|v| v == "1" || v.to_lowercase() == "true")
+            .unwrap_or(false);
+
+        // Load Secondary / Worker Sessions only if not in single-account mode
+        if !single_account && !env_single {
+            let mut idx = 1;
+            loop {
+                let s_email = std::env::var(format!("SECONDARY_ACCOUNT_{idx}_EMAIL"))
+                    .or_else(|_| std::env::var(format!("SCOUT_ACCOUNT_{idx}_EMAIL")))
+                    .or_else(|_| std::env::var(format!("WQ_BRAIN_EMAIL_ACC{}", idx + 1)));
+                let s_pass = std::env::var(format!("SECONDARY_ACCOUNT_{idx}_PASSWORD"))
+                    .or_else(|_| std::env::var(format!("SCOUT_ACCOUNT_{idx}_PASSWORD")))
+                    .or_else(|_| std::env::var(format!("WQ_BRAIN_PASSWORD_ACC{}", idx + 1)));
+                match (s_email, s_pass) {
+                    (Ok(email), Ok(pass)) => {
+                        if let Ok(client) = BrainClient::new(&email, &pass) {
+                            accounts.push(AccountWorker {
+                                client,
+                                role: format!("WORKER_{idx}"),
+                                is_main: false,
+                                semaphore: Arc::new(tokio::sync::Semaphore::new(concurrency)),
+                            });
+                        }
+                        idx += 1;
                     }
-                    idx += 1;
+                    _ => break,
                 }
-                _ => break,
             }
         }
 
