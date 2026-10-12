@@ -1,3 +1,8 @@
+//! [DEPRECATED] Legacy heuristic crowd risk models.
+//!
+//! Superseded by `crowd_allocation`, `crowd_model`, and `shadow` modules
+//! which provide usage-weighted profile PnL synthesis and proxy sensitivity.
+
 use crate::models::DatasetEntry;
 use colored::Colorize;
 use serde::{Deserialize, Serialize};

@@ -1,3 +1,7 @@
+use crate::config::quant::{
+    BRAIN_MAX_CORRELATION, EPSILON_VARIANCE, EPSILON_VOLATILITY, MIN_CORRELATION_DAYS,
+    MIN_PORTFOLIO_DAYS, ORTHOGONAL_CORRELATION_THRESHOLD, TRADING_DAYS_PER_YEAR,
+};
 use crate::models::PortfolioImpactResult;
 use std::collections::{HashMap, HashSet};
 
@@ -16,7 +20,7 @@ pub fn pearson_correlation(
         .collect();
     let n = common.len();
 
-    if n < 30 {
+    if n < MIN_CORRELATION_DAYS {
         return (None, n);
     }
 
@@ -45,7 +49,7 @@ pub fn pearson_correlation(
     }
 
     let denom = (var_x * var_y).sqrt();
-    if denom > 1e-12 {
+    if denom > EPSILON_VARIANCE {
         let corr = cov / denom;
         if corr.is_finite() {
             (Some(corr.clamp(-1.0, 1.0)), n)
@@ -114,8 +118,8 @@ pub fn audit_candidate(
     };
 
     // Fail-closed: Cannot claim compliance or orthogonality without valid comparisons
-    let is_brain_compliant = max_corr.is_some_and(|m| m <= 0.70);
-    let is_true_orthogonal = max_corr.is_some_and(|m| m <= 0.15);
+    let is_brain_compliant = max_corr.is_some_and(|m| m <= BRAIN_MAX_CORRELATION);
+    let is_true_orthogonal = max_corr.is_some_and(|m| m <= ORTHOGONAL_CORRELATION_THRESHOLD);
 
     CorrelationAuditReport {
         candidate_id: candidate_id.to_string(),
@@ -166,7 +170,7 @@ pub fn simulate_portfolio(pnls: &[&HashMap<String, f64>]) -> Option<PortfolioMer
     dates_vec.sort();
 
     let n_days = dates_vec.len();
-    if n_days < 100 {
+    if n_days < MIN_PORTFOLIO_DAYS {
         return None;
     }
 
@@ -189,9 +193,9 @@ pub fn simulate_portfolio(pnls: &[&HashMap<String, f64>]) -> Option<PortfolioMer
         / (n_days_f64 - 1.0);
     let std_daily = var_daily.sqrt();
 
-    let ann_pnl = mean_daily * 252.0;
-    let ann_vol = std_daily * (252.0f64).sqrt();
-    let merged_sharpe = if ann_vol > 1e-9 {
+    let ann_pnl = mean_daily * TRADING_DAYS_PER_YEAR;
+    let ann_vol = std_daily * TRADING_DAYS_PER_YEAR.sqrt();
+    let merged_sharpe = if ann_vol > EPSILON_VOLATILITY {
         ann_pnl / ann_vol
     } else {
         0.0

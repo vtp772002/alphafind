@@ -1,5 +1,7 @@
 pub mod autotuner;
 pub mod client;
+pub mod commands;
+pub mod config;
 pub mod correlation;
 pub mod crowd;
 pub mod crowd_allocation;
