@@ -105,7 +105,8 @@ impl MultiAccountScreener {
         Ok(())
     }
 
-    /// Screens a batch of candidate alphas across 9 concurrent workers
+    /// Screens a batch of candidate alphas across configured sessions.
+    /// The current implementation creates one task per candidate; this is not a concurrency limit.
     pub async fn screen_batch(
         &self,
         candidates: Vec<CandidateAlpha>,

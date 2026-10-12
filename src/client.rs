@@ -8,9 +8,9 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 use crate::models::{
-    AlphaDetails, AlphaSettings, CompetitionEntry, DailyPnlResponse, DatasetEntry,
-    DatasetListResponse, InSampleStats, LeaderboardResponse, PortfolioAlpha, SimulationPayload,
-    SimulationResponse, UserProfile,
+    AlphaDetails, AlphaSettings, CompetitionEntry, DailyPnlResponse, DataFieldEntry,
+    DataFieldListResponse, DatasetEntry, DatasetListResponse, InSampleStats, LeaderboardResponse,
+    PortfolioAlpha, SimulationPayload, SimulationResponse, UserProfile,
 };
 
 pub const BASE_URL: &str = "https://api.worldquantbrain.com";
@@ -691,6 +691,68 @@ impl BrainClient {
 
         let board = resp.json::<LeaderboardResponse>().await?;
         Ok(board)
+    }
+
+    /// Fetches field-level crowd usage for one field in a specific BRAIN configuration.
+    pub async fn fetch_data_field(
+        &self,
+        field_id: &str,
+        instrument_type: &str,
+        region: &str,
+        universe: &str,
+        delay: i32,
+    ) -> Result<Option<DataFieldEntry>> {
+        self.authenticate().await?;
+
+        let url = format!("{}/data-fields", BASE_URL);
+        let delay_string = delay.to_string();
+        for attempt in 0..5 {
+            let headers = self.auth_headers()?;
+            let response = self
+                .client
+                .get(&url)
+                .query(&[
+                    ("instrumentType", instrument_type),
+                    ("region", region),
+                    ("universe", universe),
+                    ("delay", delay_string.as_str()),
+                    ("id", field_id),
+                    ("limit", "5"),
+                    ("offset", "0"),
+                ])
+                .headers(headers)
+                .send()
+                .await;
+
+            match response {
+                Ok(response) if response.status().as_u16() == 429 => {
+                    if attempt == 4 {
+                        anyhow::bail!("BRAIN rate limit while fetching data field metadata");
+                    }
+                    let wait = response
+                        .headers()
+                        .get(RETRY_AFTER)
+                        .and_then(|value| value.to_str().ok())
+                        .and_then(|value| value.parse::<f64>().ok())
+                        .unwrap_or(2.0f64.powi(attempt) + 1.0);
+                    sleep(Duration::from_secs_f64(wait)).await;
+                }
+                Ok(response) => {
+                    let response = response.error_for_status()?;
+                    let list = response.json::<DataFieldListResponse>().await?;
+                    return Ok(list
+                        .results
+                        .into_iter()
+                        .find(|entry| entry.id.eq_ignore_ascii_case(field_id)));
+                }
+                Err(_) if attempt < 4 => {
+                    sleep(Duration::from_secs(2)).await;
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+
+        Ok(None)
     }
 
     /// Fetches all datasets with pagination (limit 50 per page) for a given region with exponential backoff on 429.

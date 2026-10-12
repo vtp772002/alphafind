@@ -583,7 +583,7 @@ pub fn print_single_alpha_diagnostic(a: &AlphaHealthReport) {
     println!("  Portfolio Role:       {}", a.role_verdict.badge());
     if let Some(crowd_corr) = a.crowd_co_movement {
         println!(
-            "  Crowd Co-Movement:    {:.2}% with Synthetic Crowd",
+            "  Synthetic Proxy Corr: {:.2}% (not platform PnL/Uniqueness)",
             crowd_corr * 100.0
         );
     }

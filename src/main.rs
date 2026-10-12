@@ -7,8 +7,16 @@ use std::path::Path;
 
 use alphafind::autotuner::FitnessAutoTuner;
 use alphafind::client::BrainClient;
-use alphafind::correlation::{audit_candidate, calculate_portfolio_impact, simulate_portfolio};
-use alphafind::crowd::{evaluate_crowd_risk, print_crowd_risk_audit};
+use alphafind::correlation::{
+    audit_candidate, calculate_portfolio_impact, pearson_correlation, simulate_portfolio,
+};
+use alphafind::crowd_allocation::{
+    build_formula_allocation, cache_field, current_unix_time, field_cache_key, find_dataset_config,
+    get_fresh_cached_field, load_local_field_datasets, FieldConfig, FieldUsageCache,
+};
+use alphafind::crowd_model::{
+    build_usage_weighted_profile_pnl, equal_weight_pnl_merge, project_proxy_correlation,
+};
 use alphafind::forecast::{generate_inverse_blueprint, print_blueprint_report};
 use alphafind::health::{
     evaluate_portfolio_health, print_detailed_alpha_table, print_health_report,
@@ -17,13 +25,82 @@ use alphafind::health::{
 use alphafind::matrix::{
     analyze_formula_hyper_synergy, build_dynamic_matrix, print_dynamic_matrix,
 };
-use alphafind::models::{AlphaSettings, CensusSnapshot, DatasetEntry, PortfolioAlpha};
-use alphafind::screener::MultiAccountScreener;
-use alphafind::shadow::{
-    audit_portfolio_crowd_exposure, calibrate_shadow_portfolio, print_shadow_audit_report,
-    print_uniqueness_impact_report, project_uniqueness_impact,
+use alphafind::models::{
+    AlphaSettings, CensusSnapshot, DataFieldEntry, DatasetEntry, PortfolioAlpha,
 };
+use alphafind::screener::MultiAccountScreener;
 use alphafind::taxonomy::{get_curated_candidates, FactorPillar};
+
+type DatasetAllocationKey = (String, String, String, i32, String);
+type ProfileDatasetFields = Vec<(DatasetAllocationKey, Vec<String>)>;
+
+fn derive_profile_usage_weights(
+    alpha_datasets: &HashMap<String, ProfileDatasetFields>,
+    field_cache: &FieldUsageCache,
+    dataset_counts: &HashMap<DatasetAllocationKey, f64>,
+    now: u64,
+) -> (HashMap<String, f64>, usize, usize) {
+    let mut weights = HashMap::new();
+    let mut field_weighted_alphas = 0;
+    let mut dataset_fallback_alphas = 0;
+
+    for (alpha_id, exposures) in alpha_datasets {
+        let mut exposure_weights = Vec::new();
+        let mut used_field_counts = false;
+        for (key, fields) in exposures {
+            let config = FieldConfig {
+                instrument_type: key.0.clone(),
+                region: key.1.clone(),
+                universe: key.2.clone(),
+                delay: key.3,
+            };
+            let field_counts: Vec<f64> = fields
+                .iter()
+                .filter_map(|field_id| {
+                    let cache_key = field_cache_key(field_id, &config);
+                    get_fresh_cached_field(field_cache, &cache_key, now)
+                        .and_then(|field| field.alpha_count)
+                        .filter(|count| *count > 0)
+                        .map(|count| count as f64)
+                })
+                .collect();
+
+            if !field_counts.is_empty() {
+                used_field_counts = true;
+                exposure_weights.push(field_counts.iter().sum::<f64>() / field_counts.len() as f64);
+            } else if let Some(count) = dataset_counts.get(key).filter(|count| **count > 0.0) {
+                exposure_weights.push(*count);
+            }
+        }
+
+        if !exposure_weights.is_empty() {
+            let weight = exposure_weights.iter().sum::<f64>() / exposure_weights.len() as f64;
+            if weight.is_finite() && weight > 0.0 {
+                weights.insert(alpha_id.clone(), weight);
+                if used_field_counts {
+                    field_weighted_alphas += 1;
+                } else {
+                    dataset_fallback_alphas += 1;
+                }
+            }
+        }
+    }
+
+    (weights, field_weighted_alphas, dataset_fallback_alphas)
+}
+
+fn challenge_uniqueness_score(
+    client_competitions: &[alphafind::models::CompetitionEntry],
+) -> Option<f64> {
+    client_competitions
+        .iter()
+        .find(|competition| {
+            let name = competition.name.to_ascii_lowercase();
+            name.contains("challenge") && !name.contains("iqc")
+        })
+        .and_then(|competition| competition.leaderboard.as_ref())
+        .and_then(|leaderboard| leaderboard.uniqueness_score)
+}
 
 #[derive(Parser)]
 #[command(name = "alphafind")]
@@ -51,7 +128,7 @@ enum Commands {
         alpha_id: String,
     },
 
-    /// Run exact 1,236-day Pearson correlation audit against all active OS Alphas
+    /// Audit Pearson correlation over overlapping local PnL dates against active OS Alphas
     Audit {
         /// Alpha ID (e.g., A1b2C3d4)
         alpha_id: String,
@@ -90,7 +167,7 @@ enum Commands {
         skip_checks: bool,
     },
 
-    /// Launch distributed 9-worker candidate screening across 3 accounts
+    /// Screen candidates using configured BRAIN sessions (concurrency is not bounded)
     Screen {
         /// Target Factor Pillar (ANALYST, OPTIONS, MICRO, QUAL, RISK, SHORT)
         #[arg(short, long)]
@@ -104,7 +181,7 @@ enum Commands {
         #[arg(short, long, default_value_t = 1.50)]
         min_fitness: f64,
 
-        /// Workers per account (default: 3 -> 9 total across 3 accounts)
+        /// Displayed workers per session (default: 3; does not bound task concurrency)
         #[arg(short, long, default_value_t = 3)]
         workers: usize,
 
@@ -136,7 +213,7 @@ enum Commands {
         truncation: f64,
     },
 
-    /// Live Dynamic Crowd Census Radar querying all 150 datasets to track crowd migration
+    /// Fetch and display the live dataset usage census
     Radar {
         /// Target Region (default: USA)
         #[arg(short, long, default_value = "USA")]
@@ -154,12 +231,12 @@ enum Commands {
         #[arg(short, long)]
         filter: Option<String>,
 
-        /// Filter only Green Sanctuaries (userCount < 300)
+        /// Keep datasets with a reported userCount below 300 (local usage filter)
         #[arg(long)]
         green_only: bool,
     },
 
-    /// Hyperparameter AutoTuner: multi-dimensional sweep (decay, exponent, neutralization) to maximize Fitness >= 1.50
+    /// Sweep configured decay, exponent, and neutralization values for a candidate
     Tune {
         /// FastExpr alpha formula
         #[arg(short, long)]
@@ -188,7 +265,7 @@ enum Commands {
         alpha_id: String,
     },
 
-    /// 2D Cross-Dataset Co-occurrence Matrix & Multi-Dataset Hyper-Synergy Analyzer (K >= 2)
+    /// Configured dataset-interaction heuristic and multi-dataset formula analysis
     Matrix {
         /// Target Universe (default: TOP200)
         #[arg(short, long, default_value = "TOP200")]
@@ -198,7 +275,7 @@ enum Commands {
         #[arg(short, long)]
         expr: Option<String>,
 
-        /// Filter only pristine sanctuary interactions (HUI >= 0.65)
+        /// Keep only configured-affinity pairs with score >= 0.65
         #[arg(long)]
         green_only: bool,
 
@@ -207,7 +284,7 @@ enum Commands {
         region: String,
     },
 
-    /// Inverse Portfolio Optimization & Factor Gap Forecasting for next optimal alpha
+    /// Generate rule-based portfolio gap and candidate suggestions
     Blueprint {
         /// Target Universe filter (optional: TOP3000, TOP1000, TOP500, TOP200)
         #[arg(short, long)]
@@ -218,15 +295,31 @@ enum Commands {
         export: Option<String>,
     },
 
-    /// Synthetic Crowd Shadow Portfolio & Adversarial Uniqueness Optimizer
+    /// Inspect data usage and local profile PnL sensitivity; does not forecast Uniqueness
     Shadow {
-        /// Optional candidate Alpha ID to simulate its exact crowd phase shift (Delta uniqueness)
-        #[arg(short, long)]
+        /// Inspect a candidate Alpha's saved formula and settings
+        #[arg(short, long, conflicts_with = "expr")]
         candidate: Option<String>,
 
-        /// Override anchor uniqueness correlation (default: live API value or 0.54)
+        /// Inspect a private Fast Expression directly (kept in memory only)
+        #[arg(short, long, conflicts_with = "candidate")]
+        expr: Option<String>,
+
+        /// Region for --expr (default: USA)
+        #[arg(short, long)]
+        region: Option<String>,
+
+        /// Universe for --expr (default: TOP1000)
+        #[arg(short, long)]
+        universe: Option<String>,
+
+        /// Delay for --expr (default: 1)
         #[arg(long)]
-        anchor: Option<f64>,
+        delay: Option<i32>,
+
+        /// Simulate --expr once on the main account to obtain candidate PnL for the estimate
+        #[arg(long, requires = "expr")]
+        simulate: bool,
     },
 
     /// Diagnose active OS portfolio health, alpha decay ratios, half-life, and marginal Sharpe impact
@@ -323,7 +416,14 @@ async fn main() -> Result<()> {
             region,
         } => cmd_matrix(universe, expr, green_only, region).await,
         Commands::Blueprint { universe, export } => cmd_blueprint(universe, export).await,
-        Commands::Shadow { candidate, anchor } => cmd_shadow(candidate, anchor).await,
+        Commands::Shadow {
+            candidate,
+            expr,
+            region,
+            universe,
+            delay,
+            simulate,
+        } => cmd_shadow(candidate, expr, region, universe, delay, simulate).await,
         Commands::Health {
             alpha_id,
             export,
@@ -664,7 +764,7 @@ async fn cmd_audit(alpha_id: String, label: Option<String>) -> Result<()> {
     println!(
         "{}",
         format!(
-            "  AlphaFind Quant Engine — 1,236-Day Pearson Correlation Audit [{}]",
+            "  AlphaFind Quant Engine — Local Overlapping-Date Pearson Audit [{}]",
             label_str
         )
         .bold()
@@ -782,22 +882,9 @@ async fn cmd_audit(alpha_id: String, label: Option<String>) -> Result<()> {
         );
     }
 
-    // Tier 2: Platform Crowd & Uniqueness Risk Estimator
-    if let Ok(details) = client.get_alpha_details(&alpha_id).await {
-        let u = details
-            .settings
-            .as_ref()
-            .map(|s| s.universe.as_str())
-            .unwrap_or("TOP1000");
-        let neut = details
-            .settings
-            .as_ref()
-            .map(|s| s.neutralization.as_str())
-            .unwrap_or("SUBINDUSTRY");
-        let code = details.get_code().unwrap_or("");
-        let crowd_report = evaluate_crowd_risk(code, u, neut, None);
-        print_crowd_risk_audit(&crowd_report);
-    }
+    println!(
+        "\n  Dataset/field usage is available via `alphafind shadow`; it measures participation, not official Uniqueness."
+    );
 
     Ok(())
 }
@@ -1018,7 +1105,7 @@ async fn cmd_screen(
     );
     println!(
         "{}",
-        "  AlphaFind Quant Engine — 9-Worker Distributed Screener"
+        "  AlphaFind Quant Engine — Configured-Session Screener"
             .bold()
             .cyan()
     );
@@ -1032,7 +1119,7 @@ async fn cmd_screen(
 
     let candidates = get_curated_candidates(factor_pillar, Some(&universe));
     println!(
-        "  Loaded {} orthogonal candidate hypotheses for screening.",
+        "  Loaded {} candidate hypotheses for screening.",
         candidates.len()
     );
 
@@ -1045,7 +1132,7 @@ async fn cmd_screen(
         "═════════════════════════════════════════════════════════════════════════".cyan()
     );
     println!(
-        "  🎉 Screening Session Complete! {} Alphas qualified 8/8 PASS.",
+        "  Screening Session Complete: {} candidates marked qualified by local checks. Verify each result in BRAIN before submission.",
         qualified.len()
     );
     println!(
@@ -1161,9 +1248,7 @@ async fn cmd_radar(
     );
     println!(
         "{}",
-        "  AlphaFind Quant Engine — Live Dynamic Crowd Census Radar (2D Matrix)"
-            .bold()
-            .cyan()
+        "  AlphaFind — BRAIN Dataset Usage Census".bold().cyan()
     );
     println!(
         "{}",
@@ -1196,21 +1281,22 @@ async fn cmd_radar(
         None
     };
 
-    let mut prev_map: HashMap<String, (i64, i64)> = HashMap::new();
+    let mut prev_map: HashMap<String, (Option<i64>, Option<i64>)> = HashMap::new();
     if let Some(ref prev) = prev_snapshot {
-        println!(
-            "  Loaded previous snapshot from {}. Calculating crowd migration velocity...",
-            prev.timestamp.cyan()
-        );
-        for d in &prev.datasets {
-            let sub_name = d
-                .subcategory
-                .as_ref()
-                .and_then(|s| s.name.as_deref())
-                .unwrap_or("");
-            let u_name = d.universe.as_deref().unwrap_or("");
-            let key = format!("{}:{}:{}", d.id, u_name, sub_name);
-            prev_map.insert(key, (d.user_count.unwrap_or(0), d.alpha_count.unwrap_or(0)));
+        if prev.region.eq_ignore_ascii_case(&region) {
+            println!(
+                "  Loaded previous snapshot from {}. Showing count changes since that snapshot.",
+                prev.timestamp.cyan()
+            );
+            for d in &prev.datasets {
+                let key = dataset_census_key(d);
+                prev_map.insert(key, (d.user_count, d.alpha_count));
+            }
+        } else {
+            println!(
+                "  Ignoring previous snapshot for region {}; current region is {}.",
+                prev.region, region
+            );
         }
     }
 
@@ -1268,21 +1354,26 @@ async fn cmd_radar(
     }
 
     if green_only {
-        filtered.retain(|d| d.user_count.unwrap_or(0) < 300);
+        filtered.retain(|d| d.user_count.is_some_and(|count| (0..300).contains(&count)));
     }
 
-    // Sort Green Sanctuaries (lowest userCount first)
-    let mut green_sanctuaries = filtered.clone();
-    green_sanctuaries.sort_by_key(|d| d.user_count.unwrap_or(0));
+    // Sort reported lower user counts first; unknown and invalid counts go last.
+    let mut lower_usage = filtered.clone();
+    lower_usage.sort_by_key(|d| match d.user_count {
+        Some(count) if count >= 0 => (0, count),
+        _ => (1, i64::MAX),
+    });
 
-    println!("\n  🟢 GREEN SANCTUARIES (Uncrowded / High Uniqueness Potential):");
+    println!(
+        "\n  DATASET USAGE COUNTS (lower reported user counts first; not a Uniqueness forecast):"
+    );
     println!("  ┌──────────────┬──────────┬───────────────────────────┬──────────────┬──────────────┬──────────┬────────────┐");
-    println!("  │ Dataset ID   │ Universe │ Subcategory               │ Users (Live) │ Alphas (Live)│ Coverage │ Status     │");
+    println!("  │ Dataset ID   │ Universe │ Subcategory               │ Users (API)  │ Alphas (API) │ Coverage │ Status     │");
     println!("  ├──────────────┼──────────┼───────────────────────────┼──────────────┼──────────────┼──────────┼────────────┤");
 
-    for d in green_sanctuaries.iter().take(top) {
-        let u_cnt = d.user_count.unwrap_or(0);
-        let a_cnt = d.alpha_count.unwrap_or(0);
+    for d in lower_usage.iter().take(top) {
+        let u_cnt = d.user_count;
+        let a_cnt = d.alpha_count;
         let u_name = d.universe.as_deref().unwrap_or("—");
         let cov_str = d
             .coverage
@@ -1299,27 +1390,22 @@ async fn cmd_radar(
             subcat.to_string()
         };
 
-        let status = if u_cnt <= 50 {
-            "PRISTINE".green().bold()
-        } else if u_cnt <= 300 {
-            "SAFE".green()
-        } else {
-            "MODERATE".yellow()
+        let status = match u_cnt {
+            Some(count) if (0..=50).contains(&count) => "LOW COUNT".green().bold(),
+            Some(count) if (0..=300).contains(&count) => "LOW COUNT".green(),
+            Some(count) if count >= 0 => "COUNT PRESENT".yellow(),
+            _ => "UNKNOWN".dimmed(),
         };
 
-        let key = format!("{}:{}:{}", d.id, u_name, subcat);
-        let delta_str = if let Some(&(p_u, _)) = prev_map.get(&key) {
-            let du = u_cnt - p_u;
-            if du > 0 {
-                format!(" (+{})", du).yellow().to_string()
-            } else {
-                "".to_string()
+        let key = dataset_census_key(d);
+        let delta_str = match (u_cnt, prev_map.get(&key).and_then(|counts| counts.0)) {
+            (Some(current), Some(previous)) if current != previous => {
+                format!(" ({:+})", current - previous).yellow().to_string()
             }
-        } else {
-            "".to_string()
+            _ => String::new(),
         };
 
-        let u_str = format!("{}{}", u_cnt, delta_str);
+        let u_str = format!("{}{}", format_count(u_cnt), delta_str);
 
         println!(
             "  │ {:<12} │ {:<8} │ {:<25} │ {:>12} │ {:>12} │ {:>8} │ {:<10} │",
@@ -1327,7 +1413,7 @@ async fn cmd_radar(
             u_name.white(),
             sub_display,
             u_str,
-            a_cnt,
+            format_count(a_cnt),
             cov_str,
             status
         );
@@ -1336,17 +1422,20 @@ async fn cmd_radar(
 
     // Display Top Red Zones if not green_only
     if !green_only {
-        let mut red_zones = filtered.clone();
-        red_zones.sort_by_key(|d| std::cmp::Reverse(d.user_count.unwrap_or(0)));
+        let mut higher_usage = filtered.clone();
+        higher_usage.sort_by_key(|d| match d.user_count {
+            Some(count) if count >= 0 => (0, std::cmp::Reverse(count)),
+            _ => (1, std::cmp::Reverse(0)),
+        });
 
-        println!("\n  🔴 HIGH-CROWD RED ZONES (Crowded / Diluted Uniqueness - AVOID):");
+        println!("\n  HIGHER REPORTED USER COUNTS (usage only; not a PnL-correlation or Uniqueness score):");
         println!("  ┌──────────────┬──────────┬───────────────────────────┬──────────────┬──────────────┬──────────┬────────────┐");
-        println!("  │ Dataset ID   │ Universe │ Subcategory               │ Users (Live) │ Alphas (Live)│ Coverage │ Status     │");
+        println!("  │ Dataset ID   │ Universe │ Subcategory               │ Users (API)  │ Alphas (API) │ Coverage │ Status     │");
         println!("  ├──────────────┼──────────┼───────────────────────────┼──────────────┼──────────────┼──────────┼────────────┤");
 
-        for d in red_zones.iter().take(top.min(8)) {
-            let u_cnt = d.user_count.unwrap_or(0);
-            let a_cnt = d.alpha_count.unwrap_or(0);
+        for d in higher_usage.iter().take(top.min(8)) {
+            let u_cnt = d.user_count;
+            let a_cnt = d.alpha_count;
             let u_name = d.universe.as_deref().unwrap_or("—");
             let cov_str = d
                 .coverage
@@ -1363,12 +1452,11 @@ async fn cmd_radar(
                 subcat.to_string()
             };
 
-            let status = if u_cnt >= 20000 {
-                "DANGER".red().bold()
-            } else if u_cnt >= 2000 {
-                "CROWDED".red()
-            } else {
-                "MODERATE".yellow()
+            let status = match u_cnt {
+                Some(count) if count >= 20000 => "VERY HIGH COUNT".red().bold(),
+                Some(count) if count >= 2000 => "HIGH COUNT".red(),
+                Some(count) if count >= 0 => "COUNT PRESENT".yellow(),
+                _ => "UNKNOWN".dimmed(),
             };
 
             println!(
@@ -1376,8 +1464,8 @@ async fn cmd_radar(
                 d.id.yellow(),
                 u_name.white(),
                 sub_display,
-                u_cnt,
-                a_cnt,
+                format_count(u_cnt),
+                format_count(a_cnt),
                 cov_str,
                 status
             );
@@ -1484,7 +1572,7 @@ async fn cmd_impact(alpha_id: String) -> Result<()> {
     let impact = calculate_portfolio_impact(&alpha_id, &cand_pnl, &pnl_cache)
         .context("Failed to compute portfolio merge impact (insufficient overlapping days)")?;
 
-    println!("\n  📊 PORTFOLIO MERGE SIMULATION IMPACT (1,236 Days):");
+    println!("\n  📊 PORTFOLIO MERGE SIMULATION IMPACT (overlapping PnL dates):");
     println!("  ─────────────────────────────────────────────────────────────────────────");
     println!(
         "    Active Alphas Count:       {} -> {} (+1 Alpha)",
@@ -1597,107 +1685,779 @@ async fn cmd_impact(alpha_id: String) -> Result<()> {
         );
     }
 
-    // Adversarial Crowd Uniqueness Simulation
-    let port_path = "portfolio_os.json";
-    if Path::new(port_path).exists() {
-        if let Ok(port_data) = fs::read_to_string(port_path) {
-            if let Ok(os_alphas) = serde_json::from_str::<Vec<PortfolioAlpha>>(&port_data) {
-                let live_anchor = if let Ok(comps) = client.fetch_competitions().await {
-                    comps
-                        .iter()
-                        .find_map(|c| c.leaderboard.as_ref().and_then(|lb| lb.uniqueness_score))
-                        .unwrap_or(0.50)
-                } else {
-                    0.50
-                };
+    Ok(())
+}
 
-                if let Some(shadow) =
-                    calibrate_shadow_portfolio(&os_alphas, &pnl_cache, Some(live_anchor))
-                {
-                    if let Some(uniq_report) = project_uniqueness_impact(
-                        &alpha_id, &cand_pnl, &os_alphas, &pnl_cache, &shadow,
-                    ) {
-                        print_uniqueness_impact_report(&uniq_report);
+fn profile_field_config(alpha: &PortfolioAlpha) -> FieldConfig {
+    let settings = alpha.settings.as_ref();
+    let string_setting = |camel: &str, snake: &str| {
+        settings
+            .and_then(|value| value.get(camel).or_else(|| value.get(snake)))
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+    };
+    let integer_setting = |camel: &str, snake: &str| {
+        settings
+            .and_then(|value| value.get(camel).or_else(|| value.get(snake)))
+            .and_then(serde_json::Value::as_i64)
+            .and_then(|value| i32::try_from(value).ok())
+    };
+
+    FieldConfig {
+        instrument_type: string_setting("instrumentType", "instrument_type")
+            .unwrap_or_else(|| "EQUITY".to_string()),
+        region: string_setting("region", "region").unwrap_or_else(|| "USA".to_string()),
+        universe: string_setting("universe", "universe")
+            .or_else(|| alpha.universe.clone())
+            .unwrap_or_else(|| "TOP1000".to_string()),
+        delay: integer_setting("delay", "delay").unwrap_or(1),
+    }
+}
+
+fn format_count(value: Option<i64>) -> String {
+    value
+        .map(|count| count.to_string())
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+fn field_config_label(config: &FieldConfig) -> String {
+    format!(
+        "{}/{}/{}/D{}",
+        config.instrument_type, config.region, config.universe, config.delay
+    )
+}
+
+fn dataset_census_key(dataset: &DatasetEntry) -> String {
+    format!(
+        "{}:{}:{}:{}",
+        dataset.region.as_deref().unwrap_or("").to_ascii_uppercase(),
+        dataset.id.to_ascii_lowercase(),
+        dataset
+            .universe
+            .as_deref()
+            .unwrap_or("")
+            .to_ascii_uppercase(),
+        dataset.delay.unwrap_or(-1)
+    )
+}
+
+async fn cmd_shadow(
+    candidate: Option<String>,
+    expression: Option<String>,
+    region: Option<String>,
+    universe: Option<String>,
+    delay: Option<i32>,
+    simulate_expression: bool,
+) -> Result<()> {
+    if expression.is_some() && candidate.is_some() {
+        anyhow::bail!("Use either --candidate or --expr, not both.");
+    }
+    if expression.is_none() && (region.is_some() || universe.is_some() || delay.is_some()) {
+        anyhow::bail!("--region, --universe, and --delay apply only when using --expr.");
+    }
+
+    let client = get_main_client()?;
+    let requested_candidate_id = candidate.clone();
+    let candidate_source: Option<(String, FieldConfig)> = if let Some(alpha_id) = candidate.as_ref()
+    {
+        let details = client.get_alpha_details(&alpha_id).await?;
+        let code = details
+            .get_code()
+            .context("BRAIN did not return a formula for this Alpha")?
+            .to_string();
+        let settings = details.settings.unwrap_or_default();
+        Some((
+            code,
+            FieldConfig {
+                instrument_type: settings.instrument_type,
+                region: settings.region,
+                universe: settings.universe,
+                delay: settings.delay,
+            },
+        ))
+    } else {
+        expression.map(|code| {
+            (
+                code,
+                FieldConfig {
+                    instrument_type: "EQUITY".to_string(),
+                    region: region.unwrap_or_else(|| "USA".to_string()),
+                    universe: universe.unwrap_or_else(|| "TOP1000".to_string()),
+                    delay: delay.unwrap_or(1),
+                },
+            )
+        })
+    };
+
+    let mut candidate_pnl: Option<HashMap<String, f64>> = None;
+    let mut candidate_alpha_id = requested_candidate_id;
+    if candidate_alpha_id.is_none() && simulate_expression {
+        let (formula, config) = candidate_source
+            .as_ref()
+            .context("--simulate requires an expression")?;
+        let settings = AlphaSettings {
+            instrument_type: config.instrument_type.clone(),
+            region: config.region.clone(),
+            universe: config.universe.clone(),
+            delay: config.delay,
+            ..Default::default()
+        };
+        println!("  Running one private BRAIN simulation to obtain candidate PnL...");
+        let simulation_url = client.submit_simulation(formula, &settings).await?;
+        let result = client
+            .poll_simulation(&simulation_url, 1800, 8)
+            .await
+            .context("BRAIN candidate simulation did not complete")?;
+        let alpha_ref = result
+            .alpha
+            .as_deref()
+            .context("BRAIN completed the simulation without returning an Alpha reference")?;
+        let alpha_id = alpha_ref
+            .trim_end_matches('/')
+            .rsplit('/')
+            .next()
+            .unwrap_or(alpha_ref)
+            .to_string();
+        candidate_pnl = Some(client.fetch_daily_pnl(&alpha_id).await?);
+        candidate_alpha_id = Some(alpha_id);
+    }
+
+    let portfolio_path = Path::new("portfolio_os.json");
+    let (portfolio, portfolio_available): (Vec<PortfolioAlpha>, bool) = if portfolio_path.exists() {
+        let data = fs::read_to_string(portfolio_path)?;
+        (serde_json::from_str(&data)?, true)
+    } else {
+        (Vec::new(), false)
+    };
+
+    let data_dir = Path::new("data");
+    let local_field_datasets = load_local_field_datasets(data_dir);
+    let mut field_cache: FieldUsageCache =
+        fs::read_to_string(get_cache_dir().join("data_field_usage.json"))
+            .ok()
+            .and_then(|contents| serde_json::from_str(&contents).ok())
+            .unwrap_or_default();
+    let now = current_unix_time();
+    let mut live_fields = HashMap::new();
+    let mut field_source = HashMap::new();
+
+    let mut profile_lookups = 0usize;
+    'profile_lookup: for alpha in &portfolio {
+        let config = profile_field_config(alpha);
+        let formula_fields = build_formula_allocation(
+            alpha.code.as_deref().unwrap_or_default(),
+            &local_field_datasets,
+            &HashMap::new(),
+        )
+        .fields;
+        for field_id in formula_fields.iter().take(3) {
+            if profile_lookups >= 120 {
+                break 'profile_lookup;
+            }
+            let key = field_cache_key(field_id, &config);
+            if get_fresh_cached_field(&field_cache, &key, now).is_some() {
+                continue;
+            }
+            profile_lookups += 1;
+            match client
+                .fetch_data_field(
+                    field_id,
+                    &config.instrument_type,
+                    &config.region,
+                    &config.universe,
+                    config.delay,
+                )
+                .await
+            {
+                Ok(Some(field)) => cache_field(&mut field_cache, key, field, now),
+                Ok(None) | Err(_) => {}
+            }
+        }
+    }
+
+    if let Some((formula, config)) = candidate_source.as_ref() {
+        let field_ids =
+            build_formula_allocation(formula, &local_field_datasets, &HashMap::new()).fields;
+        for field_id in field_ids {
+            let key = field_cache_key(&field_id, config);
+            if let Some(field) = get_fresh_cached_field(&field_cache, &key, now) {
+                let fetched_at = field_cache
+                    .entries
+                    .get(&key)
+                    .map(|entry| entry.fetched_at_unix_secs)
+                    .unwrap_or(now);
+                let age_hours = now.saturating_sub(fetched_at) / 3600;
+                field_source.insert(field_id.clone(), format!("cache, {}h old", age_hours));
+                live_fields.insert(field_id, field);
+                continue;
+            }
+
+            match client
+                .fetch_data_field(
+                    &field_id,
+                    &config.instrument_type,
+                    &config.region,
+                    &config.universe,
+                    config.delay,
+                )
+                .await
+            {
+                Ok(Some(field)) => {
+                    cache_field(&mut field_cache, key, field.clone(), now);
+                    field_source.insert(field_id.clone(), "BRAIN API (live)".to_string());
+                    live_fields.insert(field_id, field);
+                }
+                Ok(None) => {
+                    field_source.insert(field_id, "not returned for this config".to_string());
+                }
+                Err(_) => {
+                    if let Some(cached) = field_cache.entries.get(&key) {
+                        field_source.insert(
+                            field_id.clone(),
+                            "stale cache (API unavailable)".to_string(),
+                        );
+                        live_fields.insert(field_id, cached.field.clone());
+                    } else {
+                        field_source.insert(field_id, "unavailable".to_string());
                     }
                 }
             }
         }
     }
 
-    Ok(())
-}
-
-async fn cmd_shadow(candidate: Option<String>, anchor: Option<f64>) -> Result<()> {
-    let client = get_main_client()?;
-    let port_path = "portfolio_os.json";
-    if !Path::new(port_path).exists() {
-        anyhow::bail!("portfolio_os.json not found! Run 'alphafind sync' first.");
+    let cache_path = get_cache_dir().join("data_field_usage.json");
+    if let Ok(contents) = serde_json::to_vec_pretty(&field_cache) {
+        let _ = fs::write(cache_path, contents);
     }
-    let port_data = fs::read_to_string(port_path)?;
-    let os_alphas: Vec<PortfolioAlpha> = serde_json::from_str(&port_data)?;
 
-    let cache_file = get_cache_dir().join("portfolio_pnl.json");
-    let mut pnl_cache: HashMap<String, HashMap<String, f64>> = if cache_file.exists() {
-        fs::read_to_string(&cache_file)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
-    } else {
-        HashMap::new()
-    };
-
-    let mut missing_ids = Vec::new();
-    for a in &os_alphas {
-        if !pnl_cache.contains_key(&a.id) {
-            missing_ids.push(a.id.clone());
+    let mut cached_mapping_fields: HashMap<String, DataFieldEntry> = HashMap::new();
+    let mut ambiguous_cached_ids = std::collections::HashSet::new();
+    for cached in field_cache.entries.values() {
+        let field = &cached.field;
+        let Some(dataset_id) = field
+            .dataset
+            .as_ref()
+            .and_then(|dataset| dataset.id.as_deref())
+        else {
+            continue;
+        };
+        let field_id = field.id.to_lowercase();
+        if ambiguous_cached_ids.contains(&field_id) {
+            continue;
+        }
+        if let Some(existing) = cached_mapping_fields.get(&field_id) {
+            let existing_dataset = existing
+                .dataset
+                .as_ref()
+                .and_then(|dataset| dataset.id.as_deref());
+            if !existing_dataset
+                .is_some_and(|existing_id| existing_id.eq_ignore_ascii_case(dataset_id))
+            {
+                cached_mapping_fields.remove(&field_id);
+                ambiguous_cached_ids.insert(field_id);
+            }
+        } else {
+            cached_mapping_fields.insert(field_id, field.clone());
         }
     }
 
-    if !missing_ids.is_empty() {
-        println!(
-            "  Fetching PnL for {} active OS alphas not in cache...",
-            missing_ids.len()
+    let mut portfolio_allocations: std::collections::BTreeMap<
+        DatasetAllocationKey,
+        (
+            std::collections::HashSet<String>,
+            std::collections::BTreeSet<String>,
+            std::collections::BTreeSet<String>,
+        ),
+    > = std::collections::BTreeMap::new();
+    let mut alpha_dataset_fields: HashMap<String, ProfileDatasetFields> = HashMap::new();
+    let mut portfolio_field_count = 0usize;
+    let mut portfolio_inferred_count = 0usize;
+    let mut portfolio_unmapped_count = 0usize;
+    for alpha in &portfolio {
+        let config = profile_field_config(alpha);
+        let allocation = build_formula_allocation(
+            alpha.code.as_deref().unwrap_or_default(),
+            &local_field_datasets,
+            &cached_mapping_fields,
         );
-        for id in missing_ids {
-            if let Ok(pnl) = client.fetch_daily_pnl(&id).await {
-                pnl_cache.insert(id, pnl);
+        portfolio_field_count += allocation.fields.len();
+        portfolio_inferred_count += allocation.inferred_fields.len();
+        portfolio_unmapped_count += allocation.unmapped_fields;
+        for (dataset_id, fields) in &allocation.by_dataset {
+            let key = (
+                config.instrument_type.to_uppercase(),
+                config.region.to_uppercase(),
+                config.universe.to_uppercase(),
+                config.delay,
+                dataset_id.to_uppercase(),
+            );
+            alpha_dataset_fields
+                .entry(alpha.id.clone())
+                .or_default()
+                .push((key.clone(), fields.clone()));
+            let usage = portfolio_allocations.entry(key).or_default();
+            usage.0.insert(alpha.id.clone());
+            usage.2.extend(
+                fields
+                    .iter()
+                    .filter(|field| allocation.inferred_fields.contains(*field))
+                    .cloned(),
+            );
+            usage.1.extend(fields.iter().cloned());
+        }
+    }
+    if profile_lookups > 0 {
+        println!(
+            "  Refreshed profile field allocation metadata with {} API lookups.",
+            profile_lookups
+        );
+    }
+
+    let mut candidate_mapping_fields = cached_mapping_fields;
+    candidate_mapping_fields.extend(live_fields.clone());
+    let candidate_allocation = candidate_source.as_ref().map(|(formula, _)| {
+        build_formula_allocation(formula, &local_field_datasets, &candidate_mapping_fields)
+    });
+
+    let mut configs_by_region: HashMap<String, Vec<FieldConfig>> = HashMap::new();
+    for alpha in &portfolio {
+        let config = profile_field_config(alpha);
+        let entries = configs_by_region.entry(config.region.clone()).or_default();
+        if !entries.contains(&config) {
+            entries.push(config);
+        }
+    }
+    if let Some((_, config)) = candidate_source.as_ref() {
+        let entries = configs_by_region.entry(config.region.clone()).or_default();
+        if !entries.contains(config) {
+            entries.push(config.clone());
+        }
+    }
+
+    let mut datasets_by_region: HashMap<String, Vec<DatasetEntry>> = HashMap::new();
+    for region_name in configs_by_region.keys() {
+        match client.fetch_all_datasets(region_name).await {
+            Ok(datasets) => {
+                datasets_by_region.insert(region_name.clone(), datasets);
+            }
+            Err(_) => {
+                println!("  Dataset census unavailable for region {}.", region_name);
             }
         }
-        if let Ok(serialized) = serde_json::to_string(&pnl_cache) {
-            let _ = fs::write(&cache_file, &serialized);
-        }
     }
 
-    let live_anchor = if let Some(a) = anchor {
-        a
-    } else if let Ok(comps) = client.fetch_competitions().await {
-        comps
-            .iter()
-            .find_map(|c| c.leaderboard.as_ref().and_then(|lb| lb.uniqueness_score))
-            .unwrap_or(0.50)
-    } else {
-        0.50
-    };
-
-    let shadow = calibrate_shadow_portfolio(&os_alphas, &pnl_cache, Some(live_anchor))
-        .context("Failed to calibrate Synthetic Crowd Shadow Portfolio (insufficient overlapping trading days)")?;
-
-    let audit_report = audit_portfolio_crowd_exposure(&os_alphas, &pnl_cache, &shadow);
-    print_shadow_audit_report(&audit_report, &shadow);
-
-    if let Some(ref cand_id) = candidate {
-        println!(
-            "  Simulating Adversarial Crowd Impact for Candidate ID: {}...",
-            cand_id.yellow()
-        );
-        let cand_pnl = client.fetch_daily_pnl(cand_id).await?;
-        if let Some(impact) =
-            project_uniqueness_impact(cand_id, &cand_pnl, &os_alphas, &pnl_cache, &shadow)
+    let mut dataset_counts_by_key: HashMap<DatasetAllocationKey, f64> = HashMap::new();
+    let mut observed_dataset_count = 0usize;
+    for key in portfolio_allocations.keys() {
+        let config = FieldConfig {
+            instrument_type: key.0.clone(),
+            region: key.1.clone(),
+            universe: key.2.clone(),
+            delay: key.3,
+        };
+        if let Some(count) = datasets_by_region
+            .get(&config.region)
+            .and_then(|datasets| find_dataset_config(datasets, &key.4, &config))
+            .and_then(|dataset| dataset.alpha_count)
+            .filter(|count| *count > 0)
         {
-            print_uniqueness_impact_report(&impact);
+            let weight = count as f64;
+            dataset_counts_by_key.insert(key.clone(), weight);
+            observed_dataset_count += 1;
+        }
+    }
+    let (allocation_weights, field_weighted_alpha_count, dataset_fallback_alpha_count) =
+        derive_profile_usage_weights(
+            &alpha_dataset_fields,
+            &field_cache,
+            &dataset_counts_by_key,
+            now,
+        );
+    let total_sample_weight: f64 = allocation_weights.values().sum();
+
+    let pnl_cache_path = get_cache_dir().join("portfolio_pnl.json");
+    let mut pnl_cache: HashMap<String, HashMap<String, f64>> = fs::read_to_string(&pnl_cache_path)
+        .ok()
+        .and_then(|contents| serde_json::from_str(&contents).ok())
+        .unwrap_or_default();
+    if let (Some(alpha_id), Some(pnl)) = (candidate_alpha_id.as_ref(), candidate_pnl.as_ref()) {
+        pnl_cache.insert(alpha_id.clone(), pnl.clone());
+    }
+    let mut pnl_ids: std::collections::BTreeSet<String> =
+        portfolio.iter().map(|alpha| alpha.id.clone()).collect();
+    if let Some(alpha_id) = candidate_alpha_id.as_ref() {
+        pnl_ids.insert(alpha_id.clone());
+    }
+    let refresh_pnl_ids: Vec<String> = pnl_ids
+        .into_iter()
+        .filter(|alpha_id| {
+            !(candidate_alpha_id.as_deref() == Some(alpha_id.as_str()) && candidate_pnl.is_some())
+        })
+        .collect();
+    let mut stale_pnl_count = 0usize;
+    for (index, alpha_id) in refresh_pnl_ids.iter().enumerate() {
+        if index == 0 {
+            println!("  Refreshing allocated Alpha PnL from the main account...");
+        }
+        println!("  PnL refresh {}/{}...", index + 1, refresh_pnl_ids.len());
+        let previous = pnl_cache.get(alpha_id).cloned();
+        match client.fetch_daily_pnl(alpha_id).await {
+            Ok(pnl) => {
+                pnl_cache.insert(alpha_id.clone(), pnl);
+            }
+            Err(error) => {
+                if previous.is_some() {
+                    stale_pnl_count += 1;
+                }
+                if candidate_alpha_id.as_deref() == Some(alpha_id.as_str()) {
+                    println!("  Candidate PnL unavailable: {}", error);
+                }
+            }
+        }
+    }
+    if let Some(alpha_id) = candidate_alpha_id.as_ref() {
+        if candidate_pnl.is_none() {
+            candidate_pnl = pnl_cache.get(alpha_id).cloned();
+        }
+        if let Some(pnl) = candidate_pnl.as_ref() {
+            pnl_cache.insert(alpha_id.clone(), pnl.clone());
+        }
+    }
+    if let Ok(contents) = serde_json::to_vec(&pnl_cache) {
+        let _ = fs::write(&pnl_cache_path, contents);
+    }
+    if stale_pnl_count > 0 {
+        println!(
+            "  Used cached PnL for {} Alpha(s) whose live refresh failed.",
+            stale_pnl_count
+        );
+    }
+
+    println!("\n  Crowd usage and local PnL sensitivity (not projected Uniqueness)");
+    if portfolio_available {
+        println!(
+            "  Local profile: {} stored OS alphas; {} formula fields parsed; {} prefix-inferred; {} unmapped.",
+            portfolio.len(), portfolio_field_count, portfolio_inferred_count, portfolio_unmapped_count
+        );
+    } else {
+        println!("  Local profile: portfolio_os.json not found; profile allocation omitted.");
+    }
+    println!("  Census counts come from /data-sets; field counts come from /data-fields (live or labeled cache).\n");
+
+    if !portfolio_allocations.is_empty() || candidate_allocation.is_some() {
+        println!(
+            "  {:<18} {:<31} {:>10} {:>14} {:>10} {:>17} {:>12} {:>12}",
+            "Dataset",
+            "Config",
+            "Profile α",
+            "Mapped fields",
+            "Inferred",
+            "Candidate fields",
+            "Users",
+            "Alphas"
+        );
+        let mut report_rows = std::collections::BTreeSet::new();
+        for key in portfolio_allocations.keys() {
+            report_rows.insert(key.clone());
+        }
+        if let (Some(allocation), Some((_, config))) =
+            (candidate_allocation.as_ref(), candidate_source.as_ref())
+        {
+            for dataset_id in allocation.by_dataset.keys() {
+                report_rows.insert((
+                    config.instrument_type.to_uppercase(),
+                    config.region.to_uppercase(),
+                    config.universe.to_uppercase(),
+                    config.delay,
+                    dataset_id.to_uppercase(),
+                ));
+            }
+        }
+
+        for key in report_rows {
+            let config = FieldConfig {
+                instrument_type: key.0.clone(),
+                region: key.1.clone(),
+                universe: key.2.clone(),
+                delay: key.3,
+            };
+            let profile = portfolio_allocations.get(&key);
+            let profile_alpha_count = profile.map(|usage| usage.0.len()).unwrap_or(0);
+            let profile_fields = profile.map(|usage| usage.1.len()).unwrap_or(0);
+            let profile_inferred_fields = profile.map(|usage| usage.2.len()).unwrap_or(0);
+            let candidate_fields = candidate_allocation
+                .as_ref()
+                .filter(|_| {
+                    candidate_source
+                        .as_ref()
+                        .is_some_and(|(_, candidate_config)| candidate_config == &config)
+                })
+                .and_then(|allocation| allocation.by_dataset.get(&key.4.to_lowercase()))
+                .map(Vec::len)
+                .unwrap_or(0);
+            let census = datasets_by_region
+                .get(&config.region)
+                .and_then(|datasets| find_dataset_config(datasets, &key.4, &config));
+            let (users, alphas) = census
+                .map(|dataset| {
+                    (
+                        format_count(dataset.user_count),
+                        format_count(dataset.alpha_count),
+                    )
+                })
+                .unwrap_or_else(|| ("unknown".to_string(), "unknown".to_string()));
+            println!(
+                "  {:<18} {:<31} {:>10} {:>14} {:>10} {:>17} {:>12} {:>12}",
+                key.4,
+                field_config_label(&config),
+                profile_alpha_count,
+                profile_fields,
+                profile_inferred_fields,
+                candidate_fields,
+                users,
+                alphas
+            );
+        }
+    } else {
+        println!("  No mappable dataset allocations found in the local profile or candidate.");
+    }
+
+    if let (Some(allocation), Some((_, config))) =
+        (candidate_allocation.as_ref(), candidate_source.as_ref())
+    {
+        println!(
+            "\n  Candidate field-level usage ({})",
+            field_config_label(config)
+        );
+        if allocation.fields.is_empty() {
+            println!("  No field identifiers were extracted from the formula.");
+        } else {
+            println!(
+                "  {:<30} {:<18} {:>12} {:>12}  Source",
+                "Field", "Dataset", "Users", "Alphas"
+            );
+            for field_id in &allocation.fields {
+                let field = live_fields.get(field_id);
+                let dataset = allocation
+                    .by_dataset
+                    .iter()
+                    .find(|(_, fields)| fields.iter().any(|field| field == field_id))
+                    .map(|(dataset, _)| dataset.as_str())
+                    .unwrap_or("unknown");
+                let source = field_source
+                    .get(field_id)
+                    .map(String::as_str)
+                    .unwrap_or_else(|| {
+                        if allocation.inferred_fields.contains(field_id) {
+                            "prefix inferred from local schema"
+                        } else {
+                            "local schema mapping"
+                        }
+                    });
+                println!(
+                    "  {:<30} {:<18} {:>12} {:>12}  {}",
+                    field_id,
+                    dataset,
+                    format_count(field.and_then(|entry| entry.user_count)),
+                    format_count(field.and_then(|entry| entry.alpha_count)),
+                    source
+                );
+            }
+
+            let mut measured_fields = 0usize;
+            let mut alpha_penetration_sum = 0.0;
+            let mut alpha_penetration_count = 0usize;
+            let mut user_penetration_sum = 0.0;
+            let mut user_penetration_count = 0usize;
+            for (dataset_id, fields) in &allocation.by_dataset {
+                let dataset = datasets_by_region
+                    .get(&config.region)
+                    .and_then(|datasets| find_dataset_config(datasets, dataset_id, config));
+                for field_id in fields {
+                    if field_source
+                        .get(field_id)
+                        .is_some_and(|source| source.starts_with("stale cache"))
+                    {
+                        continue;
+                    }
+                    let Some(field) = live_fields.get(field_id) else {
+                        continue;
+                    };
+                    let Some(dataset) = dataset else {
+                        continue;
+                    };
+                    let mut field_has_comparable_count = false;
+                    if let (Some(field_count), Some(dataset_count)) =
+                        (field.alpha_count, dataset.alpha_count)
+                    {
+                        if field_count >= 0 && dataset_count > 0 {
+                            alpha_penetration_sum += field_count as f64 / dataset_count as f64;
+                            alpha_penetration_count += 1;
+                            field_has_comparable_count = true;
+                        }
+                    }
+                    if let (Some(field_count), Some(dataset_count)) =
+                        (field.user_count, dataset.user_count)
+                    {
+                        if field_count >= 0 && dataset_count > 0 {
+                            user_penetration_sum += field_count as f64 / dataset_count as f64;
+                            user_penetration_count += 1;
+                            field_has_comparable_count = true;
+                        }
+                    }
+                    if field_has_comparable_count {
+                        measured_fields += 1;
+                    }
+                }
+            }
+            if alpha_penetration_count > 0 || user_penetration_count > 0 {
+                let alpha_share = if alpha_penetration_count > 0 {
+                    format!(
+                        "{:.1}%",
+                        100.0 * alpha_penetration_sum / alpha_penetration_count as f64
+                    )
+                } else {
+                    "unavailable".to_string()
+                };
+                let user_share = if user_penetration_count > 0 {
+                    format!(
+                        "{:.1}%",
+                        100.0 * user_penetration_sum / user_penetration_count as f64
+                    )
+                } else {
+                    "unavailable".to_string()
+                };
+                println!(
+                    "  Usage penetration proxy: mean field share of dataset Alphas = {}; mean share of dataset users = {} ({} of {} fields measured).",
+                    alpha_share,
+                    user_share,
+                    measured_fields,
+                    allocation.fields.len()
+                );
+                println!("  This reports popularity of the formula's fields; it is not a PnL-correlation or Uniqueness estimate.");
+            } else {
+                println!("  Usage penetration proxy unavailable: matching field and dataset counts were not available.");
+            }
+            if allocation.unmapped_fields > 0 {
+                println!(
+                    "  {} field identifier(s) could not be mapped to a dataset.",
+                    allocation.unmapped_fields
+                );
+            }
         }
     }
 
+    let sampled_datasets: std::collections::HashSet<DatasetAllocationKey> = portfolio_allocations
+        .iter()
+        .filter(|(_, usage)| {
+            usage
+                .0
+                .iter()
+                .any(|alpha_id| pnl_cache.contains_key(alpha_id))
+        })
+        .filter_map(|(key, _)| {
+            dataset_counts_by_key
+                .contains_key(key)
+                .then_some(key.clone())
+        })
+        .collect();
+    let usage_weighted_pnl = build_usage_weighted_profile_pnl(
+        &allocation_weights,
+        &pnl_cache,
+        total_sample_weight,
+        sampled_datasets.len(),
+    );
+    let competitions = client.fetch_competitions().await.unwrap_or_default();
+    let official_score = challenge_uniqueness_score(&competitions);
+    let profile_alpha_ids: Vec<String> = portfolio
+        .iter()
+        .filter(|alpha| pnl_cache.contains_key(&alpha.id))
+        .map(|alpha| alpha.id.clone())
+        .collect();
+    let profile_pnl = equal_weight_pnl_merge(&profile_alpha_ids, &pnl_cache);
+
+    println!("\n  Local PnL sensitivity (not competitor PnL)");
+    println!(
+        "  Local PnL series: {} of {} active Alphas; field-count weights for {} Alphas; {} dataset configurations with counts.",
+        usage_weighted_pnl.as_ref().map(|proxy| proxy.sample_alpha_count).unwrap_or(0),
+        portfolio.len(),
+        field_weighted_alpha_count,
+        observed_dataset_count
+    );
+    println!(
+        "  Dataset fallback weights used for {} Alphas; local PnL weight coverage: {:.1}%.",
+        dataset_fallback_alpha_count,
+        usage_weighted_pnl
+            .as_ref()
+            .map(|proxy| proxy.pnl_weight_coverage * 100.0)
+            .unwrap_or(0.0)
+    );
+
+    if let Some(score) = official_score {
+        println!(
+            "  Current official BRAIN Uniqueness: {:.3} (current value only).",
+            score
+        );
+    } else {
+        println!("  Current official BRAIN Uniqueness was not available from the account API.");
+    }
+
+    match (usage_weighted_pnl.as_ref(), profile_pnl.as_ref()) {
+        (Some(proxy), Some(profile_series)) => {
+            let (baseline_proxy_corr, common_days) =
+                pearson_correlation(profile_series, &proxy.pnl);
+            println!(
+                "  Usage-weighted local PnL basket: {} Alpha samples across {} dataset configurations; {} common days.",
+                proxy.sample_alpha_count, proxy.sample_dataset_count, common_days
+            );
+            println!(
+                "  Equal-weight profile vs usage-weighted local basket: {:.3} correlation.",
+                baseline_proxy_corr
+            );
+
+            if let Some(alpha_id) = candidate_alpha_id.as_ref() {
+                if portfolio.iter().any(|alpha| alpha.id.eq_ignore_ascii_case(alpha_id)) {
+                    println!("  Candidate is already active in this profile; no add-on projection was made.");
+                } else if candidate_pnl.is_some() {
+                    let mut projected_ids = profile_alpha_ids.clone();
+                    projected_ids.push(alpha_id.clone());
+                    if let Some(projected_pnl) = equal_weight_pnl_merge(&projected_ids, &pnl_cache) {
+                        if let Some(projection) = project_proxy_correlation(
+                            profile_series,
+                            &projected_pnl,
+                            &proxy.pnl,
+                        ) {
+                            println!(
+                                "  Candidate impact on local basket correlation: {:.3} -> {:.3} ({:+.3}).",
+                                projection.baseline_proxy_corr,
+                                projection.projected_proxy_corr,
+                                projection.correlation_delta
+                            );
+                        } else {
+                            println!("  Not enough overlapping PnL dates to estimate candidate impact.");
+                        }
+                    } else {
+                        println!("  Could not merge candidate and profile PnL over common dates.");
+                    }
+                } else {
+                    println!("  Candidate PnL is unavailable, so local PnL sensitivity was not computed.");
+                }
+            } else if candidate_source.is_some() {
+                println!("  An expression has no PnL yet. Use --simulate with --expr for local portfolio sensitivity only.");
+            }
+
+            if proxy.pnl_weight_coverage < 0.70 || proxy.sample_alpha_count < 5 {
+                println!("  Data coverage: LOW — few local Alpha PnLs or limited weight coverage.");
+            } else {
+                println!("  Data coverage: adequate for this local diagnostic only; it says nothing quantitative about competitor PnL.");
+            }
+        }
+        _ => println!("  No local sensitivity: need mapped active Alphas, their PnL series, and at least 30 overlapping days."),
+    }
+
+    println!("\n  Weight method: average fresh field alphaCount within each mapped dataset, then average across that Alpha's datasets; use dataset alphaCount where field counts are unavailable.");
+    println!("  This reweights only your local profile PnLs. BRAIN does not return the other competitors' formulas or merged PnLs through these endpoints.");
+    println!("  Therefore only the current official Uniqueness is known; this command does not forecast a future Uniqueness score.");
     Ok(())
 }
 
@@ -1713,7 +2473,7 @@ async fn cmd_matrix(
     );
     println!(
         "{}",
-        "  AlphaFind Quant Engine — 2D Dynamic Cross-Dataset Co-occurrence Matrix"
+        "  AlphaFind — Configured Dataset-Interaction Heuristic"
             .bold()
             .cyan()
     );
@@ -1738,7 +2498,15 @@ async fn cmd_matrix(
             let snapshot_file = Path::new("data").join("census_snapshots.json");
             if let Ok(content) = fs::read_to_string(&snapshot_file) {
                 if let Ok(snap) = serde_json::from_str::<CensusSnapshot>(&content) {
-                    snap.datasets
+                    if snap.region.eq_ignore_ascii_case(&region) {
+                        snap.datasets
+                    } else {
+                        anyhow::bail!(
+                            "Cached census is for region {}, requested {}.",
+                            snap.region,
+                            region
+                        );
+                    }
                 } else {
                     anyhow::bail!("No cached census snapshot available");
                 }
@@ -1760,6 +2528,7 @@ async fn cmd_matrix(
         fs::read_to_string(&snapshot_file)
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
+            .filter(|snapshot: &CensusSnapshot| snapshot.region.eq_ignore_ascii_case(&region))
     } else {
         None
     };
@@ -1806,7 +2575,7 @@ async fn cmd_matrix(
             analysis.detected_k
         );
         println!("  ┌────────┬──────────────────────────────────────────┬──────────────┬──────────────┬────────────┐");
-        println!("  │ Pillar │ Economic Architecture Role               │ Live Quants  │ Live Alphas  │ Crowd Tier │");
+        println!("  │ Pillar │ Economic Architecture Role               │ Users (data) │ Alphas (data)│ Count band │");
         println!("  ├────────┼──────────────────────────────────────────┼──────────────┼──────────────┼────────────┤");
 
         for (pillar, role, stat) in &analysis.participating_pillars {
@@ -1836,12 +2605,12 @@ async fn cmd_matrix(
         };
 
         println!(
-            "\n  {} Dynamic Composite Hybrid Uniqueness Index (CHUI): {}",
+            "\n  {} Composite Configured-Interaction Heuristic (CHUI): {}",
             "🎯".bold(),
             chui_styled
         );
         println!(
-            "  {} Platform Uniqueness Verdict: {}",
+            "  {} Heuristic interpretation (not platform Uniqueness): {}",
             "⚖️".bold(),
             analysis.uniqueness_verdict
         );
@@ -1864,7 +2633,7 @@ async fn cmd_matrix(
         }
     } else {
         println!(
-            "\n  {} Top Pristine Multi-Dataset Synergy Pathways for {}:",
+            "\n  {} Rule-Based Multi-Dataset Hypotheses for {} (not validated forecasts):",
             "🌟".bold(),
             universe.yellow().bold()
         );
@@ -1996,10 +2765,7 @@ async fn cmd_health(alpha_id: Option<String>, export: Option<String>, all: bool)
         }
     }
 
-    // Try calibrating crowd shadow portfolio for crowd co-movement metrics
-    let shadow = calibrate_shadow_portfolio(&os_alphas, &pnl_cache, None);
-
-    let report = evaluate_portfolio_health(&os_alphas, &pnl_cache, shadow.as_ref()).context(
+    let report = evaluate_portfolio_health(&os_alphas, &pnl_cache, None).context(
         "Failed to evaluate portfolio health (insufficient data or overlapping trading days < 60)",
     )?;
 

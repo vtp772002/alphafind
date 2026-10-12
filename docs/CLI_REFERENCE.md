@@ -1,380 +1,96 @@
-# CLI Command Reference
+# CLI reference
 
-AlphaFind provides a unified native binary covering the quantitative trading lifecycle: authentication, backtest simulation, distributed screening, correlation auditing, and official Out-of-Sample submission.
+This reference describes command interfaces in `src/main.rs` as inspected on 2026-10-12. Check `alphafind --help` for the binary you built. API behavior and BRAIN rules can change independently of this CLI.
+
+## Commands
+
+| Command | Purpose | Important limitation |
+|---|---|---|
+| `auth` | Authenticate configured BRAIN clients. | Logs may contain account identifiers or email addresses. |
+| `sync` | Fetch portfolio metadata into the local portfolio file. | Fetch paths have pagination/classification and freshness limitations; verify against BRAIN. |
+| `score` | Fetch profile/competition information. | Platform scoring formulas are not reproduced by this command. |
+| `sim` | Create and poll one simulation on the main account. | Keep live expressions private. |
+| `screen` | Simulate candidates from the in-code catalog. | Tasks are spawned per candidate; `--workers` does not currently bound concurrency. Multi-account use must comply with BRAIN's account rules. |
+| `tune` | Try configured parameter variants for one expression. | A higher in-sample metric is not evidence of better OOS performance. |
+| `check` | Request platform submission check results. | The parser treats only explicit `FAIL` as failure; `PENDING`, `ERROR`, unknown, or missing checks can be misreported as PASS. Do not rely on it as an approval gate. |
+| `submit` | Send a submission request to BRAIN. | Has `--skip-checks`; use BRAIN's own status as authority. |
+| `audit` | Compare candidate PnL with locally available portfolio PnLs. | Depends on date overlap and possibly stale cached series. |
+| `portfolio` | Calculate a local merged-PnL diagnostic. | Not BRAIN's official `isScore` calculation. |
+| `impact` | Estimate local portfolio change after adding a candidate. | Depends on included alphas, weights, date coverage, and cache freshness. |
+| `radar` | Display dataset census fields returned by the API. | Census fields are time-sensitive; this is not a validated alpha uniqueness forecast. |
+| `matrix` | Display configured dataset interaction heuristics. | Uses hard-coded affinity assumptions, not measured platform-wide alpha co-occurrence. |
+| `blueprint` | Produce rule-based portfolio gap suggestions. | Fixed archetypes are hypotheses, not statistically validated forecasts. |
+| `shadow` | Inspect live BRAIN dataset/field usage, local profile allocations, and optional local PnL sensitivity. | It does not predict competitor PnL or future official Uniqueness. |
+| `health` | Print local portfolio diagnostics. | Results inherit portfolio classification, data coverage, and cache limitations. |
+
+## Usage synopsis
 
 ```text
-Usage: alphafind <COMMAND>
-
-Commands:
-  auth       Authenticate all configured BRAIN accounts concurrently
-  sync       Sync active Out-of-Sample (OS) portfolio into local cache
-  portfolio  Simulate merged multi-alpha Out-of-Sample portfolio Sharpe and risk
-  sim        Simulate an individual FastExpr formula backtest directly
-  screen     Launch 9-worker distributed candidate screening across 3 accounts
-  check      Verify the 8 mandatory In-Sample platform submission checks
-  audit      Run exact 1,236-day Pearson correlation audit against active portfolio
-  submit     Submit an Alpha to Out-of-Sample (OS) after 8/8 PASS verification
-  help       Print this message or the help of the given subcommand(s)
-```
-
----
-
-## 1. `alphafind auth`
-
-Verifies credentials in `.env` and tests concurrent session cookie generation across all configured accounts and worker sessions.
-
-### Usage
-```bash
 alphafind auth
-```
-
-### Description
-Tests connectivity, authenticates each account in parallel via `reqwest` with cookie jars, and displays account user IDs and worker concurrency readiness.
-
----
-
-## 2. `alphafind sync`
-
-Synchronizes your active Out-of-Sample (OS) portfolio directly from WorldQuant BRAIN and caches the metadata and PnL time series locally.
-
-### Usage
-```bash
 alphafind sync
-```
-
-### Description
-* Connects to your Main Account.
-* Paginates through all active Out-of-Sample alphas.
-* Saves expressions, IDs, settings, and metrics to `portfolio_os.json`.
-* Displays a universe distribution breakdown and live leaderboard status.
-
----
-
-## 3. `alphafind score`
-
-Fetches and displays live user status, rank, and official WorldQuant BRAIN leaderboard metrics.
-
-### Usage
-```bash
 alphafind score
-```
-
-### Metrics Displayed
-* **User Profile**: User ID, Full Name, Email, and Consultant Tier (e.g., `GOLD`).
-* **Active Competition**: Competition title (e.g., `Challenge - Vietnam`).
-* **Leaderboard Rank**: Live position on the national leaderboard.
-* **Total Score & Components**: Normalized Score, In-Sample Score (`isScore`), Uniqueness Score (`uniquenessScore`), and `daysOfSubmission` (rolling 60-day window).
-* **Affiliation**: Associated university or institution.
-* **Active Portfolio Snapshot**: Number of tracked Out-of-Sample Alphas.
-
----
-
-## 3. `alphafind portfolio`
-
-Simulates equal-weighted multi-alpha portfolio performance over 1,236 common backtest trading days.
-
-### Usage
-```bash
+alphafind sim --expr <PRIVATE_EXPRESSION> [--universe TOP1000] [--decay 5]
+              [--neutralization SUBINDUSTRY] [--truncation 0.05]
+alphafind screen [--pillar <PILLAR>] [--universe TOP1000]
+                 [--min-fitness 1.50] [--workers 3] [--no-tune]
+alphafind tune --expr <PRIVATE_EXPRESSION> [--universe TOP1000]
+                [--target-fitness 1.50] [--decay 10]
+                [--neutralization SUBINDUSTRY]
+alphafind check <ALPHA_ID>
+alphafind submit <ALPHA_ID> [--name <NAME>] [--category <CATEGORY>]
+                  [--color <COLOR>] [--tags <TAG,...>] [--skip-checks]
+alphafind audit <ALPHA_ID> [--label <LABEL>]
 alphafind portfolio
+alphafind impact <ALPHA_ID>
+alphafind radar [--region USA] [--universe <UNIVERSE>] [--top 15]
+                 [--filter <KEYWORD>] [--green-only]
+alphafind matrix [--universe TOP200] [--expr <PRIVATE_EXPRESSION>]
+                  [--green-only] [--region USA]
+alphafind blueprint [--universe <UNIVERSE>] [--export <PATH>]
+alphafind shadow [--candidate <ALPHA_ID> | --expr <PRIVATE_EXPRESSION>]
+                 [--region USA] [--universe TOP1000] [--delay 1] [--simulate]
+alphafind health [--alpha-id <ALPHA_ID>] [--export <PATH>] [--all]
 ```
 
-### Metrics Computed
-* **Common Backtest Trading Days**: Intersection of all historical trading dates (typically 1,236 days).
-* **Annualized Merged PnL**: Combined multi-alpha dollar PnL.
-* **Annualized Merged Volatility**: Portfolio standard deviation factoring in cross-covariance.
-* **Merged Portfolio Sharpe Ratio**: Multi-alpha Sharpe ratio reflecting true diversification.
-* **Average Pairwise Correlation ($\overline{\rho}$)**: Cross-correlation across all active alphas.
+`<PRIVATE_EXPRESSION>` is a placeholder, not literal Fast Expression syntax. Do not replace it with a pending candidate in tracked documentation or a public issue.
 
----
+## Submission commands
 
-## 4. `alphafind sim`
+### `check`
 
-Dispatches an individual FASTEXPR formula backtest directly to the BRAIN simulation API and polls for results.
-
-### Usage
-```bash
-alphafind sim [OPTIONS] --expr <EXPRESSION>
-```
-
-### Options
-| Flag | Short | Default | Description |
-|:---|:---:|:---:|:---|
-| `--expr <STR>` | `-e` | *Required* | FASTEXPR Alpha expression to simulate |
-| `--universe <U>` | `-u` | `TOP1000` | Equity universe (`TOP3000`, `TOP1000`, `TOP500`, `TOP200`) |
-| `--decay <N>` | `-d` | `5` | Linear decay factor in trading days |
-| `--neutralization <N>` | `-n` | `SUBINDUSTRY` | Neutralization regime (`MARKET`, `SECTOR`, `INDUSTRY`, `SUBINDUSTRY`) |
-| `--truncation <F>` | `-t` | `0.05` | Maximum single-stock position weight truncation |
-
-### Example
-```bash
-alphafind sim \
-  --expr "signal = rank(vwap / close - 1) * (1 + rank(volume / adv20)); group_neutralize(signal, densify(subindustry))" \
-  --universe TOP1000 \
-  --decay 5 \
-  --neutralization SUBINDUSTRY \
-  --truncation 0.05
-```
-
----
-
-## 5. `alphafind screen`
-
-Launches the 9-worker distributed screening engine across 3 parallel accounts with automated parameter tuning and atomic transfer lock.
-
-### Usage
-```bash
-alphafind screen [OPTIONS]
-```
-
-### Options
-| Flag | Short | Default | Description |
-|:---|:---:|:---:|:---|
-| `--pillar <PILLAR>` | `-p` | *Optional* | Factor pillar: `OPTIONS`, `ANALYST`, `MICRO`, `QUAL`, `RISK`, `SHORT` |
-| `--universe <U>` | `-u` | `TOP1000` | Equity universe (`TOP3000`, `TOP1000`, `TOP500`, `TOP200`) |
-| `--min-fitness <F>` | `-m` | `1.50` | Minimum Fitness threshold to trigger transfer lock & verification |
-| `--workers <N>` | `-w` | `3` | Workers per account (total = workers × accounts) |
-| `--no-tune` | | `false` | Disable automatic decay parameter sweeps |
-
-### Example
-```bash
-# Screen Options Volatility on TOP1000:
-alphafind screen --pillar OPTIONS --universe TOP1000 --min-fitness 1.50
-
-# Screen Analyst Consensus on TOP500 with SECTOR neutralization:
-alphafind screen --pillar ANALYST --universe TOP500 --min-fitness 1.40
-```
-
----
-
-## 6. `alphafind check`
-
-Verifies candidate alpha against all **8 mandatory In-Sample platform submission checks** using official platform endpoints (`GET /alphas/{id}/check`).
-
-### Usage
 ```bash
 alphafind check <ALPHA_ID>
 ```
 
-### Platform Checks Verified
-1. `LOW_SHARPE` ($\ge 1.25$)
-2. `LOW_FITNESS` ($\ge 1.00$)
-3. `LOW_TURNOVER` ($\ge 1.0\%$)
-4. `HIGH_TURNOVER` ($\le 70.0\%$)
-5. `CONCENTRATED_WEIGHT` ($\le 0.08$ truncation)
-6. `LOW_SUB_UNIVERSE_SHARPE` (passed across sub-tiers)
-7. `SELF_CORRELATION` ($\le 0.70$ or Sharpe improvement)
-8. `MATCHES_COMPETITION` (USA, Equity, Delay 1)
+This calls the platform check endpoint. A local `PASS` should only be trusted after the client verifies that the response contains every expected check, every status is explicitly passing, and the payload belongs to the requested alpha and current settings. The current parser does not enforce those conditions reliably. Review the response in BRAIN.
 
----
+### `submit`
 
-## 7. `alphafind audit`
-
-Computes microsecond Pearson correlation between candidate alpha and all active portfolio alphas over 1,236 common backtest days.
-
-### Usage
 ```bash
-alphafind audit <ALPHA_ID>
+alphafind submit <ALPHA_ID> [--name <NAME>] [--category <CATEGORY>] \
+  [--color <COLOR>] [--tags <TAG,...>] [--skip-checks]
 ```
 
-### Output
-* Total matching trading days.
-* Maximum pairwise correlation against any single active alpha.
-* Average portfolio pairwise correlation ($\overline{\rho}$).
-* Compliance flag against platform limit ($\le 0.70$) and institutional target ($\le 0.15$).
+This command can send a submission request. `--skip-checks` bypasses local preflight. Since the local preflight is incomplete, use the signed-in platform UI/API as the source of truth, and do not automate this command until the gate is fixed and covered by tests.
 
----
+## Local portfolio diagnostics
 
-## 8. `alphafind submit`
+`audit`, `portfolio`, `impact`, and `health` operate on fetched or cached PnL data. Review which alphas were included, active/OOS classification, cache age, date intersection, and number of observations. Insufficient overlap or missing data must be reported as unknown; it must not be interpreted as zero correlation.
 
-Submits a verified 8/8 PASS Alpha to Out-of-Sample (OS) forward tracking with standardized taxonomy naming and tags.
+Local portfolio correlation is distinct from BRAIN self-correlation and from competition `Uniqueness`. For current official score/submission rules, see [BRAIN Rules and Submission](BRAIN_RULES_AND_SUBMISSION.md).
 
-### Usage
-```bash
-alphafind submit [OPTIONS] <ALPHA_ID>
-```
+## Research helpers
 
-### Options
-| Flag | Short | Description |
-|:---|:---:|:---|
-| `<ALPHA_ID>` | | Alpha ID to submit |
-| `--name <NAME>` | | Institutional Alpha name |
-| `--category <CAT>` | | Alpha category (e.g., `FUNDAMENTAL`, `PRICE_VOLUME`) |
-| `--color <COLOR>` | | Color classification (`BLUE`, `GREEN`, `PURPLE`, `ORANGE`, `RED`) |
-| `--tags <TAGS>` | | Comma-separated category tags |
-| `--skip-checks` | | Skip pre-flight 8/8 check verification (not recommended) |
+`shadow` reads aggregate `userCount`/`alphaCount` data from `/data-sets` and field usage from `/data-fields`; its local profile allocation is parsed from `portfolio_os.json`. Exact field-to-dataset mappings come from live/cache metadata or downloaded local metadata; consistent local prefixes may be used as an explicitly labeled inference. Field metadata may come from a cache labeled with its age. Higher usage means more observed platform participation, not that those users' PnLs are correlated. The platform does not expose competitors' formulas or merged PnL through these endpoints. Therefore this command cannot calculate or forecast future official `Uniqueness`.
 
-### Example
-```bash
-alphafind submit <ALPHA_ID> \
-  --name "US_D1_TOP1000_PV_VwapReversal_Dec5" \
-  --color BLUE \
-  --tags "PRICE_VOLUME,VWAP,TOP1000"
-```
+When local PnL data is available, `shadow` can build a usage-weighted basket from the user's own allocated Alpha PnLs. For each local Alpha, it averages fresh mapped-field `alphaCount` values within each dataset, then averages across the Alpha's datasets; it falls back to dataset `alphaCount` where field counts are unavailable. Fresh field counts come from live responses or cache entries no older than 24 hours. It then compares that basket with an equal-weight merge of the same local profile. This is a local sensitivity diagnostic derived from the user's own series, not a crowd PnL estimate. `--simulate` with `--expr` runs one private simulation to obtain that expression's PnL for the local diagnostic. The command may display the current official Uniqueness returned by the account API, but it does not project a future score.
 
----
+For a candidate formula, the command also reports mean field `alphaCount` and `userCount` as a share of the corresponding dataset counts when both are available. This estimates how commonly those fields are used within their datasets; it does not estimate PnL correlation.
 
-## 9. `alphafind impact`
+`radar`, `matrix`, `blueprint`, and `shadow` offer research context but do not establish that a dataset is uncrowded, an alpha is unique, or an expression will pass. `matrix` and `blueprint` contain heuristic assumptions. Treat each output as a hypothesis to verify with current platform simulations and data.
 
-Simulates the exact equal-weighted portfolio merge impact of adding a candidate alpha to the active 42-alpha Out-of-Sample portfolio over 1,236 common backtest days.
+## Account and data handling
 
-### Usage
-```bash
-alphafind impact <ALPHA_ID>
-```
-
-### Output
-* Delta Merged Portfolio Sharpe ($\Delta \text{Sharpe}$).
-* Delta Annualized PnL ($\Delta \text{PnL}$).
-* Delta Annualized Volatility ($\Delta \text{Vol}$) and variance collapse indicator.
-* Delta Average Pairwise Correlation ($\Delta \overline{\rho}$).
-* Maximum Pairwise Correlation and direct OS average correlation.
-* **Safety Buffer to 70% Limit**: Distance $(70.0\% - \max \rho)$ preventing future self-correlation violations.
-* Automated Recommendation verdict: `🌟 [RECOMMENDED]`, `🟡 [CAUTION]`, or `❌ [UNSUBMITTABLE]`.
-
----
-
-## 10. `alphafind radar`
-
-Live Dynamic Crowd Census Radar querying all 150 datasets on WorldQuant BRAIN Production API to track factor crowding and quant migration velocity.
-
-### Usage
-```bash
-alphafind radar [OPTIONS]
-```
-
-### Options
-| Flag | Short | Description | Default |
-|:---|:---:|:---|:---:|
-| `--region <REGION>` | `-r` | Target market region | `USA` |
-| `--top <NUM>` | `-t` | Number of ranked datasets to display | `15` |
-| `--filter <KEYWORD>` | `-f` | Filter by dataset name or subcategory | None |
-| `--green-only` | | Show only Green Sanctuaries (`users < 300`) | `false` |
-
-### Examples
-```bash
-# General live crowd radar across all USA datasets
-alphafind radar
-
-# Monitor News and Sentiment packages
-alphafind radar --filter news
-
-# View only uncrowded Green Sanctuaries
-alphafind radar --green-only
-```
-
----
-
-## 11. `alphafind matrix`
-
-2D Dynamic Cross-Dataset Co-occurrence Matrix and Hyper-Synergy Analyzer for formulas combining $K \ge 2$ datasets. Maps factor interactions, quant migration velocities ($\vec{v}$), and evaluates the Composite Hybrid Uniqueness Index (CHUI).
-
-### Usage
-```bash
-alphafind matrix [OPTIONS]
-```
-
-### Options
-| Flag | Short | Description | Default |
-|:---|:---:|:---|:---:|
-| `--universe <UNI>` | `-u` | Target universe (`TOP3000`, `TOP1000`, `TOP500`, `TOP200`) | `TOP200` |
-| `--expr <EXPR>` | `-e` | FASTEXPR formula to analyze for $K \ge 2$ synergy & roles | None |
-| `--region <REGION>` | `-r` | Target region | `USA` |
-
-### Examples
-```bash
-# Display 2D Co-occurrence Heatmap for TOP3000
-alphafind matrix --universe TOP3000
-
-# Evaluate a multi-dataset alpha formula on the heatmap
-alphafind matrix --universe TOP3000 --expr "f1 = rank(vwap / close - 1); f2 = rank(volume / adv20); signal = f1 * (1 + f2); group_neutralize(signal, densify(subindustry))"
-```
-
----
-
-## 12. `alphafind tune`
-
-Hyperparameter AutoTuner: autonomous multi-dimensional sweep across signal decay, outer non-linear power exponent, and neutralization groups to conquer WorldQuant BRAIN Fitness thresholds ($\ge 1.50$).
-
-### Usage
-```bash
-alphafind tune [OPTIONS] --expr "<FASTEXPR>"
-```
-
-### Options
-| Flag | Short | Description | Default |
-|:---|:---:|:---|:---:|
-| `--expr <EXPR>` | `-e` | FASTEXPR alpha formula to tune | Required |
-| `--universe <UNI>` | `-u` | Target universe | `TOP1000` |
-| `--target-fitness <FIT>` | | Target Fitness to achieve | `1.50` |
-| `--decay <DECAY>` | `-d` | Base decay parameter | `10` |
-| `--neutralization <NEUT>`| `-n` | Base neutralization (`SUBINDUSTRY`, `MARKET`, `SECTOR`)| `SUBINDUSTRY` |
-
-### Example
-```bash
-alphafind tune --universe TOP1000 --target-fitness 1.50 --decay 10 --expr "signal = rank(vwap / close - 1); sig_neut = group_neutralize(signal, densify(subindustry)); signed_power(sig_neut, 2.0)"
-```
-
----
-
-## 13. `alphafind blueprint`
-
-**Inverse Portfolio Optimization & Factor Gap Forecasting**: Performs structural audit on active Out-of-Sample portfolio (45 alphas) across economic factor pillars, universes, and temporal decay frequencies ("sound"). Forecasts exact target archetypes to collapse portfolio covariance ($\overline{\rho} \le 0.10$) and suppress platform `uniquenessScore` toward $\le 0.00$.
-
-### Usage
-```bash
-alphafind blueprint [OPTIONS]
-```
-
-### Options
-| Flag | Short | Description | Default |
-|:---|:---:|:---|:---:|
-| `--universe <UNI>` | `-u` | Target universe filter (`TOP3000`, `TOP1000`, `TOP500`, `TOP200`) | None |
-| `--export <PATH>` | | Export generated FastExpr candidate skeletons to markdown file | None |
-
-### Examples
-```bash
-# Generate master inverse portfolio blueprint report
-alphafind blueprint
-
-# Focus blueprint on under-represented TOP200 universe
-alphafind blueprint --universe TOP200
-
-# Export generated archetypes to a markdown file
-alphafind blueprint --universe TOP3000 --export blueprints_day27.md
-```
-
----
-
-## 14. `alphafind shadow`
-
-**Synthetic Crowd Shadow Portfolio & Adversarial Uniqueness Optimizer**: Synthesizes the master platform crowd PnL curve calibrated against live API ground truth anchor. Decomposes crowd factor exposure across Fundamental, Analyst, Options, and Momentum. Audits which portfolio alphas drive crowd co-movement, and projects the exact phase shift ($\Delta \text{uniquenessScore}$) for candidate alphas.
-
-### Usage
-```bash
-alphafind shadow [OPTIONS]
-```
-
-### Options
-| Flag | Short | Description | Default |
-|:---|:---:|:---|:---:|
-| `--candidate <ID>` | `-c` | Candidate Alpha ID to simulate exact crowd phase shift ($\Delta \text{uniqueness}$) | None |
-| `--anchor <VAL>` | | Override ground truth anchor correlation | Live API value |
-
-### Phase Shift Verdicts
-* 💎 **ADVERSARIAL HEDGE** ($\Delta \text{uniqueness} \le -0.003$ or $\rho_{\text{crowd}} < -0.15$): Directly counters crowd momentum, collapsing platform correlation.
-* 🟢 **ORTHOGONAL SANCTUARY** ($\Delta \text{uniqueness} \le -0.001$ or $\rho_{\text{crowd}} \le 0.15$): Safely diversifies away crowd co-movement.
-* 🟡 **NEUTRAL BUFFER** ($\Delta \text{uniqueness} \le +0.001$): Marginal correlation impact.
-* 🔴 **CROWD CLONE** ($\Delta \text{uniqueness} > +0.001$): Strongly co-moves with crowd; increases uniquenessScore (unsubmittable).
-
-### Examples
-```bash
-# Audit active portfolio against Synthetic Crowd Shadow
-alphafind shadow
-
-# Simulate adversarial impact for a candidate Alpha
-alphafind shadow --candidate <ALPHA_ID>
-
-# Override anchor with custom calibration
-alphafind shadow --anchor 0.50
-```
-
+- Use only an account controlled by the participant. Do not share credentials or account IDs.
+- Keep expressions, Alpha IDs, private PnL, credentials, and pending performance out of tracked files and logs shared publicly.
+- Keep local private files permission-restricted and excluded from version control.

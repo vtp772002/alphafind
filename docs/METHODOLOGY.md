@@ -1,109 +1,71 @@
-# Quantitative Doctrine & Mathematical Methodology
+# Research methodology
 
-> **Institutional Framework for Orthogonal Alpha Generation & Portfolio Optimization on WorldQuant BRAIN**
+This document describes AlphaFind's local research approach. It does not define WorldQuant BRAIN's official scoring formula. Current platform submission criteria and Challenge rules are summarized in [BRAIN Rules and Submission](BRAIN_RULES_AND_SUBMISSION.md).
 
----
+## 1. Portfolio diversification: useful model, limited claim
 
-## 1. The Orthogonal Variance Law vs. Portfolio Dilution
+For an equal-weight portfolio of `N` signals with equal individual volatility and the same pairwise correlation `rho`, a simplified variance model gives:
 
-In quantitative portfolio construction, WorldQuant BRAIN calculates the composite Out-of-Sample (OS) portfolio performance using an equal-weighted multi-alpha formulation:
+```text
+portfolio variance / single-signal variance = 1/N + (N - 1) * rho/N
+```
 
-$$\text{Sharpe}_{\text{merged}} = \frac{\overline{R}}{\overline{\sigma} \sqrt{\frac{1}{N} + \frac{N-1}{N} \overline{\rho}}}$$
+This illustrates why adding highly correlated signals may contribute little diversification. The assumptions are restrictive: actual signals have different returns, volatilities, correlations, missing dates, and portfolio weights. This equation is not BRAIN's `isScore` formula and does not predict a leaderboard score.
 
-Where:
-* $N$ is the number of active deployed alphas in the portfolio.
-* $\overline{R}$ is the average annualized alpha return.
-* $\overline{\sigma}$ is the average alpha return volatility.
-* $\overline{\rho}$ is the average pairwise Pearson correlation among all alpha pairs over 1,236 common backtest days.
+AlphaFind's local Pearson audit measures correlation on overlapping dates from the PnL series available to the tool. A local target such as `abs(rho) <= 0.15` is an internal portfolio research preference, not the platform's published self-correlation threshold and not the platform's cross-user `Uniqueness` metric.
 
-### The High-Correlation Trap ($\overline{\rho} \approx 0.55$)
-When researchers deploy alphas sharing common risk factors (e.g., standard DuPont ratios, duplicate fundamental cash-flow signals, or momentum indicators on `TOP1000`), the denominator converges rapidly:
+## 2. Factor ideas are hypotheses
 
-$$\lim_{N \to \infty} \sqrt{\frac{1}{N} + \frac{N-1}{N} \overline{\rho}} = \sqrt{\overline{\rho}} \approx \sqrt{0.55} \approx 0.74$$
+The code groups candidate ideas into internal labels such as analyst, options, microstructure, quality, risk, short interest, and news. These are research buckets, not an official BRAIN taxonomy or proof that a dataset is predictive or uncrowded.
 
-Under this regime:
-* Merged portfolio Sharpe is mathematically capped at $\approx 2.25$.
-* Merged performance metric (`isScore`) stagnates, regardless of deploying 20, 50, or 100 additional alphas.
-* Submitting duplicate signals increases operational risk and consumes submission days without improving portfolio efficiency.
+For each candidate, record and compare:
 
-### Orthogonal Covariance Collapse ($\overline{\rho} \le 0.10$)
-By engineering alphas from genuinely independent factor pillars (e.g., pure single-stock option volatility surfaces, intraday volume distribution / microstructure VWAP, and short borrow fee dynamics), cross-covariance collapses towards zero:
+- economic rationale and information timing;
+- data availability, delay, and missingness;
+- universe and neutralization settings;
+- turnover, drawdown, Sharpe, Fitness, and OOS behavior;
+- overlap with the existing portfolio and robustness across sub-universes.
 
-$$\lim_{\overline{\rho} \to 0} \text{Sharpe}_{\text{merged}} = \sqrt{N} \times \overline{\text{Sharpe}}$$
+Treat recommendations about a specific universe, dataset, decay, exponent, or neutralization as hypotheses to test. A transformation can improve one metric while harming another; no parameter range guarantees a passing result.
 
-True orthogonality creates square-root portfolio diversification scaling:
-* Merged Sharpe expands beyond **$4.00 - 6.00+$**.
-* Portfolio variance is diversified away while alpha returns compound additively.
-* Platform ranking metrics surge exponentially.
+## 3. Avoid selection bias
 
----
+Repeatedly tuning a formula on the same in-sample period can overfit even when each individual simulation looks plausible. Keep a record of tried variants, avoid selecting solely on the best observed score, and use platform OOS results as a separate validation signal. Preserve a holdout or a predeclared evaluation rule for local experiments where possible.
 
-## 2. Factor Pillar Taxonomy & Neutralization Matrix
+Do not describe an association, backtest, or simulated PnL as causal evidence. Avoid conclusions that depend on one short interval or one universe.
 
-AlphaFind organizes quantitative hypotheses into distinct economic factor pillars. Each pillar requires specific neutralization regimes to preserve signal efficacy:
+## 4. Platform submission checks
 
-| Factor Pillar | Underlying Datasets | Best Universe | Recommended Neutralization | Quantitative Rationale |
-|:---|:---|:---:|:---:|:---|
-| **ANALYST** | Consensus EPS Revisions, Price Targets | `TOP500` | `SECTOR` or `MARKET` | Analyst upgrades occur in sector-wide waves. Subindustry neutralization strips systemic revisions. |
-| **OPTIONS** | Implied Volatility Surface, VRP, Skew | `TOP1000` / `TOP3000` | `MARKET` or `SUBINDUSTRY` | Option variance premiums are idiosyncratic across single-stock equities. |
-| **MICRO** | VWAP Slippage, Order Imbalance, Gaps | `TOP1000` | `SUBINDUSTRY` | Captures intraday liquidity dislocations and institutional execution drag. |
-| **QUAL** | ROIC, Accruals, Free Cash Flow Yield | `TOP1000` / `TOP500` | `SUBINDUSTRY` | Long-term fundamental quality spreads; robust across market regimes. |
-| **RISK** | Idiosyncratic Risk, Unsystematic Volatility Curvature | `TOP1000` / `TOP500` | `SUBINDUSTRY` | Non-linear unhedged variance spreads and residual volatility. |
-| **SHORT** | Short Interest, Borrow Fee Rates, Squeeze Pressure | `TOP2000` / `TOP1000` | `MARKET` | Crowded short squeezes and borrow supply constraints. |
+The current BRAIN Learn page lists Fitness, Sharpe, Turnover, Weight, Sub-universe, and Self-correlation criteria. The exact Delay 0/Delay 1 thresholds and the sub-universe rule are in [BRAIN Rules and Submission](BRAIN_RULES_AND_SUBMISSION.md).
 
----
+The platform's visible Learn article currently presents six criterion groups. AlphaFind's API check code contains an eight-check presentation, but its parser currently treats responses with no explicit `FAIL` as passing. Therefore:
 
-## 3. Single-Dataset Factor Purity vs. Hierarchical Conditioning
+- a missing, partial, or changed API response must not be treated as approval;
+- a local pass is not proof that the BRAIN UI will allow submission;
+- the API response must be checked for complete coverage and freshness before this gate is trusted.
 
-### Pathway A: Single-Dataset Factor Purity
-* **Objective:** Extract 100% of predictive power from a single, cohesive institutional dataset (e.g., pure options IV term structure or pure analyst target revisions).
-* **Advantage:** Preserves maximum uniqueness under platform classification (`DATA_USAGE: SINGLE_DATA_SET`), avoiding composite dataset penalties.
+## 5. Internal review gates
 
-### Pathway B: Hierarchical Conditioning
-* **Objective:** Combine distinct datasets without naive linear addition ($A + B$).
-* **Method:** Use substantive economic conditioning where **Dataset A** acts as the fundamental anchor and **Dataset B** acts as an execution/volatility catalyst:
-  $$\text{Signal} = \text{Signal}_{\text{Anchor}} \times \mathbb{I}(\text{Filter}_{\text{Catalyst}} > \theta)$$
-* **Advantage:** Filters out regime-dependent false positives while maintaining clear causal economic rationale.
+These gates are useful only when backed by current data and adequate coverage:
 
----
+1. Re-run the exact candidate and settings on the intended account.
+2. Confirm each official BRAIN criterion and OOS eligibility on the platform.
+3. Compute local correlation only on a stated date intersection and report sample size, missingness, and cache age.
+4. Compare portfolio impact using a clearly stated weighting rule; label it a local estimate.
+5. Review candidate provenance and ensure no pending formula, ID, or private metrics enter tracked public files.
 
-## 4. Non-Linear Convexity & The Fitness Denominator Trap
+A failed or unavailable data fetch should fail closed. Zero overlap, stale PnL, or an empty active portfolio is not evidence of zero correlation or good diversification.
 
-WorldQuant BRAIN defines the Fitness metric as:
+## 6. Crowd usage estimate
 
-$$\text{Fitness} = \text{Sharpe} \times \sqrt{\frac{|\text{Annualized Return}|}{\max(\text{Turnover}, 0.125)}}$$
+`alphafind shadow` maps formula identifiers to datasets and reads aggregate `userCount`/`alphaCount` from BRAIN `/data-sets` and `/data-fields`. It also counts dataset allocations found in the local `portfolio_os.json`. Field mappings use live/cache API metadata or local downloaded metadata; when neither maps a field directly, a unique dataset association shared by that field prefix in local metadata is labeled as an inference. These counts measure participation and observed concept usage only. They do not reveal which competitors hold a field, how they weight it, their PnL, or the correlation of their merged portfolios.
 
-### The Denominator Clamp
-The platform clamps the turnover denominator at $\max(\text{Turnover}, 0.125)$. Consequently:
-* Reducing turnover below $12.5\%$ yields **zero marginal increase** in Fitness.
-* Hyper-optimizing decay to achieve low turnover (e.g., $4\%$) unnecessarily suppresses annual returns without denominator benefit.
+When PnLs are available, `shadow` can create a usage-weighted basket from the user's own allocated Alpha PnLs. It averages fresh mapped-field `alphaCount` values per dataset and then across each Alpha's mapped datasets; where no fresh field counts exist it falls back to dataset `alphaCount`. Fresh field counts come from a live response or cache no older than 24 hours. It compares that basket with an equal-weight merge from the same local profile. This is a local sensitivity diagnostic, not a crowd PnL sample; it does not establish a quantitative relationship with cross-user correlation. The command can display the current official Uniqueness from the account competition response, but it must not add the local proxy-correlation change to that score or present it as a future-score forecast. From aggregate usage counts alone, future Uniqueness is not identifiable.
 
-### Convex Transformations
-To optimize Fitness past **$\ge 1.50$ (GOOD)** or **$\ge 2.50$ (SPECTACULAR)**:
-1. Calibrate decay to keep turnover naturally within the sweet spot: $\text{Turnover} \in [10\%, 25\%]$.
-2. Apply monotonic non-linear convex transformations `signed_power(signal, p)` with power parameter $p \in [3.8, 4.4]$:
-   $$\text{convex\_weight} = \text{sign}(\text{signal}) \cdot |\text{signal}|^p$$
-3. Couple with precise truncation limits (`truncation: 0.065 - 0.07`) to concentrate conviction into the highest-signal deciles without triggering `CONCENTRATED_WEIGHT` violations.
+For candidate fields, the CLI can report the mean ratio `field alphaCount / dataset alphaCount` and `field userCount / dataset userCount`, using matched region, universe, and delay settings. These are popularity measures. A small ratio may prioritize a candidate for further research, but it does not imply low PnL correlation or high Uniqueness.
 
----
+## Further reading
 
-## 5. The 8 Mandatory In-Sample Platform Submission Checks
-
-Every Alpha must achieve **8/8 PASS** on `GET /alphas/{id}/check` to be admitted into Out-of-Sample forward tracking:
-
-| # | Check Metric | Official PASS Threshold | Quantitative Meaning & System Standard |
-|:---:|:---|:---|:---|
-| 1 | **LOW_SHARPE** | **$\text{Sharpe} \ge 1.25$** | System target: $\ge 1.35$. Remediate with `MARKET` or `SECTOR` neutralization. |
-| 2 | **LOW_FITNESS** | **$\text{Fitness} \ge 1.00$** | System target: **$\ge 1.50$ (Grade: GOOD)**. Optimize via decay and power scaling. |
-| 3 | **LOW_TURNOVER** | **$\text{Turnover} \ge 1.0\%$** | Prevents dead/static portfolio allocations. |
-| 4 | **HIGH_TURNOVER** | **$\text{Turnover} \le 70.0\%$** | Avoids severe execution slippage. Optimal range: $8\% - 25\%$. |
-| 5 | **CONCENTRATED_WEIGHT** | **PASS** | Weight distribution check; requires `truncation` $\le 0.08$ (optimal: $0.065 - 0.07$). |
-| 6 | **LOW_SUB_UNIVERSE_SHARPE** | **PASS** | Profitability must hold across all market-cap sub-tiers within the universe. |
-| 7 | **MATCHES_COMPETITION** | **PASS** | Platform settings: `Region: USA`, `EQUITY`, `Delay: 1`, `Pasteurization: ON`. |
-| 8 | **SELF_CORRELATION** | **$\text{Corr} \le 0.70$** OR $\text{Sharpe}_{\text{new}} \ge 1.10 \times \text{Sharpe}_{\text{old}}$ | Pairwise correlation against active portfolio alphas must satisfy safety limits ($\le 0.15$ target). |
-
----
-
-## 6. Further Documentation
-
-* [BRAIN Knowledge Graph](BRAIN_KNOWLEDGE_GRAPH.md) — Curated reference of core FASTEXPR operators, syntax rules, and heuristic unsticking recipes.
+- [BRAIN rules and submission](BRAIN_RULES_AND_SUBMISSION.md)
+- [BRAIN knowledge graph](BRAIN_KNOWLEDGE_GRAPH.md)
+- [Architecture and implementation limits](ARCHITECTURE.md)

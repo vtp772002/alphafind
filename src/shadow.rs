@@ -4,16 +4,16 @@ use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-/// Classification of candidate Alpha's phase shift relative to the platform crowd PnL
+/// Heuristic classification relative to a locally synthesized comparison series.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum UniquenessPhaseVerdict {
-    /// Highly negative crowd correlation; aggressively pulls down portfolio uniquenessScore
+    /// The synthetic proxy correlation decreased; this says nothing definitive about platform Uniqueness.
     AdversarialNegativeHedge,
-    /// Orthogonal/uncorrelated; safely expands portfolio diversification and lowers uniquenessScore
+    /// Low correlation with this synthetic proxy.
     OrthogonalSanctuary,
-    /// Marginal co-movement; neutral impact on portfolio uniquenessScore
+    /// Marginal co-movement with this synthetic proxy.
     NeutralBuffer,
-    /// Strongly co-moves with crowd; increases portfolio uniquenessScore (DANGEROUS)
+    /// Strong co-movement with this synthetic proxy.
     DangerousCrowdClone,
 }
 
@@ -21,18 +21,16 @@ impl UniquenessPhaseVerdict {
     pub fn badge(&self) -> colored::ColoredString {
         match self {
             Self::AdversarialNegativeHedge => {
-                "💎 ADVERSARIAL HEDGE (Negative Crowd Beta — Suppresses uniquenessScore)"
+                "LOWER SYNTHETIC-PROXY CORRELATION (not an official score)"
                     .cyan()
                     .bold()
             }
-            Self::OrthogonalSanctuary => {
-                "🟢 ORTHOGONAL SANCTUARY (Zero Crowd Co-movement — High Uniqueness)"
-                    .green()
-                    .bold()
-            }
-            Self::NeutralBuffer => "🟡 NEUTRAL BUFFER (Marginal Co-movement)".yellow(),
+            Self::OrthogonalSanctuary => "LOW SYNTHETIC-PROXY CORRELATION (not an official score)"
+                .green()
+                .bold(),
+            Self::NeutralBuffer => "🟡 SMALL CHANGE IN SYNTHETIC-PROXY CORRELATION".yellow(),
             Self::DangerousCrowdClone => {
-                "🔴 CROWD CLONE (Co-moves with Crowd — Surges uniquenessScore)"
+                "🔴 HIGH SYNTHETIC-PROXY CORRELATION (not an official score)"
                     .red()
                     .bold()
             }
@@ -40,20 +38,20 @@ impl UniquenessPhaseVerdict {
     }
 }
 
-/// Master Synthetic Crowd Shadow Portfolio representing aggregate platform quant PnL
+/// Synthetic local comparison series. It does not represent aggregate platform PnL.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrowdShadowPortfolio {
-    /// Ground truth correlation anchor with user portfolio
+    /// Scalar calibration input used to construct the synthetic series.
     pub anchor_uniqueness: f64,
     /// Number of common trading days in the backtest time series
     pub n_trading_days: usize,
     /// Percentage weights of the decomposed crowd factor pillars
     pub basis_weights: HashMap<String, f64>,
-    /// Master daily PnL time series of the synthetic crowd
+    /// Master daily PnL time series of the synthetic local comparison series
     pub shadow_pnl: HashMap<String, f64>,
 }
 
-/// Detailed simulation report evaluating candidate Alpha's impact on platform uniquenessScore
+/// Heuristic report comparing a candidate with the synthetic local series.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UniquenessImpactReport {
     pub candidate_id: String,
@@ -76,8 +74,8 @@ pub struct PortfolioCrowdAuditReport {
     pub pillar_crowd_exposures: HashMap<String, f64>,
 }
 
-/// Calibrates the Synthetic Crowd Shadow Portfolio against user's active portfolio PnLs.
-/// Uses the ground truth anchor to synthesize the master crowd PnL curve.
+/// Constructs a synthetic comparison series from local portfolio PnLs and a scalar input.
+/// It cannot estimate competitor PnL or official BRAIN Uniqueness.
 pub fn calibrate_shadow_portfolio(
     portfolio_alphas: &[PortfolioAlpha],
     os_pnls: &HashMap<String, HashMap<String, f64>>,
@@ -237,7 +235,7 @@ pub fn calibrate_shadow_portfolio(
     })
 }
 
-/// Projects the exact change in platform uniquenessScore (Delta uniqueness) when adding a candidate Alpha.
+/// Projects change in correlation with a synthetic local series, not platform Uniqueness.
 pub fn project_uniqueness_impact(
     candidate_id: &str,
     candidate_pnl: &HashMap<String, f64>,
@@ -298,7 +296,7 @@ pub fn project_uniqueness_impact(
         }
     }
 
-    // 5. Projected Uniqueness with Crowd
+    // 5. Correlation with the synthetic local comparison series
     let (projected_uniqueness, _) =
         pearson_correlation(&new_merged_pnl, &shadow_portfolio.shadow_pnl);
     let current_uniqueness = shadow_portfolio.anchor_uniqueness;
@@ -308,22 +306,23 @@ pub fn project_uniqueness_impact(
     let (verdict, rec) = if cand_crowd_corr < -0.15 || delta_uniqueness <= -0.003 {
         (
             UniquenessPhaseVerdict::AdversarialNegativeHedge,
-            "APEX CANDIDATE: Directly counters crowd momentum! Submit to aggressively collapse uniquenessScore.".to_string(),
+            "The candidate lowers correlation with this synthetic proxy. Verify crowd behavior independently; this is not an Uniqueness forecast.".to_string(),
         )
     } else if cand_crowd_corr <= 0.15 || delta_uniqueness <= -0.001 {
         (
             UniquenessPhaseVerdict::OrthogonalSanctuary,
-            "HIGH PRIORITY: Orthogonal flow. Diversifies portfolio and suppresses co-movement with platform.".to_string(),
+            "The candidate has low correlation with this synthetic proxy. This does not establish platform-wide diversification.".to_string(),
         )
     } else if delta_uniqueness <= 0.001 {
         (
             UniquenessPhaseVerdict::NeutralBuffer,
-            "ACCEPTABLE BUFFER: Marginal correlation impact. Acceptable if In-Sample Fitness >= 1.50.".to_string(),
+            "The synthetic proxy correlation changes little. Evaluate with independent evidence."
+                .to_string(),
         )
     } else {
         (
             UniquenessPhaseVerdict::DangerousCrowdClone,
-            "MORATORIUM WARNING: High crowd co-movement! Submitting will increase platform correlation and damage rank.".to_string(),
+            "The candidate has high correlation with this synthetic proxy. This does not predict official Uniqueness or rank.".to_string(),
         )
     };
 
@@ -339,7 +338,7 @@ pub fn project_uniqueness_impact(
     })
 }
 
-/// Audits all active Out-of-Sample alphas against the Synthetic Crowd Shadow Portfolio
+/// Compares local active Out-of-Sample alphas with the synthetic local series.
 pub fn audit_portfolio_crowd_exposure(
     portfolio_alphas: &[PortfolioAlpha],
     os_pnls: &HashMap<String, HashMap<String, f64>>,
@@ -392,7 +391,7 @@ pub fn audit_portfolio_crowd_exposure(
     }
 }
 
-/// Formats and prints the Master Crowd Shadow Audit Report to console
+/// Prints a diagnostic against the synthetic local series.
 pub fn print_shadow_audit_report(
     report: &PortfolioCrowdAuditReport,
     shadow_portfolio: &CrowdShadowPortfolio,
@@ -400,13 +399,13 @@ pub fn print_shadow_audit_report(
     println!("\n═════════════════════════════════════════════════════════════════════════");
     println!(
         "  {}",
-        "AlphaFind Quant Engine — Synthetic Crowd Shadow Portfolio & Audit"
+        "AlphaFind — Synthetic Local Proxy Diagnostic (Not Official Uniqueness)"
             .bold()
             .cyan()
     );
     println!("═════════════════════════════════════════════════════════════════════════");
     println!(
-        "  Ground Truth Platform Anchor:   uniquenessScore = {} (Official API)",
+        "  Scalar calibration input:       {} (not a measured platform correlation)",
         format!("{:.2}", report.baseline_crowd_corr).yellow().bold()
     );
     println!(
@@ -416,7 +415,7 @@ pub fn print_shadow_audit_report(
     );
     println!("  ─────────────────────────────────────────────────────────────────────────");
 
-    println!("\n  👥 CROWD FACTOR BASIS DECOMPOSITION (Census-Calibrated Weights):");
+    println!("\n  Synthetic-series basis weights (assumptions, not platform census weights):");
     for (pillar, w) in &shadow_portfolio.basis_weights {
         let bar = "█".repeat((*w * 30.0) as usize);
         println!(
@@ -427,9 +426,9 @@ pub fn print_shadow_audit_report(
         );
     }
 
-    println!("\n  🔴 TOP 5 HIGHEST CROWD-CORRELATED ALPHAS (Dragging Uniqueness Down):");
+    println!("\n  Top 5 correlations with this synthetic series:");
     println!("  ┌──────────┬────────────────────────────────────────────┬─────────────┐");
-    println!("  │ Alpha ID │ Name                                       │ Crowd Corr  │");
+    println!("  │ Alpha ID │ Name                                       │ Proxy Corr  │");
     println!("  ├──────────┼────────────────────────────────────────────┼─────────────┤");
     for (id, name, corr) in &report.highest_crowd_alphas {
         let display_name = if name.len() > 42 {
@@ -446,9 +445,9 @@ pub fn print_shadow_audit_report(
     }
     println!("  └──────────┴────────────────────────────────────────────┴─────────────┘");
 
-    println!("\n  🟢 TOP 5 MOST DIVERSIFIED / ORTHOGONAL ALPHAS (Protecting Uniqueness):");
+    println!("\n  5 lowest correlations with this synthetic series:");
     println!("  ┌──────────┬────────────────────────────────────────────┬─────────────┐");
-    println!("  │ Alpha ID │ Name                                       │ Crowd Corr  │");
+    println!("  │ Alpha ID │ Name                                       │ Proxy Corr  │");
     println!("  ├──────────┼────────────────────────────────────────────┼─────────────┤");
     for (id, name, corr) in &report.lowest_crowd_alphas {
         let display_name = if name.len() > 42 {
@@ -465,17 +464,17 @@ pub fn print_shadow_audit_report(
     }
     println!("  └──────────┴────────────────────────────────────────────┴─────────────┘");
 
-    println!("\n  📊 AVERAGE CROWD EXPOSURE BY FACTOR PILLAR:");
+    println!("\n  Average correlation by local category:");
     for (pillar, avg_c) in &report.pillar_crowd_exposures {
         let status = if *avg_c > 0.45 {
-            "🔴 HIGH CROWD CO-MOVEMENT (Saturated)".red()
+            "HIGH CORRELATION WITH SYNTHETIC SERIES".red()
         } else if *avg_c > 0.20 {
             "🟡 MODERATE".yellow()
         } else {
-            "🟢 LOW CO-MOVEMENT (Safe Sanctuary)".green()
+            "LOW CORRELATION WITH SYNTHETIC SERIES".green()
         };
         println!(
-            "    {:<16} : Avg Crowd Corr: {:>+6.2}% | {}",
+            "    {:<16} : Avg Proxy Corr: {:>+6.2}% | {}",
             pillar.cyan(),
             avg_c * 100.0,
             status
@@ -485,12 +484,12 @@ pub fn print_shadow_audit_report(
     println!("\n═════════════════════════════════════════════════════════════════════════\n");
 }
 
-/// Formats and prints the candidate Uniqueness Impact Report to console
+/// Prints a candidate comparison with the synthetic local series.
 pub fn print_uniqueness_impact_report(report: &UniquenessImpactReport) {
     println!("\n═════════════════════════════════════════════════════════════════════════");
     println!(
         "  {}",
-        "AlphaFind Quant Engine — Adversarial Crowd Uniqueness Simulation"
+        "AlphaFind — Synthetic Proxy Comparison (Not Official Uniqueness)"
             .bold()
             .yellow()
     );
@@ -500,7 +499,7 @@ pub fn print_uniqueness_impact_report(report: &UniquenessImpactReport) {
         report.candidate_id.cyan().bold()
     );
     println!(
-        "  Crowd Co-Movement:        {:>+6.2}% (Correlation vs Entire BRAIN Platform)",
+        "  Synthetic-series Corr:    {:>+6.2}% (locally constructed proxy)",
         report.cand_crowd_corr * 100.0
     );
     println!(
@@ -509,11 +508,11 @@ pub fn print_uniqueness_impact_report(report: &UniquenessImpactReport) {
     );
     println!("  ─────────────────────────────────────────────────────────────────────────");
     println!(
-        "  Current uniquenessScore:  {:.2}",
+        "  Calibration input:        {:.2}",
         report.current_uniqueness
     );
     println!(
-        "  Projected uniquenessScore:{:.2}",
+        "  Candidate proxy corr:     {:.2}",
         report.projected_uniqueness
     );
 
@@ -529,7 +528,7 @@ pub fn print_uniqueness_impact_report(report: &UniquenessImpactReport) {
             .bold()
     };
 
-    println!("  Delta Uniqueness (Δ):     {}", delta_colored);
+    println!("  Delta proxy correlation:  {}", delta_colored);
     println!("  ─────────────────────────────────────────────────────────────────────────");
     println!("  Phase Shift Verdict:      {}", report.verdict.badge());
     println!(

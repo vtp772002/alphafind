@@ -105,7 +105,9 @@ fn test_analyze_formula_hyper_synergy_apex() {
     );
     assert!(analysis.composite_uniqueness_index >= 0.80);
     assert!(
-        analysis.uniqueness_verdict.contains("ORTHOGONAL")
-            || analysis.uniqueness_verdict.contains("INSTITUTIONAL")
+        analysis
+            .uniqueness_verdict
+            .contains("not a Uniqueness forecast")
+            || analysis.uniqueness_verdict.contains("heuristic")
     );
 }
