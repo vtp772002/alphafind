@@ -46,7 +46,10 @@ pub fn get_cache_dir() -> PathBuf {
 }
 
 /// Loads the local PnL cache along with its age and freshness information.
-pub fn load_pnl_cache() -> (HashMap<String, HashMap<String, f64>>, Option<std::time::Duration>) {
+pub fn load_pnl_cache() -> (
+    HashMap<String, HashMap<String, f64>>,
+    Option<std::time::Duration>,
+) {
     let cache_file = get_cache_dir().join("portfolio_pnl.json");
     if !cache_file.exists() {
         return (HashMap::new(), None);
@@ -138,7 +141,9 @@ pub fn field_config_label(config: &crate::crowd_allocation::FieldConfig) -> Stri
 }
 
 /// Helper to derive field configuration from a portfolio alpha
-pub fn profile_field_config(alpha: &crate::models::PortfolioAlpha) -> crate::crowd_allocation::FieldConfig {
+pub fn profile_field_config(
+    alpha: &crate::models::PortfolioAlpha,
+) -> crate::crowd_allocation::FieldConfig {
     let settings = alpha.settings.as_ref();
     let string_setting = |camel: &str, snake: &str| {
         settings

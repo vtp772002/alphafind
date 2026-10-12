@@ -53,7 +53,10 @@ fn test_pearson_insufficient_days_fails_closed() {
     let y = make_pnl(&[("2020-01-01", 3.0), ("2020-01-02", 4.0)]);
     let (corr, days) = pearson_correlation(&x, &y);
     assert_eq!(days, 2);
-    assert!(corr.is_none(), "Should fail-closed (return None) when less than 30 common days");
+    assert!(
+        corr.is_none(),
+        "Should fail-closed (return None) when less than 30 common days"
+    );
 }
 
 #[test]
@@ -62,7 +65,10 @@ fn test_pearson_no_overlap_fails_closed() {
     let y = make_pnl(&[("2020-02-01", 1.0)]);
     let (corr, days) = pearson_correlation(&x, &y);
     assert_eq!(days, 0);
-    assert!(corr.is_none(), "Should fail-closed (return None) when no overlap");
+    assert!(
+        corr.is_none(),
+        "Should fail-closed (return None) when no overlap"
+    );
 }
 
 #[test]
@@ -80,7 +86,10 @@ fn test_pearson_constant_series_fails_closed() {
         .collect();
     let (corr, _days) = pearson_correlation(&common, &y);
     // Constant series has zero variance, must fail-closed as None
-    assert!(corr.is_none(), "Constant series has zero variance, should return None");
+    assert!(
+        corr.is_none(),
+        "Constant series has zero variance, should return None"
+    );
 }
 
 #[test]
@@ -95,8 +104,12 @@ fn test_audit_candidate_basic() {
     assert_eq!(report.pairwise_results.len(), 2);
     assert_eq!(report.valid_comparisons, 2);
     assert_eq!(report.insufficient_overlap_count, 0);
-    let max = report.max_correlation.expect("Should have valid max correlation");
-    let avg = report.avg_correlation.expect("Should have valid avg correlation");
+    let max = report
+        .max_correlation
+        .expect("Should have valid max correlation");
+    let avg = report
+        .avg_correlation
+        .expect("Should have valid avg correlation");
     assert!((-1.0..=1.0).contains(&max));
     assert!((-1.0..=1.0).contains(&avg));
 }
@@ -133,7 +146,10 @@ fn test_audit_empty_portfolio_fails_closed() {
 fn test_audit_insufficient_overlap_fails_closed() {
     let cand = make_pnl(&[("2020-01-01", 1.0), ("2020-01-02", 2.0)]);
     let mut os_pnls = HashMap::new();
-    os_pnls.insert("alpha_short_history".to_string(), make_pnl(&[("2020-01-01", 3.0), ("2020-01-02", 4.0)]));
+    os_pnls.insert(
+        "alpha_short_history".to_string(),
+        make_pnl(&[("2020-01-01", 3.0), ("2020-01-02", 4.0)]),
+    );
 
     let report = audit_candidate("candidate", &cand, &os_pnls);
     assert_eq!(report.pairwise_results.len(), 0);
@@ -212,12 +228,18 @@ fn test_pearson_boundary_29_vs_30_days() {
     // 29 days must fail-closed per AGENTS.md (< 30 days)
     let (corr_29, days_29) = pearson_correlation(&pnl_29, &pnl_29);
     assert_eq!(days_29, 29);
-    assert!(corr_29.is_none(), "29 days overlap must fail-closed (return None)");
+    assert!(
+        corr_29.is_none(),
+        "29 days overlap must fail-closed (return None)"
+    );
 
     // 30 days must pass and yield valid correlation
     let (corr_30, days_30) = pearson_correlation(&pnl_30, &pnl_30);
     assert_eq!(days_30, 30);
-    assert!(corr_30.is_some(), "30 days overlap should yield valid correlation");
+    assert!(
+        corr_30.is_some(),
+        "30 days overlap should yield valid correlation"
+    );
     assert!((corr_30.unwrap() - 1.0).abs() < 1e-10);
 }
 
@@ -236,7 +258,10 @@ fn test_pearson_zero_variance_fails_closed() {
 
     let (corr, days) = pearson_correlation(&pnl_normal, &pnl_constant);
     assert_eq!(days, 50);
-    assert!(corr.is_none(), "Zero variance series must fail-closed (return None)");
+    assert!(
+        corr.is_none(),
+        "Zero variance series must fail-closed (return None)"
+    );
 }
 
 #[test]
@@ -257,7 +282,10 @@ fn test_pearson_nan_and_infinity_filtering() {
     // After filtering 10 invalid entries, 25 valid common dates remain (< 30) -> must return None
     let (corr, valid_days) = pearson_correlation(&pnl_a, &pnl_b);
     assert_eq!(valid_days, 25);
-    assert!(corr.is_none(), "When valid non-NaN days < 30, must fail-closed");
+    assert!(
+        corr.is_none(),
+        "When valid non-NaN days < 30, must fail-closed"
+    );
 
     // Now test with 50 days total, 10 NaN -> 40 valid days remain (>= 30) -> valid correlation
     let mut pnl_c = generate_pnl(50, 1.0);
@@ -284,7 +312,10 @@ fn test_simulate_portfolio_nan_handling() {
     }
 
     let result = simulate_portfolio(&[&pnl1, &pnl2]);
-    assert!(result.is_none(), "Should return None when finite common days < 100");
+    assert!(
+        result.is_none(),
+        "Should return None when finite common days < 100"
+    );
 
     // Now test with 120 days total: 120 - 10 = 110 valid days (>= 100)
     let mut pnl3 = generate_pnl(120, 1.0);
@@ -295,9 +326,11 @@ fn test_simulate_portfolio_nan_handling() {
     }
 
     let result2 = simulate_portfolio(&[&pnl3, &pnl4]);
-    assert!(result2.is_some(), "Should succeed when finite common days >= 100");
+    assert!(
+        result2.is_some(),
+        "Should succeed when finite common days >= 100"
+    );
     let metrics = result2.unwrap();
     assert_eq!(metrics.n_trading_days, 110);
     assert!(metrics.merged_sharpe.is_finite());
 }
-

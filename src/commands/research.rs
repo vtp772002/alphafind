@@ -19,9 +19,7 @@ use crate::crowd_model::{
     build_usage_weighted_profile_pnl, equal_weight_pnl_merge, project_proxy_correlation,
 };
 use crate::forecast::{generate_inverse_blueprint, print_blueprint_report};
-use crate::matrix::{
-    analyze_formula_hyper_synergy, build_dynamic_matrix, print_dynamic_matrix,
-};
+use crate::matrix::{analyze_formula_hyper_synergy, build_dynamic_matrix, print_dynamic_matrix};
 use crate::models::{
     AlphaSettings, CensusSnapshot, CompetitionEntry, DataFieldEntry, DatasetEntry, PortfolioAlpha,
 };
@@ -89,9 +87,7 @@ fn derive_profile_usage_weights(
     (weights, field_weighted_alphas, dataset_fallback_alphas)
 }
 
-fn challenge_uniqueness_score(
-    client_competitions: &[CompetitionEntry],
-) -> Option<f64> {
+fn challenge_uniqueness_score(client_competitions: &[CompetitionEntry]) -> Option<f64> {
     client_competitions
         .iter()
         .find(|competition| {
@@ -458,7 +454,8 @@ pub async fn cmd_shadow(
         .into_iter()
         .filter(|alpha_id| {
             !pnl_cache.contains_key(alpha_id)
-                && !(candidate_alpha_id.as_deref() == Some(alpha_id.as_str()) && candidate_pnl.is_some())
+                && !(candidate_alpha_id.as_deref() == Some(alpha_id.as_str())
+                    && candidate_pnl.is_some())
         })
         .collect();
     let mut stale_pnl_count = 0usize;
@@ -1088,4 +1085,3 @@ pub async fn cmd_blueprint(universe: Option<String>, export: Option<String>) -> 
 
     Ok(())
 }
-

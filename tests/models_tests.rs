@@ -257,7 +257,9 @@ fn test_evaluate_submission_checks_missing_core_fails_closed() {
     let eval = evaluate_submission_checks(&stats);
     assert!(!eval.passed);
     assert!(eval.message.contains("Missing required core checks"));
-    assert!(eval.missing_core_checks.contains(&"SELF_CORRELATION".to_string()));
+    assert!(eval
+        .missing_core_checks
+        .contains(&"SELF_CORRELATION".to_string()));
 }
 
 #[test]
@@ -276,7 +278,9 @@ fn test_evaluate_submission_checks_pending_reported() {
     };
     let eval = evaluate_submission_checks(&stats);
     assert!(!eval.passed);
-    assert!(eval.pending_checks.contains(&"SELF_CORRELATION".to_string()));
+    assert!(eval
+        .pending_checks
+        .contains(&"SELF_CORRELATION".to_string()));
     assert!(eval.message.contains("CHECKS STILL PENDING"));
 }
 
@@ -320,5 +324,7 @@ fn test_evaluate_submission_checks_all_pass_succeeds() {
     assert!(eval.passed);
     assert_eq!(eval.passed_count, 8);
     assert_eq!(eval.total_count, 8);
-    assert!(eval.message.contains("ALL SUBMISSION CHECKS PASSED (8/8 PASS)"));
+    assert!(eval
+        .message
+        .contains("ALL SUBMISSION CHECKS PASSED (8/8 PASS)"));
 }

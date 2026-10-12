@@ -119,7 +119,11 @@ pub async fn cmd_audit(alpha_id: String, label: Option<String>) -> Result<()> {
         None => "N/A".to_string(),
     };
     let partner = report.most_correlated_id.as_deref().unwrap_or("none");
-    println!("  MAX INTERNAL CORRELATION: {} vs {}", max_str, partner.yellow());
+    println!(
+        "  MAX INTERNAL CORRELATION: {} vs {}",
+        max_str,
+        partner.yellow()
+    );
     println!("  AVERAGE INTERNAL CORR:   {}", avg_str);
     if report.insufficient_overlap_count > 0 {
         println!(

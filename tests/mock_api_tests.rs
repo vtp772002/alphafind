@@ -16,7 +16,10 @@ async fn test_mock_authenticate_success() {
 
     let client = BrainClient::with_base_url("user@example.com", "secret", server.uri()).unwrap();
     let result = client.authenticate().await;
-    assert!(result.is_ok(), "Authentication should succeed with 200 response");
+    assert!(
+        result.is_ok(),
+        "Authentication should succeed with 200 response"
+    );
 }
 
 #[tokio::test]
@@ -48,7 +51,10 @@ async fn test_mock_submit_simulation_success() {
         .and(path("/simulations"))
         .respond_with(
             ResponseTemplate::new(201)
-                .append_header("Location", format!("{}/simulations/sim-12345", server.uri()))
+                .append_header(
+                    "Location",
+                    format!("{}/simulations/sim-12345", server.uri()),
+                )
                 .set_body_json(json!({"id": "sim-12345"})),
         )
         .mount(&server)
@@ -56,7 +62,10 @@ async fn test_mock_submit_simulation_success() {
 
     let client = BrainClient::with_base_url("user@example.com", "secret", server.uri()).unwrap();
     let settings = AlphaSettings::default();
-    let sim_id = client.submit_simulation("rank(close)", &settings).await.unwrap();
+    let sim_id = client
+        .submit_simulation("rank(close)", &settings)
+        .await
+        .unwrap();
     assert!(sim_id.contains("sim-12345"));
 }
 
@@ -299,7 +308,10 @@ async fn test_mock_fetch_user_alphas_paginated() {
         .await;
 
     let client = BrainClient::with_base_url("user@example.com", "secret", server.uri()).unwrap();
-    let all_alphas = client.fetch_user_alphas_paginated("stage=OS").await.unwrap();
+    let all_alphas = client
+        .fetch_user_alphas_paginated("stage=OS")
+        .await
+        .unwrap();
 
     assert_eq!(
         all_alphas.len(),
