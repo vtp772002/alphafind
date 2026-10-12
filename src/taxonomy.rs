@@ -166,7 +166,7 @@ pub fn get_curated_candidates(
         Some(FactorPillar::MicrostructureVwap) => vec![
             CandidateAlpha {
                 name: "US_D1_TOP3000_NightDay_Spread_SubNeut_Dec22".to_string(),
-                expression: "night_ret = winsorize((open - ts_delay(close, 1)) / ts_delay(close, 1)); day_ret = winsorize((close - open) / open); spread = ts_mean(night_ret, 10) - ts_mean(day_ret, 10); signal = signed_power(rank(spread) - 0.5, 1.8); group_neutralize(signed_power(signal, 4.2), densify(subindustry))".to_string(),
+                expression: "night_ret = winsorize(<OVERNIGHT_RETURN_GAP>); day_ret = winsorize(<INTRADAY_RETURN_DRIFT>); spread = ts_mean(night_ret, 10) - ts_mean(day_ret, 10); signal = signed_power(rank(spread) - 0.5, 1.8); group_neutralize(signed_power(signal, 4.2), densify(subindustry))".to_string(),
                 universe: "TOP3000".to_string(),
                 decay: 22,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -175,7 +175,7 @@ pub fn get_curated_candidates(
             },
             CandidateAlpha {
                 name: "US_D1_TOP3000_ATR_NightDay_Spread_Dec20".to_string(),
-                expression: "atr = ts_mean(high - low, 20); night_gap = winsorize((open - ts_delay(close, 1)) / atr); day_drift = winsorize((close - open) / atr); spread = ts_mean(night_gap, 10) - ts_mean(day_drift, 10); signal = signed_power(rank(spread) - 0.5, 1.8); group_neutralize(signed_power(signal, 4.2), densify(subindustry))".to_string(),
+                expression: "vol_norm = <VOLATILITY_NORM>; night_gap = winsorize(<OVERNIGHT_RETURN_GAP> / vol_norm); day_drift = winsorize(<INTRADAY_RETURN_DRIFT> / vol_norm); spread = ts_mean(night_gap, 10) - ts_mean(day_drift, 10); signal = signed_power(rank(spread) - 0.5, 1.8); group_neutralize(signed_power(signal, 4.2), densify(subindustry))".to_string(),
                 universe: "TOP3000".to_string(),
                 decay: 20,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -184,7 +184,7 @@ pub fn get_curated_candidates(
             },
             CandidateAlpha {
                 name: "US_D1_TOP3000_Micro_VWAP_Burst_Dec38".to_string(),
-                expression: "vwap_dev = signed_power(rank(vwap / close - 1) - 0.5, 1.4); vol_burst = signed_power(rank(volume / ts_mean(volume, 60)) - 0.5, 1.3); reversal = signed_power(rank(ts_decay_linear(ts_delta(close, 5), 3)) - 0.5, 1.5); signal = vwap_dev * (1 + 0.70 * vol_burst) - 0.04 * reversal; group_neutralize(signed_power(signal, 3.8), densify(subindustry))".to_string(),
+                expression: "vwap_dev = signed_power(rank(<VWAP_PRICE_DISLOCATION>) - 0.5, 1.4); vol_burst = signed_power(rank(<VOLUME_SHOCK_FACTOR>) - 0.5, 1.3); reversal = signed_power(rank(<REVERSAL_DAMPENER>) - 0.5, 1.5); signal = vwap_dev * (1 + 0.70 * vol_burst) - 0.04 * reversal; group_neutralize(signed_power(signal, 3.8), densify(subindustry))".to_string(),
                 universe: "TOP3000".to_string(),
                 decay: 38,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -193,7 +193,7 @@ pub fn get_curated_candidates(
             },
             CandidateAlpha {
                 name: "US_D1_TOP1000_NightDay_Spread_Dec22".to_string(),
-                expression: "night_ret = winsorize((open - ts_delay(close, 1)) / ts_delay(close, 1)); day_ret = winsorize((close - open) / open); spread = ts_mean(night_ret, 10) - ts_mean(day_ret, 10); signal = signed_power(rank(spread) - 0.5, 1.8); group_neutralize(signed_power(signal, 4.2), densify(subindustry))".to_string(),
+                expression: "night_ret = winsorize(<OVERNIGHT_RETURN_GAP>); day_ret = winsorize(<INTRADAY_RETURN_DRIFT>); spread = ts_mean(night_ret, 10) - ts_mean(day_ret, 10); signal = signed_power(rank(spread) - 0.5, 1.8); group_neutralize(signed_power(signal, 4.2), densify(subindustry))".to_string(),
                 universe: "TOP1000".to_string(),
                 decay: 22,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -202,7 +202,7 @@ pub fn get_curated_candidates(
             },
             CandidateAlpha {
                 name: "US_D1_TOP3000_NightDay_VolWeight_Dec24".to_string(),
-                expression: "night_ret = winsorize((open - ts_delay(close, 1)) / ts_delay(close, 1)); day_ret = winsorize((close - open) / open); spread = (ts_mean(night_ret, 10) - ts_mean(day_ret, 10)) * (1 + 0.5 * rank(volume / ts_mean(volume, 40))); signal = signed_power(rank(spread) - 0.5, 1.8); group_neutralize(signed_power(signal, 4.0), densify(subindustry))".to_string(),
+                expression: "night_ret = winsorize(<OVERNIGHT_RETURN_GAP>); day_ret = winsorize(<INTRADAY_RETURN_DRIFT>); spread = (ts_mean(night_ret, 10) - ts_mean(day_ret, 10)) * (1 + 0.5 * rank(<VOLUME_SHOCK_FACTOR>)); signal = signed_power(rank(spread) - 0.5, 1.8); group_neutralize(signed_power(signal, 4.0), densify(subindustry))".to_string(),
                 universe: "TOP3000".to_string(),
                 decay: 24,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -211,7 +211,7 @@ pub fn get_curated_candidates(
             },
             CandidateAlpha {
                 name: "US_D1_TOP1000_Micro_VWAP_Burst_Dec40".to_string(),
-                expression: "vwap_dev = signed_power(rank(vwap / close - 1) - 0.5, 1.4); vol_burst = signed_power(rank(volume / ts_mean(volume, 60)) - 0.5, 1.3); reversal = signed_power(rank(ts_decay_linear(ts_delta(close, 5), 3)) - 0.5, 1.5); signal = vwap_dev * (1 + 0.70 * vol_burst) - 0.04 * reversal; group_neutralize(signed_power(signal, 3.8), densify(subindustry))".to_string(),
+                expression: "vwap_dev = signed_power(rank(<VWAP_PRICE_DISLOCATION>) - 0.5, 1.4); vol_burst = signed_power(rank(<VOLUME_SHOCK_FACTOR>) - 0.5, 1.3); reversal = signed_power(rank(<REVERSAL_DAMPENER>) - 0.5, 1.5); signal = vwap_dev * (1 + 0.70 * vol_burst) - 0.04 * reversal; group_neutralize(signed_power(signal, 3.8), densify(subindustry))".to_string(),
                 universe: "TOP1000".to_string(),
                 decay: 40,
                 neutralization: "SUBINDUSTRY".to_string(),

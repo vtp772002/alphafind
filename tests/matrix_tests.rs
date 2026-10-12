@@ -7,8 +7,8 @@ use alphafind::taxonomy::FactorPillar;
 
 #[test]
 fn test_detect_three_datasets() {
-    let expr = "f_risk = ts_backfill(unsystematic_risk_last_60_days, 10); \
-                f_short = ts_backfill(shares_sold_short_count_2, 40); \
+    let expr = "f_risk = ts_backfill(residual_vol_proxy, 10); \
+                f_short = ts_backfill(borrow_fee_rate, 40); \
                 f_vwap = vwap / close - 1; \
                 signal = f_risk + f_short + f_vwap;";
     let pillars = detect_all_participating_pillars(expr);
@@ -22,8 +22,8 @@ fn test_detect_three_datasets() {
 
 #[test]
 fn test_detect_four_datasets() {
-    let expr = "raw_60 = unsystematic_risk_last_60_days; \
-                short = shares_sold_short_count_2; \
+    let expr = "raw_60 = residual_vol_proxy; \
+                short = borrow_fee_rate; \
                 news = mean_composite_sentiment_score; \
                 reversal = ts_delta(close, 4); \
                 signal = raw_60 + short + news + reversal;";
@@ -33,8 +33,8 @@ fn test_detect_four_datasets() {
 
 #[test]
 fn test_classify_economic_roles() {
-    let expr = "anchor = unsystematic_risk_last_60_days; \
-                catalyst = shares_sold_short_count_2; \
+    let expr = "anchor = residual_vol_proxy; \
+                catalyst = borrow_fee_rate; \
                 friction = ts_delta(close, 4); \
                 trade_when(anchor > 0, anchor * (1 + catalyst) - friction, -1)";
 
@@ -55,8 +55,8 @@ fn test_detect_fusion_patterns() {
         FusionPattern::NaiveLinearAddition
     );
 
-    let hier_expr = "anchor = unsystematic_risk_last_60_days; \
-                     cat = shares_sold_short_count_2; \
+    let hier_expr = "anchor = residual_vol_proxy; \
+                     cat = borrow_fee_rate; \
                      hedge = ts_delta(close, 4); \
                      trade_when(anchor > 0, anchor - hedge, -1)";
     assert_eq!(
@@ -89,8 +89,8 @@ fn test_build_dynamic_matrix_structure() {
 
 #[test]
 fn test_analyze_formula_hyper_synergy_apex() {
-    let dummy_expr = "risk = ts_backfill(unsystematic_risk_last_60_days, 10); \
-                      borrow = ts_backfill(shares_sold_short_count_2, 40); \
+    let dummy_expr = "risk = ts_backfill(residual_vol_proxy, 10); \
+                      borrow = ts_backfill(borrow_fee_rate, 40); \
                       vwap_dev = rank(vwap / close - 1); \
                       friction = ts_delta(close, 4); \
                       signal = 0.5 * risk + 0.3 * borrow + 0.2 * vwap_dev - friction; \

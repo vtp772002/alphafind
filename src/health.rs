@@ -182,19 +182,22 @@ pub fn evaluate_portfolio_health(
             let full_sh = compute_series_sharpe(&dates, pnl);
             let trailing_sh = compute_series_sharpe(trailing_dates, pnl);
 
-            let decay_ratio = if full_sh.abs() > 0.05 {
+            let decay_ratio = if full_sh > 0.05 {
                 trailing_sh / full_sh
             } else {
                 1.0
             };
 
-            let decay_status = if trailing_sh > full_sh * 1.15 && trailing_sh > 1.25 {
+            let decay_status = if trailing_sh < 0.0 || (full_sh <= 0.0 && trailing_sh <= full_sh) {
+                severe_decay_count += 1;
+                AlphaDecayStatus::SevereDecay
+            } else if full_sh > 0.0 && trailing_sh > full_sh * 1.15 && trailing_sh > 1.25 {
                 accelerating_count += 1;
                 AlphaDecayStatus::Accelerating
-            } else if decay_ratio >= 0.75 {
+            } else if full_sh > 0.0 && decay_ratio >= 0.75 {
                 robust_count += 1;
                 AlphaDecayStatus::Robust
-            } else if decay_ratio >= 0.40 {
+            } else if full_sh > 0.0 && decay_ratio >= 0.40 {
                 moderate_decay_count += 1;
                 AlphaDecayStatus::ModerateDecay
             } else {
@@ -203,7 +206,7 @@ pub fn evaluate_portfolio_health(
             };
 
             // Pairwise self-correlation audit
-            let mut max_corr = -1.0;
+            let mut max_corr: Option<f64> = None;
             let mut most_corr_id = String::new();
             for other in portfolio_alphas {
                 if other.id == alpha.id {
@@ -211,15 +214,18 @@ pub fn evaluate_portfolio_health(
                 }
                 if let Some(other_pnl) = os_pnls.get(&other.id) {
                     if let (Some(r), _) = pearson_correlation(pnl, other_pnl) {
-                        if r > max_corr {
-                            max_corr = r;
+                        if max_corr.is_none_or(|m| r > m) {
+                            max_corr = Some(r);
                             most_corr_id = other.id.clone();
                         }
                     }
                 }
             }
-            let safety_buffer = (0.70 - max_corr) * 100.0;
-            if safety_buffer < 8.0 {
+            let (max_corr_val, safety_buffer) = match max_corr {
+                Some(r) => (r, (crate::config::quant::BRAIN_MAX_CORRELATION - r).max(0.0) * 100.0),
+                None => (0.0, 0.0),
+            };
+            if safety_buffer < 8.0 && max_corr.is_some() {
                 tight_buffer_count += 1;
             }
 
@@ -269,7 +275,7 @@ pub fn evaluate_portfolio_health(
                 trailing_1y_sharpe: trailing_sh,
                 decay_ratio,
                 decay_status,
-                max_internal_corr: max_corr,
+                max_internal_corr: max_corr_val,
                 most_correlated_id: most_corr_id,
                 safety_buffer_pct: safety_buffer,
                 marginal_sharpe_delta: marginal_delta,
@@ -525,16 +531,14 @@ pub fn print_detailed_alpha_table(alphas: &[AlphaHealthReport]) {
     println!("  ├──────────┼──────────┼──────────────┼─────────────┼─────────────┼──────────────┼──────────────────┼─────────────┼────────────────────┤");
 
     for a in alphas {
-        let max_corr_str = format!(
-            "{:.1}% ({})",
-            a.max_internal_corr * 100.0,
-            &a.most_correlated_id[..a.most_correlated_id.len().min(8)]
-        );
+        let peer_short: String = a.most_correlated_id.chars().take(8).collect();
+        let max_corr_str = format!("{:.1}% ({})", a.max_internal_corr * 100.0, peer_short);
+        let cat_short: String = a.category.chars().take(12).collect();
         println!(
             "  │ {:<8} │ {:<8} │ {:<12} │ {:>11.2} │ {:>11.2} │ {:<20} │ {:>16} │ {:>+11.4} │ {:<18} │",
             a.alpha_id.cyan().bold(),
             a.universe.yellow(),
-            &a.category[..a.category.len().min(12)],
+            cat_short,
             a.full_sharpe,
             a.trailing_1y_sharpe,
             a.decay_status.badge(),

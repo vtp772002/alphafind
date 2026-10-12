@@ -171,9 +171,17 @@ pub fn equal_weight_pnl_merge(
         return None;
     }
 
-    let mut common_dates: HashSet<String> = series[0].keys().cloned().collect();
+    let mut common_dates: HashSet<String> = series[0]
+        .iter()
+        .filter(|(_, &v)| v.is_finite())
+        .map(|(k, _)| k.clone())
+        .collect();
     for pnl in &series[1..] {
-        let dates: HashSet<String> = pnl.keys().cloned().collect();
+        let dates: HashSet<String> = pnl
+            .iter()
+            .filter(|(_, &v)| v.is_finite())
+            .map(|(k, _)| k.clone())
+            .collect();
         common_dates.retain(|date| dates.contains(date));
     }
     if common_dates.len() < 30 {

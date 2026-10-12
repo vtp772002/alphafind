@@ -307,8 +307,9 @@ pub async fn cmd_radar(
             .as_ref()
             .and_then(|s| s.name.as_deref())
             .unwrap_or("General");
-        let sub_display = if subcat.len() > 25 {
-            format!("{}...", &subcat[..22])
+        let sub_display = if subcat.chars().count() > 25 {
+            let truncated: String = subcat.chars().take(22).collect();
+            format!("{}...", truncated)
         } else {
             subcat.to_string()
         };
@@ -369,8 +370,9 @@ pub async fn cmd_radar(
                 .as_ref()
                 .and_then(|s| s.name.as_deref())
                 .unwrap_or("General");
-            let sub_display = if subcat.len() > 25 {
-                format!("{}...", &subcat[..22])
+            let sub_display = if subcat.chars().count() > 25 {
+                let truncated: String = subcat.chars().take(22).collect();
+                format!("{}...", truncated)
             } else {
                 subcat.to_string()
             };
@@ -422,7 +424,6 @@ pub async fn cmd_tune(
 
     match res {
         Some(tuned) => {
-            let st = tuned.details.is.as_ref().unwrap();
             println!("\n  🎉 TUNING SUCCESS!");
             println!(
                 "    Tuned Strategy: {}",
@@ -433,11 +434,13 @@ pub async fn cmd_tune(
                 "    Fitness:        {:.2} -> {:.2}",
                 tuned.original_fitness, tuned.tuned_fitness
             );
-            println!("    Sharpe:         {:.2}", st.sharpe.unwrap_or(0.0));
-            println!(
-                "    Turnover:       {:.1}%",
-                st.turnover.unwrap_or(0.0) * 100.0
-            );
+            if let Some(st) = tuned.details.is.as_ref() {
+                println!("    Sharpe:         {:.2}", st.sharpe.unwrap_or(0.0));
+                println!(
+                    "    Turnover:       {:.1}%",
+                    st.turnover.unwrap_or(0.0) * 100.0
+                );
+            }
             println!(
                 "    Settings:       Decay={}, Neut={}",
                 tuned.settings.decay, tuned.settings.neutralization

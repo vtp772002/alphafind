@@ -227,8 +227,9 @@ pub async fn cmd_score() -> Result<()> {
                     };
 
                     let uni_short = entry.university.as_deref().unwrap_or("—");
-                    let uni_display = if uni_short.len() > 26 {
-                        format!("{}...", &uni_short[..23])
+                    let uni_display = if uni_short.chars().count() > 26 {
+                        let truncated: String = uni_short.chars().take(23).collect();
+                        format!("{}...", truncated)
                     } else {
                         uni_short.to_string()
                     };
