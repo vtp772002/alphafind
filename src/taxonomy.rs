@@ -53,18 +53,62 @@ impl FactorPillar {
     }
 }
 
+/// Attempts to load private candidate definitions from a local permission-restricted JSON store.
+/// Per AGENTS.md, concrete candidate formulas are excluded from Git-tracked source code.
+fn load_private_candidates() -> Option<Vec<CandidateAlpha>> {
+    let path = std::env::var("ALPHAFIND_CANDIDATES_PATH")
+        .unwrap_or_else(|_| "data/private_candidates.json".to_string());
+    if std::path::Path::new(&path).exists() {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            if let Ok(candidates) = serde_json::from_str::<Vec<CandidateAlpha>>(&content) {
+                return Some(candidates);
+            }
+        }
+    }
+    None
+}
+
 /// Generates curated candidate hypotheses for screening.
+///
+/// If a local private store (`data/private_candidates.json` or `ALPHAFIND_CANDIDATES_PATH`)
+/// is present, candidates are loaded dynamically from that store.
+/// Otherwise, canonical factor archetypes with abstract placeholders (`<FIELD>`, `<SIGNAL>`)
+/// or public price-volume formulas are returned per the AGENTS.md research hygiene policy.
 pub fn get_curated_candidates(
     pillar: Option<FactorPillar>,
     universe: Option<&str>,
 ) -> Vec<CandidateAlpha> {
     let u = universe.unwrap_or("TOP1000");
 
+    // 1. Attempt dynamic load from untracked private store
+    if let Some(private_candidates) = load_private_candidates() {
+        let filtered: Vec<CandidateAlpha> = private_candidates
+            .into_iter()
+            .filter(|c| {
+                if let Some(p) = pillar {
+                    if c.pillar != p.as_str() {
+                        return false;
+                    }
+                }
+                if let Some(target_u) = universe {
+                    if c.universe != target_u {
+                        return false;
+                    }
+                }
+                true
+            })
+            .collect();
+        if !filtered.is_empty() {
+            return filtered;
+        }
+    }
+
+    // 2. Fall back to sanitized canonical factor skeletons with abstract placeholders
     match pillar {
         Some(FactorPillar::AnalystConsensus) => vec![
             CandidateAlpha {
                 name: "US_D1_TOP500_Analyst_EPS_Delta5_Dec32".to_string(),
-                expression: "group_neutralize(signed_power(rank(ts_backfill(<REDACTED_FIELD>, 20) / close) - 0.5, 3.2) - 0.6 * rank(ts_delta(close, 5)), densify(sector))".to_string(),
+                expression: "group_neutralize(signed_power(rank(ts_backfill(<ANALYST_REVISION_FIELD>, 20) / close) - 0.5, 3.2) - 0.6 * rank(ts_delta(close, 5)), densify(sector))".to_string(),
                 universe: "TOP500".to_string(),
                 decay: 32,
                 neutralization: "SECTOR".to_string(),
@@ -73,7 +117,7 @@ pub fn get_curated_candidates(
             },
             CandidateAlpha {
                 name: "US_D1_TOP500_Dual_Consensus_Yield_Dec40".to_string(),
-                expression: "group_neutralize(signed_power(0.6 * rank(ts_backfill(<REDACTED_FIELD>, 60) / close) + 0.4 * rank(ts_backfill(actual_adj_net_income_quarterly, 60) / cap) - 0.5, 4.0), densify(market))".to_string(),
+                expression: "group_neutralize(signed_power(0.6 * rank(ts_backfill(<ANALYST_SURPRISE_FIELD>, 60) / close) + 0.4 * rank(ts_backfill(<CONSENSUS_NET_INCOME_FIELD>, 60) / cap) - 0.5, 4.0), densify(market))".to_string(),
                 universe: "TOP500".to_string(),
                 decay: 40,
                 neutralization: "MARKET".to_string(),
@@ -82,7 +126,7 @@ pub fn get_curated_candidates(
             },
             CandidateAlpha {
                 name: "US_D1_TOP500_PureAnalyst_Apex_Dec50".to_string(),
-                expression: "group_neutralize(signed_power(rank(ts_decay_linear(ts_backfill(<REDACTED_FIELD> / close, 126), 20)) - 0.5, 4.4), densify(sector))".to_string(),
+                expression: "group_neutralize(signed_power(rank(ts_decay_linear(ts_backfill(<ANALYST_EPS_FIELD> / close, 126), 20)) - 0.5, 4.4), densify(sector))".to_string(),
                 universe: "TOP500".to_string(),
                 decay: 50,
                 neutralization: "SECTOR".to_string(),
@@ -93,7 +137,7 @@ pub fn get_curated_candidates(
         Some(FactorPillar::IdiosyncraticRisk) => vec![
             CandidateAlpha {
                 name: "US_D1_TOP1000_IdioCurv_30_60_90_Dec14".to_string(),
-                expression: "group_neutralize(signed_power(rank(ts_backfill(<REDACTED_FIELD>_30_days, 10) - 2.0 * ts_backfill(<REDACTED_FIELD>_60_days, 10) + ts_backfill(<REDACTED_FIELD>_90_days, 10)) - 0.5, 2.5), densify(subindustry))".to_string(),
+                expression: "group_neutralize(signed_power(rank(ts_backfill(<IDIO_RISK_SHORT>, 10) - 2.0 * ts_backfill(<IDIO_RISK_MED>, 10) + ts_backfill(<IDIO_RISK_LONG>, 10)) - 0.5, 2.5), densify(subindustry))".to_string(),
                 universe: "TOP1000".to_string(),
                 decay: 14,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -102,7 +146,7 @@ pub fn get_curated_candidates(
             },
             CandidateAlpha {
                 name: "US_D1_TOP1000_IdioVol_60d_Delta3_Dec16".to_string(),
-                expression: "group_neutralize(signed_power(rank(ts_backfill(<REDACTED_FIELD>_60_days, 15)) - 0.5, 2.8) - 0.5 * rank(ts_delta(close, 3)), densify(subindustry))".to_string(),
+                expression: "group_neutralize(signed_power(rank(ts_backfill(<IDIO_RISK_MED>, 15)) - 0.5, 2.8) - 0.5 * rank(ts_delta(close, 3)), densify(subindustry))".to_string(),
                 universe: "TOP1000".to_string(),
                 decay: 16,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -111,7 +155,7 @@ pub fn get_curated_candidates(
             },
             CandidateAlpha {
                 name: "US_D1_TOP500_IdioRisk_Spread_Dec12".to_string(),
-                expression: "group_neutralize(signed_power(rank(ts_backfill(<REDACTED_FIELD>_30_days / <REDACTED_FIELD>_90_days, 10)) - 0.5, 3.0), densify(subindustry))".to_string(),
+                expression: "group_neutralize(signed_power(rank(ts_backfill(<IDIO_RISK_SHORT> / <IDIO_RISK_LONG>, 10)) - 0.5, 3.0), densify(subindustry))".to_string(),
                 universe: "TOP500".to_string(),
                 decay: 12,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -178,7 +222,7 @@ pub fn get_curated_candidates(
         Some(FactorPillar::NewsEvent) => vec![
             CandidateAlpha {
                 name: "US_D1_TOP3000_News_Event_FastRev_Dec20".to_string(),
-                expression: "news = rank(ts_decay_linear(winsorize(ts_backfill(vec_avg(<REDACTED_FIELD>_sl), 30)), 20)); rev = signed_power(rank(ts_decay_linear(ts_delta(close, 5), 3)) - 0.5, 1.5); signal = signed_power(news - 0.5, 1.5) - 0.04 * rev; group_neutralize(signed_power(signal, 4.0), densify(subindustry))".to_string(),
+                expression: "news = rank(ts_decay_linear(winsorize(ts_backfill(vec_avg(<NEWS_SENTIMENT_FIELD>), 30)), 20)); rev = signed_power(rank(ts_decay_linear(ts_delta(close, 5), 3)) - 0.5, 1.5); signal = signed_power(news - 0.5, 1.5) - 0.04 * rev; group_neutralize(signed_power(signal, 4.0), densify(subindustry))".to_string(),
                 universe: "TOP3000".to_string(),
                 decay: 20,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -187,7 +231,7 @@ pub fn get_curated_candidates(
             },
             CandidateAlpha {
                 name: "US_D1_TOP3000_News_VolSurge_Dec24".to_string(),
-                expression: "news = ts_backfill(vec_avg(<REDACTED_FIELD>_sl), 20); f_news = if_else(is_nan(news), 0, rank(news) - 0.5); vol_ratio = rank(volume / ts_mean(volume, 30)) - 0.5; signal = signed_power(f_news, 1.5) * (1 + 0.65 * signed_power(vol_ratio, 1.2)); group_neutralize(signed_power(signal, 4.2), densify(subindustry))".to_string(),
+                expression: "news = ts_backfill(vec_avg(<NEWS_SENTIMENT_FIELD>), 20); f_news = if_else(is_nan(news), 0, rank(news) - 0.5); vol_ratio = rank(volume / ts_mean(volume, 30)) - 0.5; signal = signed_power(f_news, 1.5) * (1 + 0.65 * signed_power(vol_ratio, 1.2)); group_neutralize(signed_power(signal, 4.2), densify(subindustry))".to_string(),
                 universe: "TOP3000".to_string(),
                 decay: 24,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -196,7 +240,7 @@ pub fn get_curated_candidates(
             },
             CandidateAlpha {
                 name: "US_D1_TOP1000_News_Afterhours_Dec22".to_string(),
-                expression: "news = rank(ts_decay_linear(winsorize(ts_backfill(vec_avg(<REDACTED_FIELD>_sl), 25)), 15)); rev = signed_power(rank(ts_delta(close, 4)) - 0.5, 1.5); signal = signed_power(news - 0.5, 1.6) - 0.03 * rev; group_neutralize(signed_power(signal, 4.2), densify(subindustry))".to_string(),
+                expression: "news = rank(ts_decay_linear(winsorize(ts_backfill(vec_avg(<AFTERHOURS_NEWS_FIELD>), 25)), 15)); rev = signed_power(rank(ts_delta(close, 4)) - 0.5, 1.5); signal = signed_power(news - 0.5, 1.6) - 0.03 * rev; group_neutralize(signed_power(signal, 4.2), densify(subindustry))".to_string(),
                 universe: "TOP1000".to_string(),
                 decay: 22,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -207,7 +251,7 @@ pub fn get_curated_candidates(
         Some(FactorPillar::ShortInterest) => vec![
             CandidateAlpha {
                 name: "US_D1_TOP1000_Short_Dual_SubNeut_Dec28".to_string(),
-                expression: "short_cov = ts_backfill(vec_avg(<REDACTED_FIELD>), 45); short_all = ts_backfill(vec_avg(<REDACTED_FIELD>), 45); f_cov = if_else(is_nan(short_cov), 0, rank(short_cov) - 0.5); f_all = if_else(is_nan(short_all), 0, rank(short_all) - 0.5); dual_short = 0.60 * f_cov + 0.40 * f_all; vol_burst = signed_power(rank(volume / ts_mean(volume, 30)) - 0.5, 1.2); reversal = signed_power(rank(ts_decay_linear(ts_delta(close, 4), 3)) - 0.5, 1.5); signal = 0.65 * signed_power(dual_short, 1.5) + 0.20 * vol_burst - 0.04 * reversal; group_neutralize(signed_power(signal, 4.0), densify(subindustry))".to_string(),
+                expression: "short_cov = ts_backfill(vec_avg(<SHORT_COVER_FIELD>), 45); short_all = ts_backfill(vec_avg(<SHORT_INTEREST_ALL_FIELD>), 45); f_cov = if_else(is_nan(short_cov), 0, rank(short_cov) - 0.5); f_all = if_else(is_nan(short_all), 0, rank(short_all) - 0.5); dual_short = 0.60 * f_cov + 0.40 * f_all; vol_burst = signed_power(rank(volume / ts_mean(volume, 30)) - 0.5, 1.2); reversal = signed_power(rank(ts_decay_linear(ts_delta(close, 4), 3)) - 0.5, 1.5); signal = 0.65 * signed_power(dual_short, 1.5) + 0.20 * vol_burst - 0.04 * reversal; group_neutralize(signed_power(signal, 4.0), densify(subindustry))".to_string(),
                 universe: "TOP1000".to_string(),
                 decay: 28,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -216,7 +260,7 @@ pub fn get_curated_candidates(
             },
             CandidateAlpha {
                 name: "US_D1_TOP3000_Short_Accel_SubNeut_Dec22".to_string(),
-                expression: "short_val = ts_backfill(vec_avg(<REDACTED_FIELD>), 60); short_factor = if_else(is_nan(short_val), 0, rank(short_val) - 0.5); short_delta = ts_delta(short_val, 20); short_accel = if_else(is_nan(short_delta), 0, rank(short_delta) - 0.5); vol_factor = rank(volume / ts_mean(volume, 40)) - 0.5; signal = 0.70 * signed_power(short_factor, 1.5) + 0.30 * signed_power(short_accel, 1.3) + 0.25 * signed_power(vol_factor, 1.2); delta_damp = 0.04 * signed_power(rank(ts_decay_linear(ts_delta(close, 4), 3)) - 0.5, 1.5); signal_clean = rank(signal - delta_damp) - 0.5; group_neutralize(signed_power(signal_clean, 3.8), densify(subindustry))".to_string(),
+                expression: "short_val = ts_backfill(vec_avg(<SHORT_INTEREST_FIELD>), 60); short_factor = if_else(is_nan(short_val), 0, rank(short_val) - 0.5); short_delta = ts_delta(short_val, 20); short_accel = if_else(is_nan(short_delta), 0, rank(short_delta) - 0.5); vol_factor = rank(volume / ts_mean(volume, 40)) - 0.5; signal = 0.70 * signed_power(short_factor, 1.5) + 0.30 * signed_power(short_accel, 1.3) + 0.25 * signed_power(vol_factor, 1.2); delta_damp = 0.04 * signed_power(rank(ts_decay_linear(ts_delta(close, 4), 3)) - 0.5, 1.5); signal_clean = rank(signal - delta_damp) - 0.5; group_neutralize(signed_power(signal_clean, 3.8), densify(subindustry))".to_string(),
                 universe: "TOP3000".to_string(),
                 decay: 22,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -227,7 +271,7 @@ pub fn get_curated_candidates(
         Some(FactorPillar::OptionsVrp) => vec![
             CandidateAlpha {
                 name: "US_D1_TOP3000_VRP120d_Hedge_Dec26".to_string(),
-                expression: "vrp = rank(ts_backfill(<REDACTED_FIELD> / historical_volatility_120, 20)) - rank(ts_backfill(<REDACTED_FIELD> / historical_volatility_120, 20)); signal = signed_power(vrp, 1.3) - 0.04 * signed_power(rank(ts_delta(close, 4)) - 0.5, 1.5); group_neutralize(signed_power(signal, 4.2), densify(subindustry))".to_string(),
+                expression: "vrp = rank(ts_backfill(<IMPLIED_VOL_CALL_120D> / <HISTORICAL_VOL_120D>, 20)) - rank(ts_backfill(<IMPLIED_VOL_PUT_120D> / <HISTORICAL_VOL_120D>, 20)); signal = signed_power(vrp, 1.3) - 0.04 * signed_power(rank(ts_delta(close, 4)) - 0.5, 1.5); group_neutralize(signed_power(signal, 4.2), densify(subindustry))".to_string(),
                 universe: "TOP3000".to_string(),
                 decay: 26,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -236,7 +280,7 @@ pub fn get_curated_candidates(
             },
             CandidateAlpha {
                 name: "US_D1_TOP1000_VRP60d_Delta3_Dec18".to_string(),
-                expression: "group_neutralize(signed_power(rank(ts_backfill(implied_volatility_call_60 / historical_volatility_60, 15)) - rank(ts_backfill(implied_volatility_put_60 / historical_volatility_60, 15)) - 0.5, 3.8), densify(subindustry))".to_string(),
+                expression: "group_neutralize(signed_power(rank(ts_backfill(<IMPLIED_VOL_CALL_60D> / <HISTORICAL_VOL_60D>, 15)) - rank(ts_backfill(<IMPLIED_VOL_PUT_60D> / <HISTORICAL_VOL_60D>, 15)) - 0.5, 3.8), densify(subindustry))".to_string(),
                 universe: "TOP1000".to_string(),
                 decay: 18,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -247,7 +291,7 @@ pub fn get_curated_candidates(
         Some(FactorPillar::CrossSanctuary) => vec![
             CandidateAlpha {
                 name: format!("US_D1_{}_News_Short_Hybrid_SubNeut_Dec28", u),
-                expression: "news_sl = ts_backfill(vec_avg(<REDACTED_FIELD>_sl), 20); short_cov = ts_backfill(vec_avg(<REDACTED_FIELD>), 40); f_news = if_else(is_nan(news_sl), 0, rank(news_sl) - 0.5); f_short = if_else(is_nan(short_cov), 0, rank(short_cov) - 0.5); vol_burst = signed_power(rank(volume / ts_mean(volume, 30)) - 0.5, 1.2); signal = 0.50 * signed_power(f_news, 1.5) + 0.40 * signed_power(f_short, 1.4) + 0.20 * vol_burst; delta_damp = 0.04 * signed_power(rank(ts_decay_linear(ts_delta(close, 4), 3)) - 0.5, 1.5); group_neutralize(signed_power(signal - delta_damp, 4.0), densify(subindustry))".to_string(),
+                expression: "news_sl = ts_backfill(vec_avg(<NEWS_SENTIMENT_FIELD>), 20); short_cov = ts_backfill(vec_avg(<SHORT_COVER_FIELD>), 40); f_news = if_else(is_nan(news_sl), 0, rank(news_sl) - 0.5); f_short = if_else(is_nan(short_cov), 0, rank(short_cov) - 0.5); vol_burst = signed_power(rank(volume / ts_mean(volume, 30)) - 0.5, 1.2); signal = 0.50 * signed_power(f_news, 1.5) + 0.40 * signed_power(f_short, 1.4) + 0.20 * vol_burst; delta_damp = 0.04 * signed_power(rank(ts_decay_linear(ts_delta(close, 4), 3)) - 0.5, 1.5); group_neutralize(signed_power(signal - delta_damp, 4.0), densify(subindustry))".to_string(),
                 universe: u.to_string(),
                 decay: 28,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -256,7 +300,7 @@ pub fn get_curated_candidates(
             },
             CandidateAlpha {
                 name: format!("US_D1_{}_News_DualShort_VWAP_Dec28", u),
-                expression: "news_sl = ts_backfill(vec_avg(<REDACTED_FIELD>_sl), 20); short_cov = ts_backfill(vec_avg(<REDACTED_FIELD>), 40); short_all = ts_backfill(vec_avg(<REDACTED_FIELD>), 40); f_news = if_else(is_nan(news_sl), 0, rank(news_sl) - 0.5); f_cov = if_else(is_nan(short_cov), 0, rank(short_cov) - 0.5); f_all = if_else(is_nan(short_all), 0, rank(short_all) - 0.5); dual_short = 0.60 * f_cov + 0.40 * f_all; vol_burst = signed_power(rank(volume / ts_mean(volume, 30)) - 0.5, 1.2); vwap_dev = signed_power(rank(vwap / close - 1) - 0.5, 1.4); signal = 0.50 * signed_power(f_news, 1.5) + 0.40 * signed_power(dual_short, 1.4) + 0.15 * vol_burst + 0.15 * vwap_dev; delta_damp = 0.04 * signed_power(rank(ts_decay_linear(ts_delta(close, 4), 3)) - 0.5, 1.5); group_neutralize(signed_power(signal - delta_damp, 4.2), densify(subindustry))".to_string(),
+                expression: "news_sl = ts_backfill(vec_avg(<NEWS_SENTIMENT_FIELD>), 20); short_cov = ts_backfill(vec_avg(<SHORT_COVER_FIELD>), 40); short_all = ts_backfill(vec_avg(<SHORT_INTEREST_ALL_FIELD>), 40); f_news = if_else(is_nan(news_sl), 0, rank(news_sl) - 0.5); f_cov = if_else(is_nan(short_cov), 0, rank(short_cov) - 0.5); f_all = if_else(is_nan(short_all), 0, rank(short_all) - 0.5); dual_short = 0.60 * f_cov + 0.40 * f_all; vol_burst = signed_power(rank(volume / ts_mean(volume, 30)) - 0.5, 1.2); vwap_dev = signed_power(rank(vwap / close - 1) - 0.5, 1.4); signal = 0.50 * signed_power(f_news, 1.5) + 0.40 * signed_power(dual_short, 1.4) + 0.15 * vol_burst + 0.15 * vwap_dev; delta_damp = 0.04 * signed_power(rank(ts_decay_linear(ts_delta(close, 4), 3)) - 0.5, 1.5); group_neutralize(signed_power(signal - delta_damp, 4.2), densify(subindustry))".to_string(),
                 universe: u.to_string(),
                 decay: 28,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -265,7 +309,7 @@ pub fn get_curated_candidates(
             },
             CandidateAlpha {
                 name: format!("US_D1_{}_Short_VWAP_OrderFlow_Dec25", u),
-                expression: "short_cov = ts_backfill(vec_avg(<REDACTED_FIELD>), 40); f_short = if_else(is_nan(short_cov), 0, rank(short_cov) - 0.5); vwap_dev = signed_power(rank(vwap / close - 1) - 0.5, 1.4); vol_burst = signed_power(rank(volume / ts_mean(volume, 30)) - 0.5, 1.2); signal = 0.60 * signed_power(f_short, 1.4) + 0.25 * vwap_dev + 0.20 * vol_burst; delta_damp = 0.04 * signed_power(rank(ts_decay_linear(ts_delta(close, 4), 3)) - 0.5, 1.5); group_neutralize(signed_power(signal - delta_damp, 4.0), densify(subindustry))".to_string(),
+                expression: "short_cov = ts_backfill(vec_avg(<SHORT_COVER_FIELD>), 40); f_short = if_else(is_nan(short_cov), 0, rank(short_cov) - 0.5); vwap_dev = signed_power(rank(vwap / close - 1) - 0.5, 1.4); vol_burst = signed_power(rank(volume / ts_mean(volume, 30)) - 0.5, 1.2); signal = 0.60 * signed_power(f_short, 1.4) + 0.25 * vwap_dev + 0.20 * vol_burst; delta_damp = 0.04 * signed_power(rank(ts_decay_linear(ts_delta(close, 4), 3)) - 0.5, 1.5); group_neutralize(signed_power(signal - delta_damp, 4.0), densify(subindustry))".to_string(),
                 universe: u.to_string(),
                 decay: 25,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -274,7 +318,7 @@ pub fn get_curated_candidates(
             },
             CandidateAlpha {
                 name: format!("US_D1_{}_NightDay_BorrowCost_Dec22", u),
-                expression: "night_ret = winsorize((open - ts_delay(close, 1)) / ts_delay(close, 1)); day_ret = winsorize((close - open) / open); spread = ts_mean(night_ret, 10) - ts_mean(day_ret, 10); short_cov = ts_backfill(vec_avg(<REDACTED_FIELD>), 40); f_short = if_else(is_nan(short_cov), 0, rank(short_cov) - 0.5); signal = 0.65 * signed_power(rank(spread) - 0.5, 1.8) + 0.35 * signed_power(f_short, 1.4); group_neutralize(signed_power(signal, 4.2), densify(subindustry))".to_string(),
+                expression: "night_ret = winsorize((open - ts_delay(close, 1)) / ts_delay(close, 1)); day_ret = winsorize((close - open) / open); spread = ts_mean(night_ret, 10) - ts_mean(day_ret, 10); short_cov = ts_backfill(vec_avg(<SHORT_COVER_FIELD>), 40); f_short = if_else(is_nan(short_cov), 0, rank(short_cov) - 0.5); signal = 0.65 * signed_power(rank(spread) - 0.5, 1.8) + 0.35 * signed_power(f_short, 1.4); group_neutralize(signed_power(signal, 4.2), densify(subindustry))".to_string(),
                 universe: u.to_string(),
                 decay: 22,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -283,10 +327,9 @@ pub fn get_curated_candidates(
             },
         ],
         _ => vec![
-            // Default candidate batch; candidate independence is not established here.
             CandidateAlpha {
                 name: "US_D1_TOP500_Analyst_EPS_Delta5_Dec32".to_string(),
-                expression: "group_neutralize(signed_power(rank(ts_backfill(<REDACTED_FIELD>, 20) / close) - 0.5, 3.2) - 0.6 * rank(ts_delta(close, 5)), densify(sector))".to_string(),
+                expression: "group_neutralize(signed_power(rank(ts_backfill(<ANALYST_REVISION_FIELD>, 20) / close) - 0.5, 3.2) - 0.6 * rank(ts_delta(close, 5)), densify(sector))".to_string(),
                 universe: "TOP500".to_string(),
                 decay: 32,
                 neutralization: "SECTOR".to_string(),
@@ -295,7 +338,7 @@ pub fn get_curated_candidates(
             },
             CandidateAlpha {
                 name: "US_D1_TOP1000_IdioCurv_30_60_90_Dec14".to_string(),
-                expression: "group_neutralize(signed_power(rank(ts_backfill(<REDACTED_FIELD>_30_days, 10) - 2.0 * ts_backfill(<REDACTED_FIELD>_60_days, 10) + ts_backfill(<REDACTED_FIELD>_90_days, 10)) - 0.5, 2.5), densify(subindustry))".to_string(),
+                expression: "group_neutralize(signed_power(rank(ts_backfill(<IDIO_RISK_SHORT>, 10) - 2.0 * ts_backfill(<IDIO_RISK_MED>, 10) + ts_backfill(<IDIO_RISK_LONG>, 10)) - 0.5, 2.5), densify(subindustry))".to_string(),
                 universe: "TOP1000".to_string(),
                 decay: 14,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -304,7 +347,7 @@ pub fn get_curated_candidates(
             },
             CandidateAlpha {
                 name: "US_D1_TOP3000_VRP120d_Hedge_Dec26".to_string(),
-                expression: "vrp = rank(ts_backfill(<REDACTED_FIELD> / historical_volatility_120, 20)) - rank(ts_backfill(<REDACTED_FIELD> / historical_volatility_120, 20)); signal = signed_power(vrp, 1.3) - 0.04 * signed_power(rank(ts_delta(close, 4)) - 0.5, 1.5); group_neutralize(signed_power(signal, 4.2), densify(subindustry))".to_string(),
+                expression: "vrp = rank(ts_backfill(<IMPLIED_VOL_CALL_120D> / <HISTORICAL_VOL_120D>, 20)) - rank(ts_backfill(<IMPLIED_VOL_PUT_120D> / <HISTORICAL_VOL_120D>, 20)); signal = signed_power(vrp, 1.3) - 0.04 * signed_power(rank(ts_delta(close, 4)) - 0.5, 1.5); group_neutralize(signed_power(signal, 4.2), densify(subindustry))".to_string(),
                 universe: "TOP3000".to_string(),
                 decay: 26,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -322,7 +365,7 @@ pub fn get_curated_candidates(
             },
             CandidateAlpha {
                 name: "US_D1_TOP1000_Sloan_Accruals_Dec16".to_string(),
-                expression: "group_neutralize(signed_power(rank((cashflow_op - income) / assets) - 0.5, 3.5), densify(subindustry))".to_string(),
+                expression: "group_neutralize(signed_power(rank((<OPERATING_CASHFLOW> - <NET_INCOME>) / <TOTAL_ASSETS>) - 0.5, 3.5), densify(subindustry))".to_string(),
                 universe: u.to_string(),
                 decay: 16,
                 neutralization: "SUBINDUSTRY".to_string(),
@@ -331,7 +374,7 @@ pub fn get_curated_candidates(
             },
             CandidateAlpha {
                 name: "US_D1_TOP500_PureAnalyst_Apex_Dec50".to_string(),
-                expression: "group_neutralize(signed_power(rank(ts_decay_linear(ts_backfill(<REDACTED_FIELD> / close, 126), 20)) - 0.5, 4.4), densify(sector))".to_string(),
+                expression: "group_neutralize(signed_power(rank(ts_decay_linear(ts_backfill(<ANALYST_EPS_FIELD> / close, 126), 20)) - 0.5, 4.4), densify(sector))".to_string(),
                 universe: "TOP500".to_string(),
                 decay: 50,
                 neutralization: "SECTOR".to_string(),

@@ -222,3 +222,103 @@ fn test_leaderboard_response_deserialization() {
     assert_eq!(resp.results[1].user.id(), "USR12345");
     assert_eq!(resp.results[1].score, 0.74);
 }
+
+fn make_check(name: &str, result: &str) -> alphafind::models::CheckItem {
+    alphafind::models::CheckItem {
+        name: name.to_string(),
+        result: result.to_string(),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn test_evaluate_submission_checks_empty_fails_closed() {
+    use alphafind::client::evaluate_submission_checks;
+    let stats = InSampleStats {
+        checks: vec![],
+        ..Default::default()
+    };
+    let eval = evaluate_submission_checks(&stats);
+    assert!(!eval.passed);
+    assert!(eval.message.contains("FAIL-CLOSED"));
+    assert_eq!(eval.missing_core_checks.len(), 6);
+}
+
+#[test]
+fn test_evaluate_submission_checks_missing_core_fails_closed() {
+    use alphafind::client::evaluate_submission_checks;
+    let stats = InSampleStats {
+        checks: vec![
+            make_check("LOW_SHARPE", "PASS"),
+            make_check("LOW_FITNESS", "PASS"),
+        ],
+        ..Default::default()
+    };
+    let eval = evaluate_submission_checks(&stats);
+    assert!(!eval.passed);
+    assert!(eval.message.contains("Missing required core checks"));
+    assert!(eval.missing_core_checks.contains(&"SELF_CORRELATION".to_string()));
+}
+
+#[test]
+fn test_evaluate_submission_checks_pending_reported() {
+    use alphafind::client::evaluate_submission_checks;
+    let stats = InSampleStats {
+        checks: vec![
+            make_check("LOW_SHARPE", "PASS"),
+            make_check("LOW_FITNESS", "PASS"),
+            make_check("LOW_TURNOVER", "PASS"),
+            make_check("HIGH_TURNOVER", "PASS"),
+            make_check("CONCENTRATED_WEIGHT", "PASS"),
+            make_check("SELF_CORRELATION", "PENDING"),
+        ],
+        ..Default::default()
+    };
+    let eval = evaluate_submission_checks(&stats);
+    assert!(!eval.passed);
+    assert!(eval.pending_checks.contains(&"SELF_CORRELATION".to_string()));
+    assert!(eval.message.contains("CHECKS STILL PENDING"));
+}
+
+#[test]
+fn test_evaluate_submission_checks_unknown_status_fails_closed() {
+    use alphafind::client::evaluate_submission_checks;
+    let stats = InSampleStats {
+        checks: vec![
+            make_check("LOW_SHARPE", "PASS"),
+            make_check("LOW_FITNESS", "PASS"),
+            make_check("LOW_TURNOVER", "PASS"),
+            make_check("HIGH_TURNOVER", "PASS"),
+            make_check("CONCENTRATED_WEIGHT", "PASS"),
+            make_check("SELF_CORRELATION", "ERROR"),
+        ],
+        ..Default::default()
+    };
+    let eval = evaluate_submission_checks(&stats);
+    assert!(!eval.passed);
+    assert_eq!(eval.failed_checks.len(), 1);
+    assert!(eval.failed_checks[0].contains("ERROR"));
+}
+
+#[test]
+fn test_evaluate_submission_checks_all_pass_succeeds() {
+    use alphafind::client::evaluate_submission_checks;
+    let stats = InSampleStats {
+        checks: vec![
+            make_check("LOW_SHARPE", "PASS"),
+            make_check("LOW_FITNESS", "PASS"),
+            make_check("LOW_TURNOVER", "PASS"),
+            make_check("HIGH_TURNOVER", "PASS"),
+            make_check("CONCENTRATED_WEIGHT", "PASS"),
+            make_check("SELF_CORRELATION", "PASS"),
+            make_check("LOW_SUB_UNIVERSE_SHARPE", "PASS"),
+            make_check("MATCHES_COMPETITION", "PASS"),
+        ],
+        ..Default::default()
+    };
+    let eval = evaluate_submission_checks(&stats);
+    assert!(eval.passed);
+    assert_eq!(eval.passed_count, 8);
+    assert_eq!(eval.total_count, 8);
+    assert!(eval.message.contains("ALL SUBMISSION CHECKS PASSED (8/8 PASS)"));
+}

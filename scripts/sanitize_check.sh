@@ -85,14 +85,19 @@ if [ -n "$RANGE" ]; then
     fi
 fi
 
-# 5. Check for hardcoded proprietary dataset fields in forecast.rs skeletons
-if [ -f "src/forecast.rs" ]; then
-    if grep -E "<REDACTED_FIELD>|<REDACTED_FIELD>|<REDACTED_FIELD>" src/forecast.rs >/dev/null 2>&1; then
-        echo -e "${RED}❌ ERROR: Concrete dataset fields found in src/forecast.rs!${NC}"
-        echo "   Use abstract tokens like <SHORT_FIELD>, <NEWS_SENTIMENT>, <IDIO_RISK_TERM>."
-        exit 1
+# 5. Check for hardcoded proprietary dataset fields in candidate generators (forecast.rs, taxonomy.rs)
+CANDIDATE_GENS="src/forecast.rs src/taxonomy.rs"
+PROPRIETARY_PATTERNS="<REDACTED_FIELD>|<REDACTED_FIELD>|<REDACTED_FIELD>|<REDACTED_FIELD>|<REDACTED_FIELD>|<REDACTED_FIELD>|<REDACTED_FIELD>"
+for f in $CANDIDATE_GENS; do
+    if [ -f "$f" ]; then
+        if grep -E "$PROPRIETARY_PATTERNS" "$f" >/dev/null 2>&1; then
+            echo -e "${RED}❌ ERROR: Concrete dataset fields found in $f!${NC}"
+            grep -En "$PROPRIETARY_PATTERNS" "$f"
+            echo "   Use abstract tokens like <SHORT_FIELD>, <NEWS_SENTIMENT>, <IDIO_RISK_TERM>, <IMPLIED_VOL>."
+            exit 1
+        fi
     fi
-fi
+done
 
 echo -e "${GREEN}✅ [SANITIZATION GATEKEEPER] Pre-Push Audit PASSED. Safe to push.${NC}"
 exit 0

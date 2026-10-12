@@ -266,7 +266,7 @@ enum Commands {
 
     /// Simulate exact portfolio merge impact (Delta Sharpe, PnL, Vol, Correlation) for a candidate Alpha
     Impact {
-        /// Candidate Alpha ID (e.g., vR2lzJor)
+        /// Candidate Alpha ID (e.g., A1b2C3d4)
         alpha_id: String,
     },
 
