@@ -330,7 +330,7 @@ enum Commands {
     /// Diagnose active OS portfolio health, alpha decay ratios, half-life, and marginal Sharpe impact
     Health {
         /// Optional specific Alpha ID to inspect in depth
-        #[arg(short, long)]
+        #[arg(short = 'i', long)]
         alpha_id: Option<String>,
 
         /// Export full diagnostic JSON report to a file
