@@ -1856,7 +1856,7 @@ async fn cmd_shadow(
         )
         .fields;
         for field_id in formula_fields.iter().take(3) {
-            if profile_lookups >= 120 {
+            if profile_lookups >= 20 {
                 break 'profile_lookup;
             }
             let key = field_cache_key(field_id, &config);
@@ -1864,7 +1864,7 @@ async fn cmd_shadow(
                 continue;
             }
             profile_lookups += 1;
-            if let Ok(Some(field)) = client
+            match client
                 .fetch_data_field(
                     field_id,
                     &config.instrument_type,
@@ -1874,7 +1874,17 @@ async fn cmd_shadow(
                 )
                 .await
             {
-                cache_field(&mut field_cache, key, field, now);
+                Ok(Some(field)) => {
+                    cache_field(&mut field_cache, key, field, now);
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    println!(
+                        "  Field metadata lookup paused ({}); continuing with available cache and census.",
+                        error
+                    );
+                    break 'profile_lookup;
+                }
             }
         }
     }
@@ -2091,7 +2101,8 @@ async fn cmd_shadow(
     let refresh_pnl_ids: Vec<String> = pnl_ids
         .into_iter()
         .filter(|alpha_id| {
-            !(candidate_alpha_id.as_deref() == Some(alpha_id.as_str()) && candidate_pnl.is_some())
+            !pnl_cache.contains_key(alpha_id)
+                && !(candidate_alpha_id.as_deref() == Some(alpha_id.as_str()) && candidate_pnl.is_some())
         })
         .collect();
     let mut stale_pnl_count = 0usize;
