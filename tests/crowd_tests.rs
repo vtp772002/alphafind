@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use alphafind::crowd::{
     detect_dataset_and_pillar, evaluate_crowd_risk, NeutralizationShield, UniquenessRisk,
 };

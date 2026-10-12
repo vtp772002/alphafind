@@ -33,6 +33,11 @@ use alphafind::taxonomy::{get_curated_candidates, FactorPillar};
 
 type DatasetAllocationKey = (String, String, String, i32, String);
 type ProfileDatasetFields = Vec<(DatasetAllocationKey, Vec<String>)>;
+type AllocationSets = (
+    std::collections::HashSet<String>,
+    std::collections::BTreeSet<String>,
+    std::collections::BTreeSet<String>,
+);
 
 fn derive_profile_usage_weights(
     alpha_datasets: &HashMap<String, ProfileDatasetFields>,
@@ -1760,7 +1765,7 @@ async fn cmd_shadow(
     let requested_candidate_id = candidate.clone();
     let candidate_source: Option<(String, FieldConfig)> = if let Some(alpha_id) = candidate.as_ref()
     {
-        let details = client.get_alpha_details(&alpha_id).await?;
+        let details = client.get_alpha_details(alpha_id).await?;
         let code = details
             .get_code()
             .context("BRAIN did not return a formula for this Alpha")?
@@ -1859,7 +1864,7 @@ async fn cmd_shadow(
                 continue;
             }
             profile_lookups += 1;
-            match client
+            if let Ok(Some(field)) = client
                 .fetch_data_field(
                     field_id,
                     &config.instrument_type,
@@ -1869,8 +1874,7 @@ async fn cmd_shadow(
                 )
                 .await
             {
-                Ok(Some(field)) => cache_field(&mut field_cache, key, field, now),
-                Ok(None) | Err(_) => {}
+                cache_field(&mut field_cache, key, field, now);
             }
         }
     }
@@ -1963,11 +1967,7 @@ async fn cmd_shadow(
 
     let mut portfolio_allocations: std::collections::BTreeMap<
         DatasetAllocationKey,
-        (
-            std::collections::HashSet<String>,
-            std::collections::BTreeSet<String>,
-            std::collections::BTreeSet<String>,
-        ),
+        AllocationSets,
     > = std::collections::BTreeMap::new();
     let mut alpha_dataset_fields: HashMap<String, ProfileDatasetFields> = HashMap::new();
     let mut portfolio_field_count = 0usize;
