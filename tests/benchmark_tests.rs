@@ -45,7 +45,12 @@ fn bench_correlation_pairwise_scaling() {
         pairs_computed, n_alphas, n_days, elapsed
     );
     let max_allowed_ms = if cfg!(debug_assertions) { 5000 } else { 300 };
-    assert!(elapsed.as_millis() < max_allowed_ms, "Correlation benchmark exceeded {}ms: {:?}", max_allowed_ms, elapsed);
+    assert!(
+        elapsed.as_millis() < max_allowed_ms,
+        "Correlation benchmark exceeded {}ms: {:?}",
+        max_allowed_ms,
+        elapsed
+    );
 }
 
 #[test]
@@ -70,7 +75,12 @@ fn bench_simulate_portfolio_scalability() {
         n_days, elapsed
     );
     let max_allowed_ms = if cfg!(debug_assertions) { 10000 } else { 500 };
-    assert!(elapsed.as_millis() < max_allowed_ms, "Portfolio simulation exceeded {}ms: {:?}", max_allowed_ms, elapsed);
+    assert!(
+        elapsed.as_millis() < max_allowed_ms,
+        "Portfolio simulation exceeded {}ms: {:?}",
+        max_allowed_ms,
+        elapsed
+    );
 }
 
 #[test]
@@ -93,5 +103,10 @@ fn bench_hyper_synergy_throughput() {
         iterations, elapsed
     );
     let max_allowed_ms = if cfg!(debug_assertions) { 2000 } else { 100 };
-    assert!(elapsed.as_millis() < max_allowed_ms, "Hyper synergy benchmark exceeded {}ms: {:?}", max_allowed_ms, elapsed);
+    assert!(
+        elapsed.as_millis() < max_allowed_ms,
+        "Hyper synergy benchmark exceeded {}ms: {:?}",
+        max_allowed_ms,
+        elapsed
+    );
 }

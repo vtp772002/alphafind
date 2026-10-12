@@ -47,7 +47,10 @@ pub fn evaluate_submission_checks(stats: &InSampleStats) -> SubmissionCheckResul
             total_count: 0,
             failed_checks: Vec::new(),
             pending_checks: Vec::new(),
-            missing_core_checks: CORE_SUBMISSION_CHECKS.iter().map(|s| s.to_string()).collect(),
+            missing_core_checks: CORE_SUBMISSION_CHECKS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
         };
     }
 
@@ -375,11 +378,13 @@ impl BrainClient {
         poll_interval_secs: u64,
     ) -> Result<SimulationResponse> {
         let url = if sim_url_or_id.starts_with("http") {
-            let parsed = reqwest::Url::parse(sim_url_or_id)
-                .context("Invalid simulation URL format")?;
-            let base_parsed = reqwest::Url::parse(&self.base_url)
-                .context("Invalid configured base URL")?;
-            if parsed.scheme() != base_parsed.scheme() || parsed.host_str() != base_parsed.host_str() {
+            let parsed =
+                reqwest::Url::parse(sim_url_or_id).context("Invalid simulation URL format")?;
+            let base_parsed =
+                reqwest::Url::parse(&self.base_url).context("Invalid configured base URL")?;
+            if parsed.scheme() != base_parsed.scheme()
+                || parsed.host_str() != base_parsed.host_str()
+            {
                 return Err(anyhow!(
                     "Security violation: Rejected follow-up URL outside configured BRAIN host ({}): {}",
                     self.base_url,
@@ -389,7 +394,10 @@ impl BrainClient {
             sim_url_or_id.to_string()
         } else {
             let id = sim_url_or_id.trim();
-            if !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+            if !id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+            {
                 return Err(anyhow!("Invalid simulation ID format: {}", id));
             }
             format!("{}/simulations/{}", self.base_url, id)
@@ -686,7 +694,10 @@ impl BrainClient {
     }
 
     /// Fetches all user's alphas matching the filter, automatically iterating through all pages.
-    pub async fn fetch_user_alphas_paginated(&self, base_filter: &str) -> Result<Vec<serde_json::Value>> {
+    pub async fn fetch_user_alphas_paginated(
+        &self,
+        base_filter: &str,
+    ) -> Result<Vec<serde_json::Value>> {
         let mut all_results = Vec::new();
         let mut offset = 0;
         let limit = 100;

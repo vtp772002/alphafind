@@ -222,7 +222,10 @@ pub fn evaluate_portfolio_health(
                 }
             }
             let (max_corr_val, safety_buffer) = match max_corr {
-                Some(r) => (r, (crate::config::quant::BRAIN_MAX_CORRELATION - r).max(0.0) * 100.0),
+                Some(r) => (
+                    r,
+                    (crate::config::quant::BRAIN_MAX_CORRELATION - r).max(0.0) * 100.0,
+                ),
                 None => (0.0, 0.0),
             };
             if safety_buffer < 8.0 && max_corr.is_some() {
@@ -253,9 +256,8 @@ pub fn evaluate_portfolio_health(
             };
 
             // Crowd co-movement from shadow portfolio if available
-            let crowd_corr = shadow_opt.and_then(|shadow| {
-                pearson_correlation(pnl, &shadow.shadow_pnl).0
-            });
+            let crowd_corr =
+                shadow_opt.and_then(|shadow| pearson_correlation(pnl, &shadow.shadow_pnl).0);
 
             all_reports.push(AlphaHealthReport {
                 alpha_id: alpha.id.clone(),

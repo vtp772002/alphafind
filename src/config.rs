@@ -64,7 +64,8 @@ pub mod quant {
     pub use super::research_hypotheses::*;
 
     /// Backward-compatibility alias for internal target Sharpe
-    pub const MIN_QUALIFYING_SHARPE: f64 = super::research_hypotheses::INTERNAL_TARGET_SHARPE_HEURISTIC;
+    pub const MIN_QUALIFYING_SHARPE: f64 =
+        super::research_hypotheses::INTERNAL_TARGET_SHARPE_HEURISTIC;
 }
 
 /// Operational and caching thresholds

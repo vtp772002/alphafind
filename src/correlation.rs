@@ -71,8 +71,8 @@ pub struct CorrelationAuditReport {
     pub pairwise_results: Vec<(String, f64, usize)>, // (alpha_id, corr, common_days)
     pub insufficient_overlap_count: usize,
     pub valid_comparisons: usize,
-    pub is_brain_compliant: bool,                    // <= 0.70 with valid comparisons
-    pub is_true_orthogonal: bool,                    // <= 0.15 with valid comparisons
+    pub is_brain_compliant: bool, // <= 0.70 with valid comparisons
+    pub is_true_orthogonal: bool, // <= 0.15 with valid comparisons
 }
 
 /// Audits a candidate Alpha's PnL against an entire portfolio of active OS Alphas in a fail-closed manner.
