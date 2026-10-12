@@ -409,8 +409,10 @@ pub fn build_dynamic_matrix(
             let p_a = &p_names[i];
             let p_b = &p_names[j];
 
-            let stat_a = pillar_stats.get(p_a).unwrap();
-            let stat_b = pillar_stats.get(p_b).unwrap();
+            let (stat_a, stat_b) = match (pillar_stats.get(p_a), pillar_stats.get(p_b)) {
+                (Some(a), Some(b)) => (a, b),
+                _ => continue,
+            };
 
             // Configured affinity assumptions; these are not measured co-occurrence rates.
             let affinity = match (p_a.as_str(), p_b.as_str()) {

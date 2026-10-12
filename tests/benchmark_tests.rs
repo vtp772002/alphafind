@@ -75,8 +75,8 @@ fn bench_simulate_portfolio_scalability() {
 
 #[test]
 fn bench_hyper_synergy_throughput() {
-    let dummy_expr = "risk = ts_backfill(<REDACTED_FIELD>_60_days, 10); \
-                      borrow = ts_backfill(<REDACTED_FIELD>, 40); \
+    let dummy_expr = "risk = ts_backfill(residual_vol_proxy, 10); \
+                      borrow = ts_backfill(borrow_fee_rate, 40); \
                       vwap_dev = rank(vwap / close - 1); \
                       signal = 0.5 * risk + 0.3 * borrow + 0.2 * vwap_dev; \
                       trade_when(abs(signal) > 0.01, signal, -1)";

@@ -202,12 +202,14 @@ pub fn calibrate_shadow_portfolio(
         .sum::<f64>()
         / (n_days_f64 - 1.0);
 
-    let z_norm: Vec<f64> = if (1.0 - r0.powi(2)).abs() > 1e-6 {
-        let scale = (1.0 - r0.powi(2)).sqrt();
+    let r0_clamped = r0.clamp(-0.9999, 0.9999);
+    let remainder = (1.0 - r0_clamped.powi(2)).max(0.0);
+    let z_norm: Vec<f64> = if remainder > 1e-6 {
+        let scale = remainder.sqrt();
         x_norm
             .iter()
             .zip(y_norm.iter())
-            .map(|(&x, &y)| (y - r0 * x) / scale)
+            .map(|(&x, &y)| (y - r0_clamped * x) / scale)
             .collect()
     } else {
         // Deterministic synthetic orthogonal perturbation
@@ -286,7 +288,7 @@ pub fn project_uniqueness_impact(
 
     // 3. Candidate correlation with internal portfolio
     let (cand_internal_corr_opt, _) = pearson_correlation(candidate_pnl, &user_merged_pnl);
-    let cand_internal_corr = cand_internal_corr_opt.unwrap_or(0.0);
+    let cand_internal_corr = cand_internal_corr_opt?;
 
     // 4. Build New Combined Portfolio: P_new = (N * P_user + P_cand) / (N + 1)
     let mut new_merged_pnl = HashMap::new();
@@ -435,11 +437,7 @@ pub fn print_shadow_audit_report(
     println!("  │ Alpha ID │ Name                                       │ Proxy Corr  │");
     println!("  ├──────────┼────────────────────────────────────────────┼─────────────┤");
     for (id, name, corr) in &report.highest_crowd_alphas {
-        let display_name = if name.len() > 42 {
-            &name[..42]
-        } else {
-            name.as_str()
-        };
+        let display_name: String = name.chars().take(42).collect();
         println!(
             "  │ {:<8} │ {:<42} │ {:>+10.2}% │",
             id.yellow(),
@@ -454,11 +452,7 @@ pub fn print_shadow_audit_report(
     println!("  │ Alpha ID │ Name                                       │ Proxy Corr  │");
     println!("  ├──────────┼────────────────────────────────────────────┼─────────────┤");
     for (id, name, corr) in &report.lowest_crowd_alphas {
-        let display_name = if name.len() > 42 {
-            &name[..42]
-        } else {
-            name.as_str()
-        };
+        let display_name: String = name.chars().take(42).collect();
         println!(
             "  │ {:<8} │ {:<42} │ {:>+10.2}% │",
             id.green(),

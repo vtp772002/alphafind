@@ -74,7 +74,7 @@ alphafind/
 > **Location:** [`src/taxonomy.rs`](file:///Users/phamtoan/Developer/alphafind/src/taxonomy.rs) lines 210–334
 > **Violates:** `AGENTS.md` Backlog Item #3, Git Hygiene Policy
 
-14+ complete, concrete FastExpr alpha formulas using live platform datasets (`<REDACTED_FIELD>`, `<REDACTED_FIELD>`, `<REDACTED_FIELD>_*`, `<REDACTED_FIELD>`) are directly committed to Git-tracked source code.
+14+ complete FastExpr alpha formulas using platform datasets (`<IMPLIED_VOL>`, `<SHORT_FIELD>`, `<IDIO_RISK_TERM>`, `<ANALYST_FIELD>`) were previously directly committed to Git-tracked source code.
 
 **Impact:** Anyone with repository access (or access to Git history) can see proprietary research IP. Even if deleted in a future commit, formulas remain in Git history permanently.
 
@@ -312,6 +312,18 @@ flowchart LR
 16. **Externalize magic numbers** ✅ — Centralized quant boundaries, platform compliance limits, and caching parameters in [`src/config.rs`](file:///Users/phamtoan/Developer/alphafind/src/config.rs).
 17. **Improve Rustdoc coverage** ✅ — Full public API doc comment coverage verified via `cargo doc --no-deps`.
 18. **Prune deprecated modules** ✅ — Added module deprecation notice to [`src/crowd.rs`](file:///Users/phamtoan/Developer/alphafind/src/crowd.rs).
+
+### Phase 5: 360° Specialist Audit & Production Hardening (Completed ✅)
+
+Following the implementation of Phases 1–4, three specialized subagents conducted a concurrent, multi-perspective audit across Security & Compliance, Quantitative Math/Logic, and Rust Architecture & Test Coverage:
+
+| Audit Dimension | Auditor Role | Key Findings & Remediations | Status |
+|:---|:---|:---|:---:|
+| **Security & Compliance** | Security Auditor | • Sanitized concrete dataset names in integration tests (`tests/benchmark_tests.rs`, `tests/crowd_tests.rs`, `tests/matrix_tests.rs`)<br>• Hardened `scripts/sanitize_check.sh` to extract Alpha IDs from `portfolio_os.json` and scan entire `src/`, `tests/`, and `docs/`<br>• Enforced pre-push sanitization gate in `.github/workflows/ci.yml` | **VERIFIED (PASSED)** |
+| **Quantitative Math & Logic** | Quant Auditor | • Partitioned `src/config.rs` constants into platform rules vs internal hypotheses<br>• Corrected fail-closed behavior in `calculate_portfolio_impact` when overlap < 30 days<br>• Fixed directional inversion in Sharpe decay ratio calculation (`full_sh <= 0.0`)<br>• Clamped calibration correlation to avoid numerical overshoot and NaNs in `shadow.rs` | **VERIFIED (PASSED)** |
+| **Rust Architecture & Robustness** | Architect Auditor | • Grade awarded: **A (94/100)**<br>• Eliminated remaining `.unwrap()` calls in `matrix.rs` and `commands/simulation.rs`<br>• Replaced byte-slice indexing with UTF-8 char-safe slicing in CLI outputs<br>• Added full crate-level documentation to `src/lib.rs` | **VERIFIED (PASSED)** |
+
+*Final Test Suite: **89 passing tests**, 0 warnings (`cargo clippy --all-targets -- -D warnings`), 100% clean pre-push audit.*
 
 ---
 

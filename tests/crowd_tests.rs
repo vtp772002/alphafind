@@ -15,7 +15,7 @@ fn test_detect_dataset_and_pillar_options() {
 
 #[test]
 fn test_detect_dataset_and_pillar_idio_risk() {
-    let expr = "raw_60 = ts_backfill(<REDACTED_FIELD>_60_days, 10); raw_60";
+    let expr = "raw_60 = ts_backfill(residual_vol_proxy, 10); raw_60";
     let (ds, pillar) = detect_dataset_and_pillar(expr);
     assert_eq!(ds, "model51");
     assert_eq!(pillar, "IDIOSYNCRATIC_RISK");
@@ -23,7 +23,7 @@ fn test_detect_dataset_and_pillar_idio_risk() {
 
 #[test]
 fn test_detect_dataset_and_pillar_short() {
-    let expr = "short_val = ts_backfill(vec_avg(<REDACTED_FIELD>), 40); short_val";
+    let expr = "short_val = ts_backfill(vec_avg(short_interest_proxy), 40); short_val";
     let (ds, pillar) = detect_dataset_and_pillar(expr);
     assert_eq!(ds, "short");
     assert_eq!(pillar, "SHORT_INTEREST");
@@ -31,7 +31,7 @@ fn test_detect_dataset_and_pillar_short() {
 
 #[test]
 fn test_detect_dataset_and_pillar_news() {
-    let expr = "news_sl = ts_backfill(vec_avg(<REDACTED_FIELD>_sl), 20); news_sl";
+    let expr = "news_sl = ts_backfill(vec_avg(news_headline_sentiment), 20); news_sl";
     let (ds, pillar) = detect_dataset_and_pillar(expr);
     assert_eq!(ds, "news12");
     assert_eq!(pillar, "NEWS_EVENT");
@@ -47,7 +47,7 @@ fn test_detect_dataset_and_pillar_fundamental() {
 
 #[test]
 fn test_evaluate_crowd_risk_sanctuary_subneut() {
-    let expr = "raw_60 = ts_backfill(<REDACTED_FIELD>_60_days, 10); raw_60";
+    let expr = "raw_60 = ts_backfill(residual_vol_proxy, 10); raw_60";
     let report = evaluate_crowd_risk(expr, "TOP200", "SUBINDUSTRY", None);
     assert_eq!(report.detected_dataset, "model51");
     assert_eq!(report.detected_pillar, "IDIOSYNCRATIC_RISK");

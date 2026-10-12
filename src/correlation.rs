@@ -49,7 +49,7 @@ pub fn pearson_correlation(
     }
 
     let denom = (var_x * var_y).sqrt();
-    if denom > EPSILON_VARIANCE {
+    if var_x > EPSILON_VARIANCE && var_y > EPSILON_VARIANCE && denom > EPSILON_VARIANCE {
         let corr = cov / denom;
         if corr.is_finite() {
             (Some(corr.clamp(-1.0, 1.0)), n)
@@ -257,7 +257,7 @@ pub fn calculate_portfolio_impact(
     let new_metrics = simulate_portfolio(&combined_refs)?;
 
     // Calculate candidate correlation vs active OS alphas (skipping itself)
-    let mut max_corr = -1.0;
+    let mut max_corr: Option<f64> = None;
     let mut most_corr_id = String::new();
     let mut sum_corr = 0.0;
     let mut valid_pairs = 0;
@@ -266,25 +266,23 @@ pub fn calculate_portfolio_impact(
         if os_id == candidate_id {
             continue;
         }
-        if let (Some(corr), days) = pearson_correlation(candidate_pnl, pnl) {
-            if days >= 30 {
-                if corr > max_corr {
-                    max_corr = corr;
-                    most_corr_id = os_id.clone();
-                }
-                sum_corr += corr;
-                valid_pairs += 1;
+        if let (Some(corr), _) = pearson_correlation(candidate_pnl, pnl) {
+            if max_corr.is_none_or(|m| corr > m) {
+                max_corr = Some(corr);
+                most_corr_id = os_id.clone();
             }
+            sum_corr += corr;
+            valid_pairs += 1;
         }
     }
 
-    let avg_corr_vs_os = if valid_pairs > 0 {
-        sum_corr / (valid_pairs as f64)
-    } else {
-        0.0
-    };
+    if valid_pairs == 0 || max_corr.is_none() {
+        return None; // Fail-closed per AGENTS.md: cannot compute impact without valid pairwise overlap
+    }
 
-    let safety_buffer = (0.70 - max_corr).max(0.0) * 100.0;
+    let max_corr_val = max_corr.unwrap();
+    let avg_corr_vs_os = sum_corr / (valid_pairs as f64);
+    let safety_buffer = (BRAIN_MAX_CORRELATION - max_corr_val).max(0.0) * 100.0;
 
     Some(PortfolioImpactResult {
         candidate_id: candidate_id.to_string(),
@@ -305,7 +303,7 @@ pub fn calculate_portfolio_impact(
         delta_vol: new_metrics.annualized_vol - baseline.annualized_vol,
         delta_avg_corr: new_metrics.avg_pairwise_corr - baseline.avg_pairwise_corr,
 
-        max_pairwise_corr: max_corr,
+        max_pairwise_corr: max_corr_val,
         most_correlated_id: most_corr_id,
         avg_pairwise_corr_vs_os: avg_corr_vs_os,
         safety_buffer_pct: safety_buffer,

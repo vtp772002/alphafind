@@ -51,6 +51,19 @@ if [ -f "submittable_alphas.csv" ]; then
     done < submittable_alphas.csv
 fi
 
+if [ -f "portfolio_os.json" ]; then
+    while read -r alpha_id || [ -n "$alpha_id" ]; do
+        if [[ "$alpha_id" =~ ^[A-Za-z0-9]{8}$ ]]; then
+            ALPHA_IDS+=("$alpha_id")
+        fi
+    done < <(grep -oE '"id":\s*"[A-Za-z0-9]{8}"' portfolio_os.json | sed -E 's/.*"([A-Za-z0-9]{8})".*/\1/' | sort -u)
+fi
+
+# Deduplicate ALPHA_IDS
+if [ ${#ALPHA_IDS[@]} -gt 0 ]; then
+    ALPHA_IDS=($(printf "%s\n" "${ALPHA_IDS[@]}" | sort -u))
+fi
+
 # Also check outgoing commits against remote upstream or recent commit
 RANGE=""
 if git rev-parse --verify @{u} >/dev/null 2>&1; then
@@ -96,14 +109,15 @@ if [ -n "$RANGE" ]; then
     fi
 fi
 
-# 5. Check for hardcoded proprietary dataset fields in candidate generators (forecast.rs, taxonomy.rs)
-CANDIDATE_GENS="src/forecast.rs src/taxonomy.rs"
+# 5. Check for hardcoded proprietary dataset fields across all tracked source and tests
 PROPRIETARY_PATTERNS="<REDACTED_FIELD>|<REDACTED_FIELD>|<REDACTED_FIELD>|<REDACTED_FIELD>|<REDACTED_FIELD>|<REDACTED_FIELD>|<REDACTED_FIELD>"
-for f in $CANDIDATE_GENS; do
-    if [ -f "$f" ]; then
-        if grep -E "$PROPRIETARY_PATTERNS" "$f" >/dev/null 2>&1; then
-            echo -e "${RED}❌ ERROR: Concrete dataset fields found in $f!${NC}"
-            grep -En "$PROPRIETARY_PATTERNS" "$f"
+SCAN_TARGETS=(src tests docs)
+for target in "${SCAN_TARGETS[@]}"; do
+    if [ -d "$target" ]; then
+        MATCHES=$(git grep -En "$PROPRIETARY_PATTERNS" -- "$target" 2>/dev/null || true)
+        if [ -n "$MATCHES" ]; then
+            echo -e "${RED}❌ ERROR: Concrete dataset fields found in $target!${NC}"
+            echo "$MATCHES"
             echo "   Use abstract tokens like <SHORT_FIELD>, <NEWS_SENTIMENT>, <IDIO_RISK_TERM>, <IMPLIED_VOL>."
             exit 1
         fi
