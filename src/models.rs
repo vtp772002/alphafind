@@ -410,6 +410,39 @@ pub struct DatasetListResponse {
     pub results: Vec<DatasetEntry>,
 }
 
+/// Field-level usage statistics returned by GET /data-fields.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataFieldEntry {
+    pub id: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub dataset: Option<DatasetCategoryInfo>,
+    #[serde(default)]
+    pub region: Option<String>,
+    #[serde(default)]
+    pub delay: Option<i32>,
+    #[serde(default)]
+    pub universe: Option<String>,
+    #[serde(default)]
+    pub coverage: Option<f64>,
+    #[serde(default)]
+    pub date_coverage: Option<f64>,
+    #[serde(default)]
+    pub user_count: Option<i64>,
+    #[serde(default)]
+    pub alpha_count: Option<i64>,
+}
+
+/// Paginated result returned by GET /data-fields.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DataFieldListResponse {
+    pub count: usize,
+    #[serde(default)]
+    pub results: Vec<DataFieldEntry>,
+}
+
 /// Historical snapshot of dataset census for tracking crowd migration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CensusSnapshot {

@@ -53,7 +53,7 @@ impl FactorPillar {
     }
 }
 
-/// Generates a curated batch of 9 orthogonal candidate alphas for parallel distributed screening
+/// Generates curated candidate hypotheses for screening.
 pub fn get_curated_candidates(
     pillar: Option<FactorPillar>,
     universe: Option<&str>,
@@ -283,7 +283,7 @@ pub fn get_curated_candidates(
             },
         ],
         _ => vec![
-            // Default 9-worker distributed batch across 3 accounts
+            // Default candidate batch; candidate independence is not established here.
             CandidateAlpha {
                 name: "US_D1_TOP500_Analyst_EPS_Delta5_Dec32".to_string(),
                 expression: "group_neutralize(signed_power(rank(ts_backfill(actual_eps_value_quarterly, 20) / close) - 0.5, 3.2) - 0.6 * rank(ts_delta(close, 5)), densify(sector))".to_string(),

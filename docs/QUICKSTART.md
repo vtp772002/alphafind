@@ -1,130 +1,61 @@
-# Quickstart Installation & Getting Started Guide
+# Quickstart
 
-Get up and running with **AlphaFind** in under 2 minutes.
+This guide covers a local build and a cautious first run. AlphaFind is an experimental research CLI; the BRAIN interface/API remains authoritative for simulation checks, OOS eligibility, competition score, and submission status.
 
----
+## Requirements
 
-## 📋 System Requirements
+- Rust toolchain with Cargo.
+- Network access to the BRAIN API.
+- One BRAIN account controlled by the participant using it.
 
-* **OS**: macOS (Apple Silicon / Intel), Linux (Ubuntu 20.04+, Debian, Fedora, Arch), or Windows via WSL2.
-* **Rust**: `rustc` and `cargo` $\ge 1.75.0$ (Rust 2021 Edition).
-* **WorldQuant BRAIN Account**: Active credentials. Optional secondary sessions enable full 9-worker distributed exploration.
-* **Network**: Stable HTTPS connection to `https://api.worldquantbrain.com`.
+WorldQuant's Challenge guidelines require one active account per participant and prohibit sharing an account or ID. Do not put another person's credentials into your `.env` or use multiple accounts for one person. Read [current BRAIN rules](BRAIN_RULES_AND_SUBMISSION.md) before using the competition features.
 
----
-
-## ⚡ Step 1: Installation
-
-### Option A: 1-Line Automated Installer (Recommended)
-
-Run the automated installer in your terminal. It detects your environment, verifies the Rust toolchain, fetches the repository, builds the optimized release binary, and adds `alphafind` to your `PATH`:
+## Build from source
 
 ```bash
-curl -# -fsSL https://raw.githubusercontent.com/vtp772002/alphafind/main/install.sh | bash
-```
-
-```text
-  [1/5] Verifying toolchain        [██████████████████████] 100% Rust 1.85.0 (OK)
-  [2/5] Downloading repository     [██████████████████████] 100% Complete
-  [3/5] Compiling release engine   [██████████████████████] 100% Optimized build ready
-  [4/5] Installing binary to PATH  [██████████████████████] 100% ~/.cargo/bin/alphafind
-  [5/5] Configuring environment    [██████████████████████] 100% .env initialized
-```
-
-### Option B: Build from Source
-
-```bash
-# Clone the repository
 git clone https://github.com/vtp772002/alphafind.git
 cd alphafind
-
-# Build the release binary
 cargo build --release
-
-# Install binary to local cargo bin
-cp target/release/alphafind ~/.cargo/bin/
 ```
 
-Verify installation:
-```bash
-alphafind --version
-```
+The repository's installer currently performs a hard reset during updates. Avoid running it against a working checkout until that behavior is changed and documented.
 
----
+## Configure credentials
 
-## ⚙️ Step 2: Configure Credentials (`.env`)
-
-In your `alphafind` directory, create a `.env` file from the example template:
+Create a local `.env` file and restrict its permissions:
 
 ```bash
 cp .env.example .env
-nano .env
+chmod 600 .env
 ```
 
-Populate with your credentials:
+Set only the primary account variables supported by this checkout:
 
 ```env
-# Primary Research Account (Mandatory - Verification & Official Submission)
-MAIN_ACCOUNT_EMAIL=your_email@example.com
-MAIN_ACCOUNT_PASSWORD=your_brain_password
-
-# Secondary Worker Sessions (Optional — Collaborative Team Research Pooling)
-SECONDARY_ACCOUNT_1_EMAIL=team_worker1@example.com
-SECONDARY_ACCOUNT_1_PASSWORD=team_worker1_password
-
-SECONDARY_ACCOUNT_2_EMAIL=team_worker2@example.com
-SECONDARY_ACCOUNT_2_PASSWORD=team_worker2_password
+MAIN_ACCOUNT_EMAIL=you@example.com
+MAIN_ACCOUNT_PASSWORD=your_password
 ```
 
-> [!NOTE]
-> Secondary sessions are optional. For collaborative quantitative research teams, configuring secondary sessions alongside your primary account enables scaling up to **9 parallel asynchronous workers**.
+Keep `.env` out of version control. The CLI may print account identifiers or email addresses while authenticating, so do not paste raw logs into public issues or commits.
 
----
-
-## 🔐 Step 3: Authenticate Accounts
-
-Verify your credentials and test session cookie generation:
+## Start with read-only commands
 
 ```bash
-alphafind auth
+./target/release/alphafind --help
+./target/release/alphafind score
+./target/release/alphafind radar --top 10
 ```
 
-Sample output:
-```text
-═════════════════════════════════════════════════════════════════════════
-  AlphaFind Quant Engine — Concurrency Authentication Check
-═════════════════════════════════════════════════════════════════════════
-  PRIMARY SESSION:   ✅ Authenticated (User ID: 123456)
-  WORKER SESSION 1:  ✅ Authenticated (User ID: 234567)
-  WORKER SESSION 2:  ✅ Authenticated (User ID: 345678)
-  Status: All sessions active. Full 9-worker concurrency enabled!
-```
+The `score` and `radar` commands make authenticated/read-only API requests. Their outputs are time-sensitive; verify important facts in the BRAIN interface.
 
----
+## Simulation and submission
 
-## 🚀 Step 4: Run Your First Screening
-
-Screen candidate alphas on the `TOP1000` equity universe using the **Options Volatility** pillar:
+Use the BRAIN UI to select an expression and settings, or supply a privately held expression to `sim`. Avoid placing a live candidate formula in shell history, docs, screenshots, tracked files, or support logs.
 
 ```bash
-alphafind screen --pillar OPTIONS --universe TOP1000 --min-fitness 1.50
+./target/release/alphafind sim --expr '<PRIVATE_EXPRESSION>' --universe TOP1000
 ```
 
-When a high-conviction candidate satisfies all 8 platform checks, verify and audit its correlation:
+Before any submission, review the actual simulation results and all current platform criteria. `alphafind check` is not yet a trustworthy gate for incomplete API responses, and `alphafind submit` supports bypassing checks. Use the platform UI/API as the approval source until the client has fail-closed check parsing and complete coverage tests.
 
-```bash
-# Verify 8/8 In-Sample checks
-alphafind check <ALPHA_ID>
-
-# Audit 1,236-day Pearson correlation against active portfolio
-alphafind audit <ALPHA_ID>
-```
-
----
-
-## 📚 Next Steps
-
-* [CLI Command Reference](CLI_REFERENCE.md) — Comprehensive guide to all 8 CLI subcommands and options.
-* [Quantitative Methodology](METHODOLOGY.md) — Detailed mathematical proofs, factor pillars, and platform rules.
-* [System Architecture](ARCHITECTURE.md) — Multi-account concurrency design and internal engine layout.
-* [Operator Knowledge Graph](BRAIN_KNOWLEDGE_GRAPH.md) — Curated selection of core FASTEXPR operators.
+Read [BRAIN Rules and Submission](BRAIN_RULES_AND_SUBMISSION.md), [CLI Reference](CLI_REFERENCE.md), and [Architecture](ARCHITECTURE.md) before using automated workflows.

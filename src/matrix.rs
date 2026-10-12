@@ -44,13 +44,13 @@ impl FusionPattern {
     pub fn badge(&self) -> colored::ColoredString {
         match self {
             Self::HierarchicalConditioning => {
-                "HIERARCHICAL CONDITIONING (Institutional Gold Standard)"
+                "HIERARCHICAL CONDITIONING (testable structural hypothesis)"
                     .green()
                     .bold()
             }
-            Self::NaiveLinearAddition => "NAIVE LINEAR ADDITION (Crowd Tail Dilution Risk)"
-                .red()
-                .bold(),
+            Self::NaiveLinearAddition => {
+                "NAIVE LINEAR ADDITION (compare by simulation)".red().bold()
+            }
             Self::SingleDataset => "SINGLE DATASET PURITY".yellow(),
         }
     }
@@ -322,15 +322,9 @@ pub fn build_dynamic_matrix(
             }
         }
 
-        // Fallback: match dataset ID only
-        if matched.is_none() {
-            for d in datasets {
-                if d.id.eq_ignore_ascii_case(ds_id) {
-                    matched = Some(d);
-                    break;
-                }
-            }
-        }
+        let counts_reported = matched
+            .map(|entry| entry.user_count.is_some() && entry.alpha_count.is_some())
+            .unwrap_or(false);
 
         let (live_u, live_a, cov) = match matched {
             Some(entry) => (
@@ -366,21 +360,23 @@ pub fn build_dynamic_matrix(
 
         if delta_u >= 50 {
             migration_alerts.push(format!(
-                "⚠️ CROWD INFLUX ALERT: Pillar '{}' on {} saw +{} quants recently! Crowding velocity accelerating.",
+                "Reported userCount for pillar '{}' in {} increased by {} since the prior snapshot.",
                 p_key, u_clean, delta_u
             ));
         }
 
-        let status_str = if live_u <= 50 && delta_u <= 5 {
-            "PRISTINE"
+        let status_str = if !counts_reported {
+            "FALLBACK COUNTS"
+        } else if live_u <= 50 && delta_u <= 5 {
+            "LOW COUNT"
         } else if live_u <= 300 && delta_u <= 20 {
-            "SAFE"
+            "LOW COUNT"
         } else if live_u <= 2000 {
-            "MODERATE"
+            "MODERATE COUNT"
         } else if live_u <= 15000 {
-            "CROWDED"
+            "HIGH COUNT"
         } else {
-            "DANGER"
+            "VERY HIGH COUNT"
         };
 
         pillar_stats.insert(
@@ -418,9 +414,7 @@ pub fn build_dynamic_matrix(
             let stat_a = pillar_stats.get(p_a).unwrap();
             let stat_b = pillar_stats.get(p_b).unwrap();
 
-            // Empirical affinity multiplier between factors:
-            // Fundamental x Micro has massive natural affinity (crowd template 1)
-            // IdioRisk x Short has near-zero historical affinity
+            // Configured affinity assumptions; these are not measured co-occurrence rates.
             let affinity = match (p_a.as_str(), p_b.as_str()) {
                 ("MICRO", "FND") | ("FND", "MICRO") => 2.2,
                 ("MICRO", "ANL") | ("ANL", "MICRO") => 1.8,
@@ -434,24 +428,24 @@ pub fn build_dynamic_matrix(
                 _ => 0.60,
             };
 
-            // Joint probability estimation (% of alphas mixing A and B)
+            // Heuristic density proxy from aggregate shares and configured affinity.
             let base_joint =
                 (stat_a.platform_share_pct * stat_b.platform_share_pct / 100.0) * affinity;
             let density_pct = base_joint.clamp(0.005, 50.0);
 
-            // Dynamic Hybrid Uniqueness Index: penalized by joint density and positive migration velocity
+            // Configured interaction heuristic; not a PnL or Uniqueness estimate.
             let vel_penalty =
                 ((stat_a.delta_users.max(0) + stat_b.delta_users.max(0)) as f64 * 0.001).min(0.20);
             let hui = (1.0 - (density_pct / 15.0).min(0.95) - vel_penalty).clamp(0.05, 0.99);
 
             let risk_tier = if hui >= 0.85 {
-                "🟢 PRISTINE HYBRID"
+                "LOW CONFIGURED DENSITY"
             } else if hui >= 0.65 {
-                "🟡 SAFE CORRIDOR"
+                "MODERATE CONFIGURED DENSITY"
             } else if hui >= 0.40 {
-                "🟠 CONTESTED"
+                "HIGHER CONFIGURED DENSITY"
             } else {
-                "🔴 CROWD DEATH ZONE"
+                "VERY HIGH CONFIGURED DENSITY"
             };
 
             interactions.push(PillarInteraction {
@@ -521,7 +515,7 @@ pub fn analyze_formula_hyper_synergy(
 
         if stat.delta_users > 20 {
             warnings.push(format!(
-                "⚠️ DYNAMIC MIGRATION: Pillar '{}' has incoming crowd velocity (+{} quants).",
+                "Reported userCount for pillar '{}' increased by {} since the prior snapshot.",
                 p_str, stat.delta_users
             ));
         }
@@ -575,13 +569,13 @@ pub fn analyze_formula_hyper_synergy(
     };
 
     let verdict = if chui >= 0.85 {
-        "🌟 SPECTACULAR ORTHOGONAL HYBRID (Maximum Uniqueness Score Suppression)".to_string()
+        "🌟 HIGH CONFIGURED INTERACTION SCORE (heuristic; not a Uniqueness forecast)".to_string()
     } else if chui >= 0.70 {
-        "🟢 SAFE INSTITUTIONAL HYBRID (High Diversification / Low Crowd Overlap)".to_string()
+        "🟢 HIGH CONFIGURED INTERACTION (heuristic; validate with simulations)".to_string()
     } else if chui >= 0.50 {
-        "🟡 MODERATE HYBRID (Acceptable if Subindustry Neutralized)".to_string()
+        "🟡 MODERATE CONFIGURED INTERACTION (heuristic)".to_string()
     } else {
-        "🔴 CROWD TRAP HYBRID (High platform PnL correlation; risks raising uniquenessScore)"
+        "🔴 LOW CONFIGURED INTERACTION (not a measured PnL correlation or Uniqueness score)"
             .to_string()
     };
 
@@ -601,7 +595,7 @@ pub fn analyze_formula_hyper_synergy(
 /// Formats and displays the dynamic co-occurrence heatmap matrix in the terminal
 pub fn print_dynamic_matrix(report: &DynamicMatrixReport, green_only: bool) {
     println!(
-        "\n  {} Target Universe: {} | Platform Tracked Alphas: {}",
+        "\n  {} Target Universe: {} | Sum of selected dataset alphaCounts (may overlap): {}",
         "📊".bold(),
         report.universe.yellow().bold(),
         report.total_platform_alphas.to_string().cyan()
@@ -622,7 +616,7 @@ pub fn print_dynamic_matrix(report: &DynamicMatrixReport, green_only: bool) {
         "🏛️".bold()
     );
     println!("  ┌────────┬──────────────────────┬──────────────┬──────────────┬──────────────┬──────────┬────────────┐");
-    println!("  │ Pillar │ Primary Dataset      │ Users (Live) │ Alphas (Live)│ Δ Users (Vel)│ Coverage │ Status     │");
+    println!("  │ Pillar │ Primary Dataset      │ Users (data) │ Alphas (data)│ Δ Users      │ Coverage │ Count band │");
     println!("  ├────────┼──────────────────────┼──────────────┼──────────────┼──────────────┼──────────┼────────────┤");
 
     for p in &report.pillars {
@@ -636,11 +630,11 @@ pub fn print_dynamic_matrix(report: &DynamicMatrixReport, green_only: bool) {
             };
 
             let status_styled = match stat.status.as_str() {
-                "PRISTINE" => "PRISTINE".green().bold(),
-                "SAFE" => "SAFE".green(),
-                "MODERATE" => "MODERATE".yellow(),
-                "CROWDED" => "CROWDED".red(),
-                _ => "DANGER".red().bold(),
+                "FALLBACK COUNTS" => "FALLBACK COUNTS".yellow().bold(),
+                "LOW COUNT" => "LOW COUNT".green().bold(),
+                "MODERATE COUNT" => "MODERATE COUNT".yellow(),
+                "HIGH COUNT" => "HIGH COUNT".red(),
+                _ => "VERY HIGH COUNT".red().bold(),
             };
 
             println!(
@@ -658,11 +652,11 @@ pub fn print_dynamic_matrix(report: &DynamicMatrixReport, green_only: bool) {
     println!("  └────────┴──────────────────────┴──────────────┴──────────────┴──────────────┴──────────┴────────────┘");
 
     println!(
-        "\n  {} 2D Dynamic Cross-Dataset Co-occurrence Interaction Heatmap:",
+        "\n  {} Configured Dataset-Interaction Heuristic (not measured co-occurrence):",
         "🗺️".bold()
     );
     println!("  ┌──────────────┬──────────────┬──────────────┬────────────┬──────────┬─────────────────────────────┐");
-    println!("  │ Factor A     │ Factor B     │ Est. Density │ HUI Score  │ Δ Vel A  │ Risk Tier Status            │");
+    println!("  │ Factor A     │ Factor B     │ Est. Density │ Heuristic  │ Δ Users  │ Heuristic Tier              │");
     println!("  ├──────────────┼──────────────┼──────────────┼────────────┼──────────┼─────────────────────────────┤");
 
     for inter in &report.interactions {

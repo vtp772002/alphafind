@@ -16,11 +16,11 @@ pub enum CrowdTier {
 impl CrowdTier {
     pub fn badge(&self) -> colored::ColoredString {
         match self {
-            Self::Pristine => "PRISTINE (<=50 Users)".green().bold(),
-            Self::Safe => "SAFE SANCTUARY (<=300 Users)".green(),
-            Self::Moderate => "MODERATE (300-2k Users)".yellow(),
-            Self::Crowded => "CROWDED RED ZONE (2k-15k Users)".red(),
-            Self::Danger => "DANGER ZONE (>15k Users)".red().bold(),
+            Self::Pristine => "LOW OBSERVED USAGE (<=50 users)".green().bold(),
+            Self::Safe => "LOW OBSERVED USAGE (<=300 users)".green(),
+            Self::Moderate => "MODERATE OBSERVED USAGE (300-2k users)".yellow(),
+            Self::Crowded => "HIGH OBSERVED USAGE (2k-15k users)".red(),
+            Self::Danger => "VERY HIGH OBSERVED USAGE (>15k users)".red().bold(),
         }
     }
 }
@@ -36,12 +36,12 @@ pub enum NeutralizationShield {
 impl NeutralizationShield {
     pub fn badge(&self) -> colored::ColoredString {
         match self {
-            Self::Strong => "STRONG (SUBINDUSTRY — Eliminates industry/sector crowd beta)"
+            Self::Strong => "SUBINDUSTRY SETTING (effect on crowd PnL not measured)"
                 .green()
                 .bold(),
             Self::Moderate => "MODERATE (INDUSTRY)".yellow(),
             Self::Weak => "WEAK (SECTOR)".yellow(),
-            Self::Exposed => "EXPOSED (MARKET/NONE — Fully co-moves with crowd momentum)"
+            Self::Exposed => "MARKET/NONE SETTING (effect on crowd PnL not measured)"
                 .red()
                 .bold(),
         }
@@ -59,20 +59,18 @@ pub enum UniquenessRisk {
 impl UniquenessRisk {
     pub fn badge(&self) -> colored::ColoredString {
         match self {
-            Self::Low => "🟢 LOW RISK (Sanctuary / High Uniqueness Potential)"
+            Self::Low => "🟢 LOW HEURISTIC USAGE RISK (not official Uniqueness)"
                 .green()
                 .bold(),
-            Self::Moderate => "🟡 MODERATE RISK (Acceptable if pairwise corr is negative)"
+            Self::Moderate => "🟡 MODERATE HEURISTIC USAGE RISK (not official Uniqueness)"
                 .yellow()
                 .bold(),
-            Self::High => "🟠 HIGH RISK (Crowded factor; risk of increasing uniquenessScore)"
+            Self::High => "🟠 HIGH HEURISTIC USAGE RISK (not official Uniqueness)"
                 .truecolor(255, 140, 0)
                 .bold(),
-            Self::Critical => {
-                "🔴 CRITICAL CROWD TRAP (Surges uniquenessScore, destroys leaderboard rank)"
-                    .red()
-                    .bold()
-            }
+            Self::Critical => "🔴 VERY HIGH HEURISTIC USAGE RISK (not official Uniqueness)"
+                .red()
+                .bold(),
         }
     }
 }
@@ -147,7 +145,9 @@ pub fn load_cached_census() -> Vec<DatasetEntry> {
     Vec::new()
 }
 
-/// Estimates platform crowd and uniqueness risk for an alpha candidate
+/// Legacy heuristic based on cached census rows and static fallbacks.
+/// This does not estimate crowd PnL or official BRAIN Uniqueness.
+#[deprecated(note = "Use the live dataset/field usage report from `alphafind shadow`.")]
 pub fn evaluate_crowd_risk(
     expression: &str,
     universe: &str,
@@ -239,15 +239,15 @@ pub fn evaluate_crowd_risk(
     let uniqueness_risk = match (crowd_tier, shield) {
         (CrowdTier::Danger, NeutralizationShield::Exposed) => {
             warnings.push(format!(
-                "🔴 CROWD CONCENTRATION: Dataset '{}' on {} is mined by {} active quants ({} alphas).",
+                "🔴 HIGH OBSERVED DATASET USAGE: '{}' on {} has {} users ({} alphas); this does not measure PnL correlation.",
                 dataset_id, u_clean, users, alphas
             ));
             warnings.push(format!(
-                "🔴 ZERO BETA SHIELD: Neutralization '{}' preserves macro/sector crowd correlation.",
+                "Neutralization '{}' is a setting; its effect on other users' PnL correlation is unknown.",
                 neut_clean
             ));
             recommendations.push(
-                "Switch neutralization to SUBINDUSTRY to cancel common factor co-movement."
+                "Compare neutralization variants by simulation; usage counts alone do not establish crowd co-movement."
                     .to_string(),
             );
             if u_clean == "TOP3000" && dataset_id == "option8" {
@@ -257,40 +257,40 @@ pub fn evaluate_crowd_risk(
         }
         (CrowdTier::Danger, _) => {
             warnings.push(format!(
-                "🟠 HIGH CROWD SECTOR: Dataset '{}' is crowded ({} users), though {} neutralization provides partial protection.",
+                "🟠 HIGH OBSERVED DATASET USAGE: '{}' has {} users; {} neutralization has no measured protection in this report.",
                 dataset_id, users, neut_clean
             ));
-            recommendations.push("Consider cross-conditioning with a Green Sanctuary factor (e.g. pv1 or short interest).".to_string());
+            recommendations.push("Evaluate any additional data source with simulations; low usage does not guarantee diversification.".to_string());
             UniquenessRisk::High
         }
         (CrowdTier::Crowded, NeutralizationShield::Exposed) => {
             warnings.push(format!(
-                "🟠 CROWD WARNING: {} active quants in '{}' combined with {} neutralization.",
+                "🟠 HIGH OBSERVED DATASET USAGE: {} users in '{}' with {} neutralization; PnL relationship is unknown.",
                 users, dataset_id, neut_clean
             ));
             recommendations.push(
-                "Shift neutralization to SUBINDUSTRY to avoid platform PnL co-movement."
+                "Compare neutralization variants by simulation; this count cannot predict platform PnL co-movement."
                     .to_string(),
             );
             UniquenessRisk::High
         }
         (CrowdTier::Crowded, _) => {
             recommendations
-                .push("Maintain SUBINDUSTRY neutralization to ensure factor purity.".to_string());
+                .push("Use direct simulation results to choose neutralization.".to_string());
             UniquenessRisk::Moderate
         }
         (CrowdTier::Moderate, NeutralizationShield::Exposed) => {
             warnings.push(format!(
-                "🟡 Neutralization is {}, which may dilute uniqueness if peers trade similar assets.",
+                "🟡 Neutralization is {}; this usage count does not reveal peers' positions or PnL.",
                 neut_clean
             ));
             recommendations
-                .push("Evaluate if SUBINDUSTRY neutralization preserves Sharpe.".to_string());
+                .push("Compare settings on the same expression and evaluation period.".to_string());
             UniquenessRisk::Moderate
         }
         (CrowdTier::Moderate, _) => UniquenessRisk::Low,
         (CrowdTier::Safe | CrowdTier::Pristine, _) => {
-            recommendations.push("🌟 EXCELLENT SANCTUARY: Factor operates in low-crowd territory. Maximum uniqueness score preservation!".to_string());
+            recommendations.push("Observed usage is low; this does not establish high Uniqueness or low PnL correlation.".to_string());
             UniquenessRisk::Low
         }
     };
@@ -310,9 +310,9 @@ pub fn evaluate_crowd_risk(
     }
 }
 
-/// Formats and prints the Tier 2 Platform Uniqueness & Crowding Risk section
+/// Prints the legacy crowd usage heuristic. Counts may be stale and are not Uniqueness.
 pub fn print_crowd_risk_audit(report: &CrowdRiskReport) {
-    println!("\n  📊 TIER 2: PLATFORM CROWD & UNIQUENESS RISK ESTIMATOR (Global Platform)");
+    println!("\n  📊 LEGACY DATASET USAGE HEURISTIC (may be stale; not official Uniqueness)");
     println!("  ─────────────────────────────────────────────────────────────────────────");
     println!(
         "    Economic Factor Pillar:     {}",
@@ -324,18 +324,18 @@ pub fn print_crowd_risk_audit(report: &CrowdRiskReport) {
         report.universe.white()
     );
     println!(
-        "    Platform Crowd Density:     {} ({} Quants | {} Alphas on BRAIN)",
+        "    Historical Crowd Usage:     {} ({} users | {} alphas)",
         report.crowd_tier.badge(),
         report.user_count,
         report.alpha_count
     );
     println!(
-        "    Neutralization Beta Shield: {}",
+        "    Neutralization Setting:     {}",
         report.neutralization_shield.badge()
     );
     println!("  ─────────────────────────────────────────────────────────────────────────");
     println!(
-        "    UNIQUENESS RISK VERDICT:    {}",
+        "    HEURISTIC USAGE LABEL:      {}",
         report.overall_uniqueness_risk.badge()
     );
 

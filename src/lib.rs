@@ -2,6 +2,8 @@ pub mod autotuner;
 pub mod client;
 pub mod correlation;
 pub mod crowd;
+pub mod crowd_allocation;
+pub mod crowd_model;
 pub mod forecast;
 pub mod health;
 pub mod matrix;
