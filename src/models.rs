@@ -106,7 +106,7 @@ pub struct SimulationResponse {
 }
 
 /// Individual check item from BRAIN IS verification
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CheckItem {
     pub name: String,
     pub result: String,
@@ -236,7 +236,7 @@ pub struct SubmittableAlphaRecord {
 }
 
 /// Candidate Alpha for hypothesis generation and screening
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CandidateAlpha {
     pub name: String,
     pub expression: String,

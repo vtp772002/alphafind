@@ -15,6 +15,152 @@ use crate::models::{
 
 pub const BASE_URL: &str = "https://api.worldquantbrain.com";
 
+/// The mandatory core submission check names that MUST be present on all evaluated alphas.
+pub const CORE_SUBMISSION_CHECKS: &[&str] = &[
+    "LOW_SHARPE",
+    "LOW_FITNESS",
+    "LOW_TURNOVER",
+    "HIGH_TURNOVER",
+    "CONCENTRATED_WEIGHT",
+    "SELF_CORRELATION",
+];
+
+/// Result of evaluating submission checks in a strictly fail-closed manner.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SubmissionCheckResult {
+    pub passed: bool,
+    pub message: String,
+    pub passed_count: usize,
+    pub total_count: usize,
+    pub failed_checks: Vec<String>,
+    pub pending_checks: Vec<String>,
+    pub missing_core_checks: Vec<String>,
+}
+
+/// Evaluates submission checks in a strictly fail-closed, explicit manner per AGENTS.md.
+pub fn evaluate_submission_checks(stats: &InSampleStats) -> SubmissionCheckResult {
+    if stats.checks.is_empty() {
+        return SubmissionCheckResult {
+            passed: false,
+            message: "FAIL-CLOSED: Empty check results received from BRAIN API".to_string(),
+            passed_count: 0,
+            total_count: 0,
+            failed_checks: Vec::new(),
+            pending_checks: Vec::new(),
+            missing_core_checks: CORE_SUBMISSION_CHECKS.iter().map(|s| s.to_string()).collect(),
+        };
+    }
+
+    let check_map: HashMap<&str, &str> = stats
+        .checks
+        .iter()
+        .map(|c| (c.name.as_str(), c.result.as_str()))
+        .collect();
+
+    let mut missing_core = Vec::new();
+    for &core in CORE_SUBMISSION_CHECKS {
+        if !check_map.contains_key(core) {
+            missing_core.push(core.to_string());
+        }
+    }
+
+    let mut passed_count = 0;
+    let mut failed = Vec::new();
+    let mut pending = Vec::new();
+
+    for c in &stats.checks {
+        match c.result.to_uppercase().as_str() {
+            "PASS" => {
+                passed_count += 1;
+            }
+            "FAIL" => {
+                if c.name == "SELF_CORRELATION" {
+                    let max_corr = stats
+                        .self_correlated
+                        .as_ref()
+                        .and_then(|sc| sc.max)
+                        .unwrap_or(0.70);
+                    let partner = stats
+                        .self_correlated
+                        .as_ref()
+                        .and_then(|sc| sc.records.as_ref())
+                        .and_then(|r| r.first())
+                        .and_then(|first| first.first())
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("active OS alpha");
+                    failed.push(format!(
+                        "SELF_CORRELATION: {:.1}% (>70%) vs {}",
+                        max_corr * 100.0,
+                        partner
+                    ));
+                } else {
+                    failed.push(c.name.clone());
+                }
+            }
+            "PENDING" => {
+                pending.push(c.name.clone());
+            }
+            other => {
+                failed.push(format!("{}: {}", c.name, other));
+            }
+        }
+    }
+
+    let total_count = stats.checks.len();
+
+    if !missing_core.is_empty() {
+        return SubmissionCheckResult {
+            passed: false,
+            message: format!(
+                "FAIL-CLOSED: Missing required core checks: {}",
+                missing_core.join(", ")
+            ),
+            passed_count,
+            total_count,
+            failed_checks: failed,
+            pending_checks: pending,
+            missing_core_checks: missing_core,
+        };
+    }
+
+    if !pending.is_empty() {
+        return SubmissionCheckResult {
+            passed: false,
+            message: format!("CHECKS STILL PENDING: {}", pending.join(", ")),
+            passed_count,
+            total_count,
+            failed_checks: failed,
+            pending_checks: pending,
+            missing_core_checks: Vec::new(),
+        };
+    }
+
+    if !failed.is_empty() {
+        return SubmissionCheckResult {
+            passed: false,
+            message: format!("FAILED CHECKS: {}", failed.join("; ")),
+            passed_count,
+            total_count,
+            failed_checks: failed,
+            pending_checks: Vec::new(),
+            missing_core_checks: Vec::new(),
+        };
+    }
+
+    SubmissionCheckResult {
+        passed: true,
+        message: format!(
+            "ALL SUBMISSION CHECKS PASSED ({}/{} PASS)",
+            passed_count, total_count
+        ),
+        passed_count,
+        total_count,
+        failed_checks: Vec::new(),
+        pending_checks: Vec::new(),
+        missing_core_checks: Vec::new(),
+    }
+}
+
 #[derive(Clone)]
 pub struct BrainClient {
     client: reqwest::Client,
@@ -212,9 +358,22 @@ impl BrainClient {
         poll_interval_secs: u64,
     ) -> Result<SimulationResponse> {
         let url = if sim_url_or_id.starts_with("http") {
+            let parsed = reqwest::Url::parse(sim_url_or_id)
+                .context("Invalid simulation URL format")?;
+            if parsed.scheme() != "https" || parsed.host_str() != Some("api.worldquantbrain.com") {
+                return Err(anyhow!(
+                    "Security violation: Rejected follow-up URL outside configured BRAIN host ({}): {}",
+                    BASE_URL,
+                    sim_url_or_id
+                ));
+            }
             sim_url_or_id.to_string()
         } else {
-            format!("{}/simulations/{}", BASE_URL, sim_url_or_id)
+            let id = sim_url_or_id.trim();
+            if !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+                return Err(anyhow!("Invalid simulation ID format: {}", id));
+            }
+            format!("{}/simulations/{}", BASE_URL, id)
         };
 
         let start = std::time::Instant::now();
@@ -287,7 +446,7 @@ impl BrainClient {
         Ok(details)
     }
 
-    /// Verifies the 8 mandatory submission checks for an alpha.
+    /// Verifies the mandatory submission checks for an alpha in a strictly fail-closed manner.
     pub async fn check_submission(
         &self,
         alpha_id: &str,
@@ -350,47 +509,16 @@ impl BrainClient {
             let is_data = val.get("is").cloned().unwrap_or(val.clone());
             let stats: InSampleStats = serde_json::from_value(is_data)?;
 
-            let mut failed = Vec::new();
-            for c in &stats.checks {
-                if c.result == "FAIL" {
-                    if c.name == "SELF_CORRELATION" {
-                        let max_corr = stats
-                            .self_correlated
-                            .as_ref()
-                            .and_then(|sc| sc.max)
-                            .unwrap_or(0.70);
-                        let partner = stats
-                            .self_correlated
-                            .as_ref()
-                            .and_then(|sc| sc.records.as_ref())
-                            .and_then(|r| r.first())
-                            .and_then(|first| first.first())
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("active OS alpha");
-                        failed.push(format!(
-                            "SELF_CORRELATION: {:.1}% (>70%) vs {}",
-                            max_corr * 100.0,
-                            partner
-                        ));
-                    } else {
-                        failed.push(c.name.clone());
-                    }
-                }
+            let eval = evaluate_submission_checks(&stats);
+
+            // If checks are still pending calculation, continue polling
+            if !eval.pending_checks.is_empty() {
+                let wait = retry_after.unwrap_or(3.0);
+                sleep(Duration::from_secs_f64(wait)).await;
+                continue;
             }
 
-            if failed.is_empty() {
-                return Ok((
-                    true,
-                    "ALL SUBMISSION CHECKS PASSED (8/8 PASS)".to_string(),
-                    stats,
-                ));
-            } else {
-                return Ok((
-                    false,
-                    format!("FAILED CHECKS: {}", failed.join("; ")),
-                    stats,
-                ));
-            }
+            return Ok((eval.passed, eval.message, stats));
         }
 
         Err(anyhow!(
