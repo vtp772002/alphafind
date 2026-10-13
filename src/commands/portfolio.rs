@@ -6,6 +6,10 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
+use crate::allocation::{
+    compute_hrp_weights, evaluate_candidate_admission, evaluate_turnover_entropy,
+    identify_retirement_candidates,
+};
 use crate::commands::{get_cache_dir, get_main_client, load_pnl_cache, print_cache_status};
 use crate::correlation::{audit_candidate, calculate_portfolio_impact, simulate_portfolio};
 use crate::health::{
@@ -478,6 +482,222 @@ pub async fn cmd_health(alpha_id: Option<String>, export: Option<String>, all: b
         fs::write(export_path, serialized)?;
         println!(
             "  💾 Full Master Portfolio Health Report exported to: {}\n",
+            export_path.green().bold()
+        );
+    }
+
+    Ok(())
+}
+
+/// Diagnoses multi-horizon turnover entropy, Hierarchical Risk Parity (HRP) weights,
+/// quota deficits, and evaluates candidate admission decisions.
+pub async fn cmd_allocate(
+    candidate_id: Option<String>,
+    candidate_turnover: Option<f64>,
+    trim: bool,
+    export: Option<String>,
+) -> Result<()> {
+    println!(
+        "{}",
+        "═════════════════════════════════════════════════════════════════════════".cyan()
+    );
+    println!(
+        "{}",
+        "  AlphaFind Quant Engine — Portfolio Allocation & Admission Decision"
+            .bold()
+            .cyan()
+    );
+    println!(
+        "{}",
+        "═════════════════════════════════════════════════════════════════════════".cyan()
+    );
+
+    // 1. Load active OS alphas
+    let port_path = "portfolio_os.json";
+    if !Path::new(port_path).exists() {
+        anyhow::bail!("portfolio_os.json not found! Run 'alphafind sync' first.");
+    }
+    let port_data = fs::read_to_string(port_path)?;
+    let os_alphas: Vec<PortfolioAlpha> = serde_json::from_str(&port_data)?;
+
+    // 2. Load cached PnLs
+    let (mut pnl_cache, cache_age) = load_pnl_cache();
+    let cache_file = get_cache_dir().join("portfolio_pnl.json");
+    print_cache_status(cache_age, pnl_cache.len());
+
+    let client = get_main_client()?;
+    let mut missing_ids = Vec::new();
+    for a in &os_alphas {
+        if !pnl_cache.contains_key(&a.id) {
+            missing_ids.push(a.id.clone());
+        }
+    }
+    if !missing_ids.is_empty() {
+        println!(
+            "  Fetching PnL for {} active OS alphas not in cache...",
+            missing_ids.len()
+        );
+        for id in missing_ids {
+            if let Ok(pnl) = client.fetch_daily_pnl(&id).await {
+                pnl_cache.insert(id, pnl);
+            }
+        }
+        if let Ok(serialized) = serde_json::to_string(&pnl_cache) {
+            let _ = fs::write(&cache_file, &serialized);
+        }
+    }
+
+    // 3. Section 1: Turnover Entropy & Temporal Balance
+    let entropy_rep = evaluate_turnover_entropy(&os_alphas);
+    println!(
+        "\n  ⏳ TIER 1: TEMPORAL HORIZON & TURNOVER ENTROPY (Shannon Entropy):"
+    );
+    println!("  ─────────────────────────────────────────────────────────────────────────");
+    println!(
+        "    Active Alphas: {:<4} | Entropy Diversity Score: {:>5.1} / 100.0 [{}]",
+        entropy_rep.total_alphas,
+        entropy_rep.diversity_score,
+        entropy_rep.status
+    );
+    println!();
+    println!("    ┌──────────────────────────┬──────┬─────────┬──────────────┬──────────────┐");
+    println!("    │ Turnover Spectrum Band   │ Count│ Share % │ Target Quota │ Quota Status │");
+    println!("    ├──────────────────────────┼──────┼─────────┼──────────────┼──────────────┤");
+    
+    let slow_status = if entropy_rep.ultra_slow_pct < 5.0 { "🟡 UNDERWEIGHT".yellow() } else { "🟢 BALANCED".green() };
+    let core_status = if entropy_rep.core_pct > 70.0 { "🔴 SATURATED".red().bold() } else { "🟢 BALANCED".green() };
+    let fast_status = if entropy_rep.fast_pct < 15.0 { "🔴 DEFICIT (PRIORITY)".red().bold() } else { "🟢 BALANCED".green() };
+    let vfast_status = if entropy_rep.very_fast_pct > 15.0 { "⚠️ ELEVATED".yellow() } else { "🟢 BALANCED".green() };
+
+    println!(
+        "    │ {:<24} │ {:>4} │ {:>6.1}% │ 10% - 20%    │ {:<12} │",
+        "Ultra-Slow (<10%)", entropy_rep.ultra_slow_count, entropy_rep.ultra_slow_pct, slow_status
+    );
+    println!(
+        "    │ {:<24} │ {:>4} │ {:>6.1}% │ 50% - 65%    │ {:<12} │",
+        "Core Medium (10-25%)", entropy_rep.core_count, entropy_rep.core_pct, core_status
+    );
+    println!(
+        "    │ {:<24} │ {:>4} │ {:>6.1}% │ 20% - 35%    │ {:<12} │",
+        "Fast Tactical (25-45%)", entropy_rep.fast_count, entropy_rep.fast_pct, fast_status
+    );
+    println!(
+        "    │ {:<24} │ {:>4} │ {:>6.1}% │ < 10%        │ {:<12} │",
+        "Very Fast (45-70%)", entropy_rep.very_fast_count, entropy_rep.very_fast_pct, vfast_status
+    );
+    println!("    └──────────────────────────┴──────┴─────────┴──────────────┴──────────────┘");
+
+    // 4. Section 2: Hierarchical Risk Parity (HRP) Weights
+    let hrp_weights = compute_hrp_weights(&os_alphas, &pnl_cache);
+    let mut sorted_hrp = hrp_weights.clone();
+    sorted_hrp.sort_by(|a, b| b.health_ratio.partial_cmp(&a.health_ratio).unwrap_or(std::cmp::Ordering::Equal));
+
+    println!(
+        "\n  ⚖️  TIER 2: HIERARCHICAL RISK PARITY (HRP) VS EQUAL WEIGHT (1/N):"
+    );
+    println!("  ─────────────────────────────────────────────────────────────────────────");
+    println!("    🌟 TOP 5 PILLAR DRIVERS (Highest Risk Parity Marginal Value):");
+    println!("    ┌──────────┬──────────┬────────────┬────────────┬──────────────┬────────────────────────────┐");
+    println!("    │ Alpha ID │ Universe │ HRP Weight │ 1/N Weight │ Health Ratio │ Role Classification        │");
+    println!("    ├──────────┼──────────┼────────────┼────────────┼──────────────┼────────────────────────────┤");
+    for w in sorted_hrp.iter().take(5) {
+        println!(
+            "    │ {:<8} │ {:<8} │ {:>9.2}% │ {:>9.2}% │ {:>11.2}x │ {:<26} │",
+            w.alpha_id, w.universe, w.hrp_weight * 100.0, w.equal_weight * 100.0, w.health_ratio, w.verdict.green()
+        );
+    }
+    println!("    └──────────┴──────────┴────────────┴────────────┴──────────────┴────────────────────────────┘");
+
+    println!("\n    ⚠️ BOTTOM 5 DILUTIVE DRAGS (Excess Risk / Over-allocated under 1/N):");
+    println!("    ┌──────────┬──────────┬────────────┬────────────┬──────────────┬────────────────────────────┐");
+    println!("    │ Alpha ID │ Universe │ HRP Weight │ 1/N Weight │ Health Ratio │ Role Classification        │");
+    println!("    ├──────────┼──────────┼────────────┼────────────┼──────────────┼────────────────────────────┤");
+    for w in sorted_hrp.iter().rev().take(5) {
+        println!(
+            "    │ {:<8} │ {:<8} │ {:>9.2}% │ {:>9.2}% │ {:>11.2}x │ {:<26} │",
+            w.alpha_id, w.universe, w.hrp_weight * 100.0, w.equal_weight * 100.0, w.health_ratio, w.verdict.yellow()
+        );
+    }
+    println!("    └──────────┴──────────┴────────────┴────────────┴──────────────┴────────────────────────────┘");
+
+    // 5. Section 3: Retirement / Trimming Recommendations (if trim flag or portfolio >= 50)
+    let retirement_cands = identify_retirement_candidates(&os_alphas, &hrp_weights);
+    if trim || os_alphas.len() >= 50 {
+        println!(
+            "\n  🔄 TIER 3: RETIREMENT & TRIMMING DIRECTIVES (60-Alpha Milestone Prep):"
+        );
+        println!("  ─────────────────────────────────────────────────────────────────────────");
+        if retirement_cands.is_empty() {
+            println!("    ✅ No severe dilutive drags identified. Portfolio is well-balanced.");
+        } else {
+            println!(
+                "    Identified {} Alpha(s) with severe risk-allocation drag (HR < 0.70):",
+                retirement_cands.len()
+            );
+            for (idx, r) in retirement_cands.iter().take(3).enumerate() {
+                println!(
+                    "    #{}. [{}] ({}) TO: {:.1}% | HRP: {:.2}% | HR: {:.2}x",
+                    idx + 1, r.alpha_id.yellow().bold(), r.universe, r.turnover_pct, r.hrp_weight_pct, r.health_ratio
+                );
+                println!("        👉 Rationale: {}", r.reason);
+            }
+        }
+    }
+
+    // 6. Section 4: Candidate Admission Decision Gate (if candidate_id provided)
+    if let Some(ref cand_id) = candidate_id {
+        println!(
+            "\n  🚪 TIER 4: CANDIDATE ADMISSION DECISION GATE [{}]",
+            cand_id.yellow().bold()
+        );
+        println!("  ─────────────────────────────────────────────────────────────────────────");
+        println!("    Fetching candidate PnL for {}...", cand_id);
+        let cand_pnl = client.fetch_daily_pnl(cand_id).await?;
+        let to = candidate_turnover.unwrap_or(0.35);
+
+        let adm_report = evaluate_candidate_admission(
+            cand_id,
+            to,
+            &cand_pnl,
+            &os_alphas,
+            &pnl_cache,
+        );
+
+        println!("    Admission Verdict: {}\n", adm_report.verdict.badge());
+        println!("    Decision Metrics Delta:");
+        println!(
+            "      • Merged Sharpe Delta:       {:+0.4} ({:.2} -> {:.2})",
+            adm_report.sharpe_delta, adm_report.baseline_sharpe, adm_report.merged_sharpe
+        );
+        println!(
+            "      • Volatility Delta:          {:+0.0} (${:.0} -> ${:.0})",
+            adm_report.vol_delta, adm_report.baseline_vol, adm_report.merged_vol
+        );
+        println!(
+            "      • Turnover Diversity Delta:  {:+0.1}% ({:.1}% -> {:.1}%)",
+            adm_report.entropy_delta, adm_report.baseline_entropy_score, adm_report.merged_entropy_score
+        );
+        println!(
+            "      • Max Correlation:           +{:.2}% vs {} (Safety Buffer: {:.2}%)",
+            adm_report.max_pairwise_corr * 100.0,
+            adm_report.most_correlated_id,
+            adm_report.safety_buffer_pct
+        );
+        println!("\n    Decision Rationale:");
+        for r in &adm_report.rationale {
+            println!("      👉 {}", r);
+        }
+    }
+
+    if let Some(ref export_path) = export {
+        let export_data = serde_json::json!({
+            "turnover_entropy": entropy_rep,
+            "hrp_weights": hrp_weights,
+            "retirement_candidates": retirement_cands,
+        });
+        fs::write(export_path, serde_json::to_string_pretty(&export_data)?)?;
+        println!(
+            "\n  💾 Allocation diagnostic report exported to: {}\n",
             export_path.green().bold()
         );
     }

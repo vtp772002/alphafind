@@ -21,6 +21,7 @@
 //! - [`shadow`]: Shadow benchmark correlation, crowd-clone risk estimation, and portfolio safety buffer.
 //! - [`taxonomy`]: Mathematical strategy classification, alpha style categorization, and expression templates.
 
+pub mod allocation;
 pub mod autotuner;
 pub mod client;
 pub mod commands;
