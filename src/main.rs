@@ -2,7 +2,9 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 use alphafind::commands::auth::{cmd_auth, cmd_score, cmd_sync};
-use alphafind::commands::portfolio::{cmd_audit, cmd_health, cmd_impact, cmd_portfolio};
+use alphafind::commands::portfolio::{
+    cmd_allocate, cmd_audit, cmd_health, cmd_impact, cmd_portfolio,
+};
 use alphafind::commands::research::{cmd_blueprint, cmd_matrix, cmd_shadow};
 use alphafind::commands::simulation::{cmd_radar, cmd_screen, cmd_sim, cmd_tune};
 use alphafind::commands::submission::{cmd_check, cmd_submit};
@@ -245,6 +247,25 @@ enum Commands {
         #[arg(short, long)]
         all: bool,
     },
+
+    /// Diagnose temporal turnover entropy, HRP risk weights, and evaluate candidate admission decisions
+    Allocate {
+        /// Optional Candidate Alpha ID to test admission impact
+        #[arg(short, long)]
+        candidate: Option<String>,
+
+        /// Optional candidate turnover parameter (e.g. 0.35)
+        #[arg(long)]
+        turnover: Option<f64>,
+
+        /// Display retirement & trimming candidates
+        #[arg(short, long)]
+        trim: bool,
+
+        /// Export allocation diagnostic JSON to file
+        #[arg(long)]
+        export: Option<String>,
+    },
 }
 
 #[tokio::main]
@@ -326,5 +347,11 @@ async fn main() -> Result<()> {
             export,
             all,
         } => cmd_health(alpha_id, export, all).await,
+        Commands::Allocate {
+            candidate,
+            turnover,
+            trim,
+            export,
+        } => cmd_allocate(candidate, turnover, trim, export).await,
     }
 }
