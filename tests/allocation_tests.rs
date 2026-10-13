@@ -29,10 +29,16 @@ fn create_mock_alpha(id: &str, turnover: f64) -> PortfolioAlpha {
 
 #[test]
 fn test_turnover_bucket_ranges() {
-    assert_eq!(TurnoverBucket::from_turnover(0.05), TurnoverBucket::UltraSlow);
+    assert_eq!(
+        TurnoverBucket::from_turnover(0.05),
+        TurnoverBucket::UltraSlow
+    );
     assert_eq!(TurnoverBucket::from_turnover(0.15), TurnoverBucket::Core);
     assert_eq!(TurnoverBucket::from_turnover(0.35), TurnoverBucket::Fast);
-    assert_eq!(TurnoverBucket::from_turnover(0.60), TurnoverBucket::VeryFast);
+    assert_eq!(
+        TurnoverBucket::from_turnover(0.60),
+        TurnoverBucket::VeryFast
+    );
 }
 
 #[test]
@@ -102,7 +108,9 @@ fn test_candidate_admission_decision_go() {
     assert_eq!(rep.candidate_id, "CAND1");
     assert!(rep.safety_buffer_pct > 10.0);
     assert!(rep.quota_deficit_addressed);
-    assert!(rep.verdict == AdmissionVerdict::StrongGo || rep.verdict == AdmissionVerdict::ConditionalGo);
+    assert!(
+        rep.verdict == AdmissionVerdict::StrongGo || rep.verdict == AdmissionVerdict::ConditionalGo
+    );
 }
 
 #[test]
@@ -174,7 +182,7 @@ fn test_evaluate_candidate_swap() {
         let d = format!("2026-01-{:03}", day);
         pnl1.insert(d.clone(), 50.0 + (day as f64 % 5.0)); // Strong alpha
         pnl2.insert(d.clone(), 1.0 - (day as f64 % 10.0)); // Weak/declining alpha
-        cand_pnl.insert(d, 40.0 + (day as f64 % 3.0));     // Good candidate
+        cand_pnl.insert(d, 40.0 + (day as f64 % 3.0)); // Good candidate
     }
 
     let mut cache = HashMap::new();
