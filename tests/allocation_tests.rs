@@ -1,6 +1,6 @@
 use alphafind::allocation::{
-    compute_hrp_weights, evaluate_candidate_admission, evaluate_turnover_entropy,
-    identify_retirement_candidates, AdmissionVerdict, TurnoverBucket,
+    compute_hrp_weights, evaluate_candidate_admission, evaluate_candidate_swap,
+    evaluate_turnover_entropy, identify_retirement_candidates, AdmissionVerdict, TurnoverBucket,
 };
 use alphafind::models::PortfolioAlpha;
 use std::collections::HashMap;
@@ -158,4 +158,32 @@ fn test_identify_retirement_candidates() {
     let retirements = identify_retirement_candidates(&alphas, &hrp_weights);
     assert_eq!(retirements.len(), 1);
     assert_eq!(retirements[0].alpha_id, "A2");
+}
+
+#[test]
+fn test_evaluate_candidate_swap() {
+    let a1 = create_mock_alpha("A1", 0.15);
+    let a2 = create_mock_alpha("A2", 0.15);
+    let alphas = vec![a1, a2];
+
+    let mut pnl1 = HashMap::new();
+    let mut pnl2 = HashMap::new();
+    let mut cand_pnl = HashMap::new();
+
+    for day in 0..120 {
+        let d = format!("2026-01-{:03}", day);
+        pnl1.insert(d.clone(), 50.0 + (day as f64 % 5.0)); // Strong alpha
+        pnl2.insert(d.clone(), 1.0 - (day as f64 % 10.0)); // Weak/declining alpha
+        cand_pnl.insert(d, 40.0 + (day as f64 % 3.0));     // Good candidate
+    }
+
+    let mut cache = HashMap::new();
+    cache.insert("A1".to_string(), pnl1);
+    cache.insert("A2".to_string(), pnl2);
+
+    let swap_rep = evaluate_candidate_swap("CAND1", &cand_pnl, &alphas, &cache, "A2").unwrap();
+    assert_eq!(swap_rep.replaced_alpha_id, "A2");
+    assert_eq!(swap_rep.candidate_id, "CAND1");
+    assert!(swap_rep.is_net_improvement);
+    assert!(swap_rep.sharpe_delta > 0.0);
 }

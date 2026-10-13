@@ -630,6 +630,60 @@ pub fn identify_retirement_candidates(
     candidates
 }
 
+/// Simulated impact of swapping a retired alpha with a new candidate
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SwapSimulationReport {
+    pub replaced_alpha_id: String,
+    pub candidate_id: String,
+    pub baseline_sharpe: f64,
+    pub swapped_sharpe: f64,
+    pub sharpe_delta: f64,
+    pub baseline_vol: f64,
+    pub swapped_vol: f64,
+    pub vol_delta: f64,
+    pub is_net_improvement: bool,
+}
+
+/// Simulates swapping an underperforming / dilutive alpha with a new candidate
+pub fn evaluate_candidate_swap(
+    candidate_id: &str,
+    candidate_pnl: &HashMap<String, f64>,
+    os_alphas: &[PortfolioAlpha],
+    pnl_cache: &HashMap<String, HashMap<String, f64>>,
+    worst_alpha_id: &str,
+) -> Option<SwapSimulationReport> {
+    let mut base_pnl_refs: Vec<&HashMap<String, f64>> = Vec::new();
+    let mut swapped_pnl_refs: Vec<&HashMap<String, f64>> = Vec::new();
+
+    for a in os_alphas {
+        if let Some(pnl) = pnl_cache.get(&a.id) {
+            base_pnl_refs.push(pnl);
+            if a.id != worst_alpha_id {
+                swapped_pnl_refs.push(pnl);
+            }
+        }
+    }
+    swapped_pnl_refs.push(candidate_pnl);
+
+    let base_sim = simulate_portfolio(&base_pnl_refs)?;
+    let swapped_sim = simulate_portfolio(&swapped_pnl_refs)?;
+
+    let sharpe_delta = swapped_sim.merged_sharpe - base_sim.merged_sharpe;
+    let vol_delta = swapped_sim.annualized_vol - base_sim.annualized_vol;
+
+    Some(SwapSimulationReport {
+        replaced_alpha_id: worst_alpha_id.to_string(),
+        candidate_id: candidate_id.to_string(),
+        baseline_sharpe: base_sim.merged_sharpe,
+        swapped_sharpe: swapped_sim.merged_sharpe,
+        sharpe_delta,
+        baseline_vol: base_sim.annualized_vol,
+        swapped_vol: swapped_sim.annualized_vol,
+        vol_delta,
+        is_net_improvement: sharpe_delta > 0.0,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
