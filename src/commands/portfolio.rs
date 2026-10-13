@@ -7,8 +7,8 @@ use std::fs;
 use std::path::Path;
 
 use crate::allocation::{
-    compute_hrp_weights, evaluate_candidate_admission, evaluate_turnover_entropy,
-    identify_retirement_candidates,
+    compute_hrp_weights, evaluate_candidate_admission, evaluate_candidate_swap,
+    evaluate_turnover_entropy, identify_retirement_candidates,
 };
 use crate::commands::{get_cache_dir, get_main_client, load_pnl_cache, print_cache_status};
 use crate::correlation::{audit_candidate, calculate_portfolio_impact, simulate_portfolio};
@@ -686,6 +686,38 @@ pub async fn cmd_allocate(
         println!("\n    Decision Rationale:");
         for r in &adm_report.rationale {
             println!("      👉 {}", r);
+        }
+
+        if let Some(worst) = retirement_cands.first() {
+            if let Some(swap_rep) = evaluate_candidate_swap(
+                cand_id,
+                &cand_pnl,
+                &os_alphas,
+                &pnl_cache,
+                &worst.alpha_id,
+            ) {
+                println!(
+                    "\n    🔄 REPLACEMENT SWAP SCENARIO (60-Alpha Milestone Simulation):"
+                );
+                println!(
+                    "      • Replacing Bottom Drag:     [{}] (HRP Weight: {:.2}%, HR: {:.2}x)",
+                    worst.alpha_id.yellow(), worst.hrp_weight_pct, worst.health_ratio
+                );
+                println!(
+                    "      • Swapped Sharpe Impact:     {:+0.4} ({:.2} -> {:.2})",
+                    swap_rep.sharpe_delta, swap_rep.baseline_sharpe, swap_rep.swapped_sharpe
+                );
+                println!(
+                    "      • Swapped Volatility Impact: {:+0.0} (${:.0} -> ${:.0})",
+                    swap_rep.vol_delta, swap_rep.baseline_vol, swap_rep.swapped_vol
+                );
+                let verdict_str = if swap_rep.is_net_improvement {
+                    "🌟 HIGH VALUE REPLACEMENT (Surges Sharpe while keeping portfolio size constant)".green().bold()
+                } else {
+                    "⚠️ DILUTIVE SWAP (Net negative impact vs keeping baseline)".yellow().bold()
+                };
+                println!("      • Replacement Verdict:       {}", verdict_str);
+            }
         }
     }
 
