@@ -549,25 +549,37 @@ pub async fn cmd_allocate(
 
     // 3. Section 1: Turnover Entropy & Temporal Balance
     let entropy_rep = evaluate_turnover_entropy(&os_alphas);
-    println!(
-        "\n  ⏳ TIER 1: TEMPORAL HORIZON & TURNOVER ENTROPY (Shannon Entropy):"
-    );
+    println!("\n  ⏳ TIER 1: TEMPORAL HORIZON & TURNOVER ENTROPY (Shannon Entropy):");
     println!("  ─────────────────────────────────────────────────────────────────────────");
     println!(
         "    Active Alphas: {:<4} | Entropy Diversity Score: {:>5.1} / 100.0 [{}]",
-        entropy_rep.total_alphas,
-        entropy_rep.diversity_score,
-        entropy_rep.status
+        entropy_rep.total_alphas, entropy_rep.diversity_score, entropy_rep.status
     );
     println!();
     println!("    ┌──────────────────────────┬──────┬─────────┬──────────────┬──────────────┐");
     println!("    │ Turnover Spectrum Band   │ Count│ Share % │ Target Quota │ Quota Status │");
     println!("    ├──────────────────────────┼──────┼─────────┼──────────────┼──────────────┤");
-    
-    let slow_status = if entropy_rep.ultra_slow_pct < 5.0 { "🟡 UNDERWEIGHT".yellow() } else { "🟢 BALANCED".green() };
-    let core_status = if entropy_rep.core_pct > 70.0 { "🔴 SATURATED".red().bold() } else { "🟢 BALANCED".green() };
-    let fast_status = if entropy_rep.fast_pct < 15.0 { "🔴 DEFICIT (PRIORITY)".red().bold() } else { "🟢 BALANCED".green() };
-    let vfast_status = if entropy_rep.very_fast_pct > 15.0 { "⚠️ ELEVATED".yellow() } else { "🟢 BALANCED".green() };
+
+    let slow_status = if entropy_rep.ultra_slow_pct < 5.0 {
+        "🟡 UNDERWEIGHT".yellow()
+    } else {
+        "🟢 BALANCED".green()
+    };
+    let core_status = if entropy_rep.core_pct > 70.0 {
+        "🔴 SATURATED".red().bold()
+    } else {
+        "🟢 BALANCED".green()
+    };
+    let fast_status = if entropy_rep.fast_pct < 15.0 {
+        "🔴 DEFICIT (PRIORITY)".red().bold()
+    } else {
+        "🟢 BALANCED".green()
+    };
+    let vfast_status = if entropy_rep.very_fast_pct > 15.0 {
+        "⚠️ ELEVATED".yellow()
+    } else {
+        "🟢 BALANCED".green()
+    };
 
     println!(
         "    │ {:<24} │ {:>4} │ {:>6.1}% │ 10% - 20%    │ {:<12} │",
@@ -590,11 +602,13 @@ pub async fn cmd_allocate(
     // 4. Section 2: Hierarchical Risk Parity (HRP) Weights
     let hrp_weights = compute_hrp_weights(&os_alphas, &pnl_cache);
     let mut sorted_hrp = hrp_weights.clone();
-    sorted_hrp.sort_by(|a, b| b.health_ratio.partial_cmp(&a.health_ratio).unwrap_or(std::cmp::Ordering::Equal));
+    sorted_hrp.sort_by(|a, b| {
+        b.health_ratio
+            .partial_cmp(&a.health_ratio)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
-    println!(
-        "\n  ⚖️  TIER 2: HIERARCHICAL RISK PARITY (HRP) VS EQUAL WEIGHT (1/N):"
-    );
+    println!("\n  ⚖️  TIER 2: HIERARCHICAL RISK PARITY (HRP) VS EQUAL WEIGHT (1/N):");
     println!("  ─────────────────────────────────────────────────────────────────────────");
     println!("    🌟 TOP 5 PILLAR DRIVERS (Highest Risk Parity Marginal Value):");
     println!("    ┌──────────┬──────────┬────────────┬────────────┬──────────────┬────────────────────────────┐");
@@ -603,7 +617,12 @@ pub async fn cmd_allocate(
     for w in sorted_hrp.iter().take(5) {
         println!(
             "    │ {:<8} │ {:<8} │ {:>9.2}% │ {:>9.2}% │ {:>11.2}x │ {:<26} │",
-            w.alpha_id, w.universe, w.hrp_weight * 100.0, w.equal_weight * 100.0, w.health_ratio, w.verdict.green()
+            w.alpha_id,
+            w.universe,
+            w.hrp_weight * 100.0,
+            w.equal_weight * 100.0,
+            w.health_ratio,
+            w.verdict.green()
         );
     }
     println!("    └──────────┴──────────┴────────────┴────────────┴──────────────┴────────────────────────────┘");
@@ -615,7 +634,12 @@ pub async fn cmd_allocate(
     for w in sorted_hrp.iter().rev().take(5) {
         println!(
             "    │ {:<8} │ {:<8} │ {:>9.2}% │ {:>9.2}% │ {:>11.2}x │ {:<26} │",
-            w.alpha_id, w.universe, w.hrp_weight * 100.0, w.equal_weight * 100.0, w.health_ratio, w.verdict.yellow()
+            w.alpha_id,
+            w.universe,
+            w.hrp_weight * 100.0,
+            w.equal_weight * 100.0,
+            w.health_ratio,
+            w.verdict.yellow()
         );
     }
     println!("    └──────────┴──────────┴────────────┴────────────┴──────────────┴────────────────────────────┘");
@@ -623,9 +647,7 @@ pub async fn cmd_allocate(
     // 5. Section 3: Retirement / Trimming Recommendations (if trim flag or portfolio >= 50)
     let retirement_cands = identify_retirement_candidates(&os_alphas, &hrp_weights);
     if trim || os_alphas.len() >= 50 {
-        println!(
-            "\n  🔄 TIER 3: RETIREMENT & TRIMMING DIRECTIVES (60-Alpha Milestone Prep):"
-        );
+        println!("\n  🔄 TIER 3: RETIREMENT & TRIMMING DIRECTIVES (60-Alpha Milestone Prep):");
         println!("  ─────────────────────────────────────────────────────────────────────────");
         if retirement_cands.is_empty() {
             println!("    ✅ No severe dilutive drags identified. Portfolio is well-balanced.");
@@ -637,7 +659,12 @@ pub async fn cmd_allocate(
             for (idx, r) in retirement_cands.iter().take(3).enumerate() {
                 println!(
                     "    #{}. [{}] ({}) TO: {:.1}% | HRP: {:.2}% | HR: {:.2}x",
-                    idx + 1, r.alpha_id.yellow().bold(), r.universe, r.turnover_pct, r.hrp_weight_pct, r.health_ratio
+                    idx + 1,
+                    r.alpha_id.yellow().bold(),
+                    r.universe,
+                    r.turnover_pct,
+                    r.hrp_weight_pct,
+                    r.health_ratio
                 );
                 println!("        👉 Rationale: {}", r.reason);
             }
@@ -655,13 +682,8 @@ pub async fn cmd_allocate(
         let cand_pnl = client.fetch_daily_pnl(cand_id).await?;
         let to = candidate_turnover.unwrap_or(0.35);
 
-        let adm_report = evaluate_candidate_admission(
-            cand_id,
-            to,
-            &cand_pnl,
-            &os_alphas,
-            &pnl_cache,
-        );
+        let adm_report =
+            evaluate_candidate_admission(cand_id, to, &cand_pnl, &os_alphas, &pnl_cache);
 
         println!("    Admission Verdict: {}\n", adm_report.verdict.badge());
         println!("    Decision Metrics Delta:");
@@ -675,7 +697,9 @@ pub async fn cmd_allocate(
         );
         println!(
             "      • Turnover Diversity Delta:  {:+0.1}% ({:.1}% -> {:.1}%)",
-            adm_report.entropy_delta, adm_report.baseline_entropy_score, adm_report.merged_entropy_score
+            adm_report.entropy_delta,
+            adm_report.baseline_entropy_score,
+            adm_report.merged_entropy_score
         );
         println!(
             "      • Max Correlation:           +{:.2}% vs {} (Safety Buffer: {:.2}%)",
@@ -689,19 +713,15 @@ pub async fn cmd_allocate(
         }
 
         if let Some(worst) = retirement_cands.first() {
-            if let Some(swap_rep) = evaluate_candidate_swap(
-                cand_id,
-                &cand_pnl,
-                &os_alphas,
-                &pnl_cache,
-                &worst.alpha_id,
-            ) {
-                println!(
-                    "\n    🔄 REPLACEMENT SWAP SCENARIO (60-Alpha Milestone Simulation):"
-                );
+            if let Some(swap_rep) =
+                evaluate_candidate_swap(cand_id, &cand_pnl, &os_alphas, &pnl_cache, &worst.alpha_id)
+            {
+                println!("\n    🔄 REPLACEMENT SWAP SCENARIO (60-Alpha Milestone Simulation):");
                 println!(
                     "      • Replacing Bottom Drag:     [{}] (HRP Weight: {:.2}%, HR: {:.2}x)",
-                    worst.alpha_id.yellow(), worst.hrp_weight_pct, worst.health_ratio
+                    worst.alpha_id.yellow(),
+                    worst.hrp_weight_pct,
+                    worst.health_ratio
                 );
                 println!(
                     "      • Swapped Sharpe Impact:     {:+0.4} ({:.2} -> {:.2})",
@@ -714,7 +734,9 @@ pub async fn cmd_allocate(
                 let verdict_str = if swap_rep.is_net_improvement {
                     "🌟 HIGH VALUE REPLACEMENT (Surges Sharpe while keeping portfolio size constant)".green().bold()
                 } else {
-                    "⚠️ DILUTIVE SWAP (Net negative impact vs keeping baseline)".yellow().bold()
+                    "⚠️ DILUTIVE SWAP (Net negative impact vs keeping baseline)"
+                        .yellow()
+                        .bold()
                 };
                 println!("      • Replacement Verdict:       {}", verdict_str);
             }

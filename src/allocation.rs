@@ -165,8 +165,14 @@ pub fn compute_hrp_weights(
     if n == 1 {
         return vec![HrpAlphaWeight {
             alpha_id: alphas[0].id.clone(),
-            name: alphas[0].name.clone().unwrap_or_else(|| alphas[0].id.clone()),
-            universe: alphas[0].universe.clone().unwrap_or_else(|| "N/A".to_string()),
+            name: alphas[0]
+                .name
+                .clone()
+                .unwrap_or_else(|| alphas[0].id.clone()),
+            universe: alphas[0]
+                .universe
+                .clone()
+                .unwrap_or_else(|| "N/A".to_string()),
             hrp_weight: 1.0,
             equal_weight: 1.0,
             health_ratio: 1.0,
@@ -595,8 +601,10 @@ pub fn identify_retirement_candidates(
     hrp_weights: &[HrpAlphaWeight],
 ) -> Vec<RetirementCandidate> {
     let mut candidates = Vec::new();
-    let weight_map: HashMap<String, &HrpAlphaWeight> =
-        hrp_weights.iter().map(|w| (w.alpha_id.clone(), w)).collect();
+    let weight_map: HashMap<String, &HrpAlphaWeight> = hrp_weights
+        .iter()
+        .map(|w| (w.alpha_id.clone(), w))
+        .collect();
 
     for a in alphas {
         if let Some(w) = weight_map.get(&a.id) {
@@ -690,10 +698,16 @@ mod tests {
 
     #[test]
     fn test_turnover_bucket_classification() {
-        assert_eq!(TurnoverBucket::from_turnover(0.08), TurnoverBucket::UltraSlow);
+        assert_eq!(
+            TurnoverBucket::from_turnover(0.08),
+            TurnoverBucket::UltraSlow
+        );
         assert_eq!(TurnoverBucket::from_turnover(0.18), TurnoverBucket::Core);
         assert_eq!(TurnoverBucket::from_turnover(0.35), TurnoverBucket::Fast);
-        assert_eq!(TurnoverBucket::from_turnover(0.55), TurnoverBucket::VeryFast);
+        assert_eq!(
+            TurnoverBucket::from_turnover(0.55),
+            TurnoverBucket::VeryFast
+        );
         assert_eq!(TurnoverBucket::from_turnover(35.0), TurnoverBucket::Fast);
     }
 
