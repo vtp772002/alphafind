@@ -335,7 +335,7 @@ pub fn evaluate_portfolio_health(
     let mut recs = Vec::new();
     if tight_buffer_count > 0 {
         recs.push(format!(
-            "CẢNH BÁO TƯƠNG QUAN: Có {} Alpha đang có đệm an toàn dưới 8% so với trần 70%. Ưu tiên khai thác các Factor Pillar hoàn toàn trực giao.",
+            "CẢNH BÁO TƯƠNG QUAN: Có {} Alpha đang có đệm an toàn dưới 8% so với ngưỡng proxy 70% (tương quan local, không phải self-correlation của BRAIN). Ưu tiên khai thác các Factor Pillar hoàn toàn trực giao.",
             tight_buffer_count
         ));
     }
