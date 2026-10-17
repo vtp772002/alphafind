@@ -15,6 +15,84 @@ use crate::models::{
 
 pub const BASE_URL: &str = "https://api.worldquantbrain.com";
 
+/// Guidance attached to requests whose platform-side outcome cannot be confirmed.
+pub const AMBIGUOUS_SIMULATION_NOTE: &str = "AMBIGUOUS SIMULATION STATE: the platform may have accepted this simulation. \
+AlphaFind does not retry ambiguous, non-idempotent POSTs in order to avoid creating duplicate simulations. \
+Reconcile in the BRAIN interface (simulation/alpha list) before dispatching the same expression again.";
+
+/// Displayed when a submission POST may or may not have reached the platform.
+pub const AMBIGUOUS_SUBMISSION_NOTE: &str =
+    "AMBIGUOUS SUBMISSION STATE: the submission POST may or may not have reached \
+the platform. Do not re-submit blindly; verify the alpha stage in the BRAIN interface first.";
+
+/// Outcome of a submission request. `Unknown` means the platform outcome is unconfirmed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SubmitStatus {
+    /// The platform accepted the submission (HTTP success).
+    Accepted,
+    /// The platform answered with an explicit non-success status.
+    Rejected,
+    /// The request failed in transport before a status could be read.
+    Unknown,
+}
+
+/// Classification of a failed non-idempotent POST.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PostFailure {
+    /// The request never reached the platform; retrying cannot duplicate state.
+    NotSent,
+    /// The outcome is unknown, so the platform may have processed the request.
+    Ambiguous,
+}
+
+/// Whether a failed non-idempotent POST may be retried without risking duplicates.
+///
+/// Only [`PostFailure::NotSent`] is retryable. Ambiguous failures (timeouts, resets,
+/// truncated responses) must be reconciled against platform state first.
+pub fn retry_is_safe(failure: PostFailure) -> bool {
+    matches!(failure, PostFailure::NotSent)
+}
+
+/// Maps a transport error to its retry classification.
+///
+/// `reqwest::Error::is_connect` reports that the connection could not be established
+/// at all, which is the only transport case where the payload was definitely not sent.
+pub fn classify_transport_error(err: &reqwest::Error) -> PostFailure {
+    if err.is_connect() {
+        PostFailure::NotSent
+    } else {
+        PostFailure::Ambiguous
+    }
+}
+
+/// Stable 64-bit FNV-1a fingerprint of an expression plus its settings.
+///
+/// Used only for local diagnostics: it lets an operator recognize which request a
+/// previous ambiguous failure referred to without logging the private formula itself.
+pub fn simulation_fingerprint(expression: &str, settings: &AlphaSettings) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut write = |bytes: &[u8]| {
+        for b in bytes {
+            hash ^= u64::from(*b);
+            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    };
+    write(expression.as_bytes());
+    write(b"\x1f");
+    write(settings.instrument_type.as_bytes());
+    write(settings.region.as_bytes());
+    write(settings.universe.as_bytes());
+    write(settings.neutralization.as_bytes());
+    write(
+        format!(
+            "|d{}|delay{}|t{:.6}",
+            settings.decay, settings.delay, settings.truncation
+        )
+        .as_bytes(),
+    );
+    format!("{hash:016x}")
+}
+
 /// The mandatory core submission check names that MUST be present on all evaluated alphas.
 pub const CORE_SUBMISSION_CHECKS: &[&str] = &[
     "LOW_SHARPE",
@@ -296,6 +374,15 @@ impl BrainClient {
     }
 
     /// Submits a FastExpr alpha simulation and returns the simulation ID/URL.
+    ///
+    /// The POST is non-idempotent. Only requests that provably did not create a
+    /// simulation are retried:
+    /// - `HTTP 429` responses (the platform refused the request), and
+    /// - connection failures, where reqwest reports that no connection was established.
+    ///
+    /// Timeouts, resets, or truncated responses are treated as **ambiguous**: the
+    /// call fails closed with [`AMBIGUOUS_SIMULATION_NOTE`] instead of dispatching a
+    /// second simulation that could duplicate the first.
     pub async fn submit_simulation(
         &self,
         expression: &str,
@@ -309,6 +396,7 @@ impl BrainClient {
             settings,
             regular: expression,
         };
+        let fingerprint = simulation_fingerprint(expression, settings);
 
         for retry in 0..8 {
             let headers = self.auth_headers_json()?;
@@ -336,8 +424,9 @@ impl BrainClient {
                             return Ok(loc.to_string());
                         }
                         return Err(anyhow!(
-                            "Simulation succeeded but no ID/Location returned: {:?}",
-                            body
+                            "Simulation accepted (HTTP {}) but no ID/Location was returned. {} [fingerprint {fingerprint}]",
+                            status.as_u16(),
+                            AMBIGUOUS_SIMULATION_NOTE
                         ));
                     } else if status.as_u16() == 429 {
                         let wait = resp
@@ -358,11 +447,16 @@ impl BrainClient {
                     }
                 }
                 Err(e) => {
-                    if retry < 7 {
+                    let failure = classify_transport_error(&e);
+                    if retry_is_safe(failure) && retry < 7 {
                         sleep(Duration::from_secs(2)).await;
                         continue;
                     }
-                    return Err(anyhow!("Network error during simulation post: {}", e));
+                    return Err(anyhow!(
+                        "Network error during simulation post ({}). {} [fingerprint {fingerprint}]",
+                        e,
+                        AMBIGUOUS_SIMULATION_NOTE
+                    ));
                 }
             }
         }
@@ -604,27 +698,60 @@ impl BrainClient {
     }
 
     /// Submits an alpha to Out-of-Sample tracking.
-    pub async fn submit_alpha(&self, alpha_id: &str) -> Result<(bool, String)> {
+    /// Submits an alpha to the platform.
+    ///
+    /// The POST is non-idempotent, so a transport failure is reported as
+    /// [`SubmitStatus::Unknown`] rather than as an `Err`. Callers must verify the
+    /// alpha stage in the BRAIN interface before retrying.
+    pub async fn submit_alpha(&self, alpha_id: &str) -> Result<(SubmitStatus, String)> {
         self.authenticate().await?;
 
         let url = format!("{}/alphas/{}/submit", self.base_url, alpha_id);
         let headers = self.auth_headers_json()?;
 
-        let resp = self
+        let resp = match self
             .client
             .post(&url)
             .headers(headers)
             .body("{}")
             .send()
-            .await?;
+            .await
+        {
+            Ok(resp) => resp,
+            Err(e) => {
+                return Ok((
+                    SubmitStatus::Unknown,
+                    format!(
+                        "{} Underlying transport error: {}",
+                        AMBIGUOUS_SUBMISSION_NOTE, e
+                    ),
+                ))
+            }
+        };
 
         let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
+        let body = match resp.text().await {
+            Ok(body) => body,
+            Err(e) => {
+                return Ok((
+                    SubmitStatus::Unknown,
+                    format!(
+                        "{} Response body could not be read after HTTP {}: {}",
+                        AMBIGUOUS_SUBMISSION_NOTE,
+                        status.as_u16(),
+                        e
+                    ),
+                ))
+            }
+        };
 
         if status.is_success() {
-            Ok((true, "Submitted successfully (201 Created)".to_string()))
+            Ok((
+                SubmitStatus::Accepted,
+                format!("Submitted successfully (HTTP {})", status.as_u16()),
+            ))
         } else {
-            Ok((false, format!("HTTP {}: {}", status, body)))
+            Ok((SubmitStatus::Rejected, format!("HTTP {}: {}", status, body)))
         }
     }
 

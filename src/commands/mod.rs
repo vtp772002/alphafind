@@ -68,20 +68,33 @@ pub fn load_pnl_cache() -> (
     (pnl_cache, age)
 }
 
-/// Prints cache age and alerts if cache is stale (>24h per config).
-pub fn print_cache_status(age: Option<std::time::Duration>, count: usize) {
+/// Formats a cache age and reports whether it exceeds the freshness policy.
+///
+/// Returns `(label, is_stale)`. `None` means the age is unknown (for example a
+/// platform response that was not written to disk), which is never treated as fresh.
+pub fn cache_age_label(age: Option<std::time::Duration>) -> (String, bool) {
     match age {
         Some(d) => {
             let secs = d.as_secs();
-            let age_str = if secs < 60 {
+            let label = if secs < 60 {
                 format!("{}s ago", secs)
             } else if secs < 3600 {
                 format!("{:.1}m ago", secs as f64 / 60.0)
             } else {
                 format!("{:.1}h ago", secs as f64 / 3600.0)
             };
+            (label, secs > PNL_CACHE_MAX_AGE_HOURS * 3600)
+        }
+        None => ("age unknown".to_string(), true),
+    }
+}
 
-            if secs > PNL_CACHE_MAX_AGE_HOURS * 3600 {
+/// Prints cache age and alerts if cache is stale (>24h per config).
+pub fn print_cache_status(age: Option<std::time::Duration>, count: usize) {
+    match age {
+        Some(d) => {
+            let (age_str, stale) = cache_age_label(Some(d));
+            if stale {
                 println!(
                     "  {} Local PnL cache was updated {} ({} alphas cached, exceeds {}h freshness recommended in AGENTS.md). Run 'alphafind portfolio' to refresh.",
                     "⚠️  [CACHE STALE]".yellow().bold(),
@@ -99,7 +112,11 @@ pub fn print_cache_status(age: Option<std::time::Duration>, count: usize) {
         }
         None => {
             if count > 0 {
-                println!("  ℹ️  Local PnL cache: {} alphas loaded", count);
+                println!(
+                    "  {} Local PnL cache: {} alphas loaded, but the cache age could not be read. Treat freshness as unknown.",
+                    "⚠️".yellow().bold(),
+                    count
+                );
             }
         }
     }
