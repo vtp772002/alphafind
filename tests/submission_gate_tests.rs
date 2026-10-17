@@ -147,6 +147,28 @@ fn test_submission_gate_fails_closed_without_any_checks() {
 }
 
 #[test]
+fn test_submission_gate_explains_already_submitted_state() {
+    let eval = evaluate_submission_checks(&stats_with(vec![check("ALREADY_SUBMITTED", "FAIL")]));
+
+    assert!(
+        !eval.passed,
+        "a submitted alpha must not be reported as a verified pass"
+    );
+    assert!(
+        eval.message.contains("ALREADY SUBMITTED"),
+        "message must name the platform state, got: {}",
+        eval.message
+    );
+    assert!(
+        !eval.message.contains("Missing required core checks"),
+        "the reason must not be misreported as a coverage gap, got: {}",
+        eval.message
+    );
+    assert_eq!(eval.total_count, 1);
+    assert_eq!(eval.passed_count, 0);
+}
+
+#[test]
 fn test_cache_age_label_flags_stale_and_unknown_ages() {
     let (label, stale) = cache_age_label(Some(Duration::from_secs(2 * HOUR)));
     assert!(!stale, "a 2h cache is fresh");

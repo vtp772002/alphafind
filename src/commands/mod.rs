@@ -122,6 +122,60 @@ pub fn print_cache_status(age: Option<std::time::Duration>, count: usize) {
     }
 }
 
+/// Renders Unix seconds as a UTC `YYYY-MM-DD HH:MM` timestamp.
+///
+/// Uses the civil-from-days algorithm so no date crate is required. Deterministic
+/// for every input, including leap years.
+pub fn format_epoch_utc(secs: u64) -> String {
+    let days = (secs / 86_400) as i64;
+    let rem = secs % 86_400;
+    let (hour, minute) = (rem / 3_600, (rem % 3_600) / 60);
+
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = (z - era * 146_097) as u64;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let mut year = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    if month <= 2 {
+        year += 1;
+    }
+
+    format!(
+        "{:04}-{:02}-{:02} {:02}:{:02}",
+        year, month, day, hour, minute
+    )
+}
+
+/// Formats a stored snapshot timestamp for display.
+///
+/// Snapshots persist `Unix Epoch <secs>`; that value is rendered as a readable UTC
+/// date plus its age instead of a raw epoch number. Any other text is returned
+/// unchanged so older or hand-edited files still display.
+pub fn format_snapshot_timestamp(raw: &str, now_secs: u64) -> String {
+    let Some(secs) = raw
+        .trim()
+        .strip_prefix("Unix Epoch ")
+        .and_then(|value| value.trim().parse::<u64>().ok())
+    else {
+        return raw.to_string();
+    };
+
+    let age = now_secs.saturating_sub(secs);
+    let age_str = if age < 3_600 {
+        format!("{}m old", age / 60)
+    } else if age < 86_400 {
+        format!("{:.1}h old", age as f64 / 3_600.0)
+    } else {
+        format!("{:.1}d old", age as f64 / 86_400.0)
+    };
+
+    format!("{} UTC ({})", format_epoch_utc(secs), age_str)
+}
+
 /// Helper to format file paths for console display
 pub fn json_path_display(p: &str) -> colored::ColoredString {
     p.bold()

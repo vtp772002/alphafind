@@ -7,7 +7,10 @@ use std::fs;
 use std::path::Path;
 
 use crate::autotuner::FitnessAutoTuner;
-use crate::commands::{dataset_census_key, format_count, get_main_client};
+use crate::commands::{
+    dataset_census_key, format_count, format_snapshot_timestamp, get_main_client,
+};
+use crate::crowd_allocation::current_unix_time;
 use crate::models::{AlphaSettings, CensusSnapshot, DatasetEntry};
 use crate::screener::MultiAccountScreener;
 use crate::taxonomy::{get_curated_candidates, FactorPillar};
@@ -210,7 +213,7 @@ pub async fn cmd_radar(
         if prev.region.eq_ignore_ascii_case(&region) {
             println!(
                 "  Loaded previous snapshot from {}. Showing count changes since that snapshot.",
-                prev.timestamp.cyan()
+                format_snapshot_timestamp(&prev.timestamp, current_unix_time()).cyan()
             );
             for d in &prev.datasets {
                 let key = dataset_census_key(d);

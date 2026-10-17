@@ -189,6 +189,28 @@ pub fn evaluate_submission_checks(stats: &InSampleStats) -> SubmissionCheckResul
 
     let total_count = stats.checks.len();
 
+    // A submitted alpha is answered with a single ALREADY_SUBMITTED check instead of
+    // the full suite. That is not a verifiable pass, but "missing core checks" would
+    // misdescribe it, so report the platform state explicitly.
+    if let Some(item) = stats
+        .checks
+        .iter()
+        .find(|c| c.name.eq_ignore_ascii_case("ALREADY_SUBMITTED"))
+    {
+        return SubmissionCheckResult {
+            passed: false,
+            message: format!(
+                "ALREADY SUBMITTED (platform result: {}): the platform does not evaluate submission checks again for a submitted alpha, so there is nothing verifiable here.",
+                item.result
+            ),
+            passed_count,
+            total_count,
+            failed_checks: failed,
+            pending_checks: pending,
+            missing_core_checks: missing_core,
+        };
+    }
+
     if !missing_core.is_empty() {
         return SubmissionCheckResult {
             passed: false,
