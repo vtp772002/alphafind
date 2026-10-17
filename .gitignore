@@ -66,3 +66,9 @@ vault_backup_*.csv
 target/
 **/target/
 
+
+# Downloaded BRAIN dataset/field metadata names exact fields under research
+data/fields_*.json
+
+# Local sanitizer pattern store (names the fields under research)
+data/sanitize_field_patterns.txt
