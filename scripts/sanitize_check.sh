@@ -113,6 +113,37 @@ if [ -n "$DIFF_ADDED" ] && [ ${#ALPHA_IDS[@]} -gt 0 ]; then
     done
 fi
 
+# 4b. Scan commit history for Alpha IDs.
+#
+# The range check above covers only the outgoing diff, which on a repository without
+# an upstream collapses to the last commit. An ID committed earlier therefore slips
+# through, so every commit's added lines are scanned here as well.
+if [ ${#ALPHA_IDS[@]} -gt 0 ]; then
+    HISTORY_ADDED=$(git log -p --all --format="%H" 2>/dev/null | grep -E "^\+[^+]" || true)
+    HISTORY_HITS=0
+    if [ -n "$HISTORY_ADDED" ]; then
+        for aid in "${ALPHA_IDS[@]}"; do
+            if echo "$HISTORY_ADDED" | grep -q "$aid"; then
+                HISTORY_HITS=$((HISTORY_HITS + 1))
+            fi
+        done
+    fi
+
+    if [ "$HISTORY_HITS" -gt 0 ]; then
+        if [ "${ALPHAFIND_STRICT_HISTORY:-0}" = "1" ]; then
+            echo -e "${RED}❌ ERROR: $HISTORY_HITS Alpha ID(s) found in commit-history added lines.${NC}"
+            echo "   A new commit cannot remove them: rewrite history or rotate the exposed alphas."
+            echo "   See scratch/purge_history.sh for the purge workflow."
+            exit 1
+        fi
+        echo -e "${YELLOW}⚠️  WARNING: $HISTORY_HITS Alpha ID(s) found in commit-history added lines.${NC}"
+        echo "   Published history keeps them; rewrite history or rotate the exposed alphas."
+        echo "   Set ALPHAFIND_STRICT_HISTORY=1 to make this a hard failure."
+    else
+        echo -e "${GREEN}   ✓ Commit-history scan: no Alpha IDs in added lines.${NC}"
+    fi
+fi
+
 # Also check currently tracked files
 if [ ${#ALPHA_IDS[@]} -gt 0 ]; then
     for aid in "${ALPHA_IDS[@]}"; do
