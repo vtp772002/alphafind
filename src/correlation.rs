@@ -71,8 +71,13 @@ pub struct CorrelationAuditReport {
     pub pairwise_results: Vec<(String, f64, usize)>, // (alpha_id, corr, common_days)
     pub insufficient_overlap_count: usize,
     pub valid_comparisons: usize,
-    pub is_brain_compliant: bool, // <= 0.70 with valid comparisons
-    pub is_true_orthogonal: bool, // <= 0.15 with valid comparisons
+    /// Local Pearson rho at or below the platform's published self-correlation
+    /// threshold (0.70), used as a **local proxy**. It is not BRAIN's own
+    /// self-correlation computation, which the platform runs on its own data.
+    pub is_within_correlation_proxy: bool,
+    /// Local rho at or below the project's internal orthogonality preference
+    /// (0.15). This is a research preference, not a platform criterion.
+    pub is_locally_orthogonal: bool,
 }
 
 /// Audits a candidate Alpha's PnL against an entire portfolio of active OS Alphas in a fail-closed manner.
@@ -118,8 +123,8 @@ pub fn audit_candidate(
     };
 
     // Fail-closed: Cannot claim compliance or orthogonality without valid comparisons
-    let is_brain_compliant = max_corr.is_some_and(|m| m <= BRAIN_MAX_CORRELATION);
-    let is_true_orthogonal = max_corr.is_some_and(|m| m <= ORTHOGONAL_CORRELATION_THRESHOLD);
+    let is_within_correlation_proxy = max_corr.is_some_and(|m| m <= BRAIN_MAX_CORRELATION);
+    let is_locally_orthogonal = max_corr.is_some_and(|m| m <= ORTHOGONAL_CORRELATION_THRESHOLD);
 
     CorrelationAuditReport {
         candidate_id: candidate_id.to_string(),
@@ -129,8 +134,8 @@ pub fn audit_candidate(
         pairwise_results: pairwise,
         insufficient_overlap_count,
         valid_comparisons,
-        is_brain_compliant,
-        is_true_orthogonal,
+        is_within_correlation_proxy,
+        is_locally_orthogonal,
     }
 }
 

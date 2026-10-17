@@ -95,11 +95,11 @@ pub async fn cmd_audit(alpha_id: String, label: Option<String>) -> Result<()> {
     println!("  ─────────────────────────────────────────────────────────────────────────");
     for (idx, (os_id, corr, days)) in report.pairwise_results.iter().take(8).enumerate() {
         let status_icon = if *corr <= 0.15 {
-            "🟢 TRUE ORTHOGONAL".green()
+            "🟢 ORTHOGONAL (local ≤0.15)".green()
         } else if *corr <= 0.70 {
-            "🟡 COMPLIANT (<0.70)".yellow()
+            "🟡 WITHIN 0.70 PROXY".yellow()
         } else {
-            "🔴 COLLISION (>0.70)".red()
+            "🔴 OVER 0.70 PROXY".red()
         };
 
         println!(
@@ -141,19 +141,26 @@ pub async fn cmd_audit(alpha_id: String, label: Option<String>) -> Result<()> {
             "\n  {} No active OS alphas had >= 30 common trading days. Compliance cannot be confirmed (fail-closed).",
             "⚠️  [INSUFFICIENT DATA]".yellow().bold()
         );
-    } else if report.is_true_orthogonal {
-        println!("\n  {} Candidate is 100% TRUE ORTHOGONAL (rho <= 0.15). Maximum portfolio diversification value!", "🌟 [EXCELLENT]".green().bold());
-    } else if report.is_brain_compliant {
+    } else if report.is_locally_orthogonal {
         println!(
-            "\n  {} Candidate satisfies WorldQuant BRAIN self-correlation limit (rho <= 0.70).",
-            "✅ [COMPLIANT]".green()
+            "\n  {} Candidate is locally orthogonal (rho <= 0.15, internal research preference) against the current OS portfolio.",
+            "🌟 [EXCELLENT]".green().bold()
+        );
+    } else if report.is_within_correlation_proxy {
+        println!(
+            "\n  {} Local rho is within the platform's published 0.70 self-correlation threshold, used here only as a proxy. BRAIN computes its own self-correlation on its own data during the platform check.",
+            "✅ [WITHIN PROXY]".green()
         );
     } else {
         println!(
-            "\n  {} Candidate violates self-correlation limit (rho > 0.70). Unsubmittable.",
-            "❌ [REJECTED]".red().bold()
+            "\n  {} Local rho exceeds the 0.70 proxy threshold. Treat this as a warning: the platform check measures its own metric and is the authority.",
+            "❌ [OVER PROXY]".red().bold()
         );
     }
+
+    println!(
+        "\n  Interpretation: local Pearson rho uses overlapping dates from local PnL. 0.15 is an internal research preference and 0.70 is the platform's published self-correlation threshold used as a proxy; neither reproduces BRAIN's own check."
+    );
 
     println!(
         "\n  Dataset/field usage is available via `alphafind shadow`; it measures participation, not official Uniqueness."
@@ -387,13 +394,13 @@ pub async fn cmd_impact(alpha_id: String) -> Result<()> {
             .bold()
             .to_string()
     };
-    println!("    Safety Buffer to 70% Limit: {}", buffer_styled);
+    println!("    Safety Buffer to 70% Proxy: {}", buffer_styled);
     println!("  ─────────────────────────────────────────────────────────────────────────");
 
     if impact.max_pairwise_corr > 0.70 {
         println!(
-            "\n  {} REJECTED: Candidate violates 70% self-correlation ceiling.",
-            "❌ [UNSUBMITTABLE]".red().bold()
+            "\n  {} Local rho exceeds the 0.70 proxy threshold; confirm with the platform check before submitting.",
+            "❌ [OVER PROXY]".red().bold()
         );
     } else if impact.delta_sharpe > 0.0 && impact.safety_buffer_pct >= 8.0 {
         println!(

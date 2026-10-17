@@ -519,7 +519,7 @@ pub fn evaluate_candidate_admission(
     // Decision rule logic
     let verdict = if max_corr >= 0.70 {
         rationale.push(format!(
-            "FAIL Self-Correlation (rho = {:.2}% >= 70.0% vs {}).",
+            "FAIL local self-correlation proxy (rho = {:.2}% >= 70.0% vs {}).",
             max_corr * 100.0,
             top_match
         ));

@@ -138,8 +138,8 @@ fn test_audit_empty_portfolio_fails_closed() {
     assert!(report.max_correlation.is_none());
     assert!(report.avg_correlation.is_none());
     // Crucial fail-closed guarantees: cannot claim compliant or orthogonal without data!
-    assert!(!report.is_brain_compliant);
-    assert!(!report.is_true_orthogonal);
+    assert!(!report.is_within_correlation_proxy);
+    assert!(!report.is_locally_orthogonal);
 }
 
 #[test]
@@ -156,8 +156,8 @@ fn test_audit_insufficient_overlap_fails_closed() {
     assert_eq!(report.valid_comparisons, 0);
     assert_eq!(report.insufficient_overlap_count, 1);
     assert!(report.max_correlation.is_none());
-    assert!(!report.is_brain_compliant);
-    assert!(!report.is_true_orthogonal);
+    assert!(!report.is_within_correlation_proxy);
+    assert!(!report.is_locally_orthogonal);
 }
 
 #[test]
