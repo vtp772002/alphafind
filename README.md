@@ -4,7 +4,15 @@
 
 ## Status and limitations
 
-Treat this repository as a research prototype until the submission and data-integrity gaps described in [Architecture](docs/ARCHITECTURE.md) are fixed. In particular, the current API check parser can accept incomplete responses, screening task concurrency is not bounded by `--workers`, some reads may be stale or incomplete, and several research reports use heuristics rather than measured platform-wide data.
+This is a research prototype. The submission gate is deliberately conservative: checks must all be present and explicitly passing before a local "pass" is reported, screening concurrency is bounded per account, Alpha and dataset reads paginate, and follow-up simulation URLs are restricted to the configured BRAIN host. Candidate formulas are loaded from an ignored local store rather than from tracked source.
+
+Known gaps, stated plainly:
+
+- The local check evaluator is fail-closed but not version-aware, and the expected core check list is hardcoded.
+- Simulation and submission POSTs are non-idempotent; ambiguous transport failures fail closed with a reconciliation fingerprint instead of being retried, and no automatic reconciliation exists yet.
+- Cache age is reported for the local PnL cache and field metadata, not for every Alpha/PnL read.
+- Git history still contains real field identifiers from earlier candidate catalogs. That is a release blocker for public distribution; see [Architecture](docs/ARCHITECTURE.md).
+- Research reports (`radar`, `matrix`, `blueprint`, `shadow`) use heuristics and local, user-owned PnL. They do not measure platform-wide co-movement or forecast official Uniqueness.
 
 Current official BRAIN rules and verified submission criteria are summarized in [BRAIN Rules and Submission](docs/BRAIN_RULES_AND_SUBMISSION.md). Confirm rules in the signed-in platform before submitting.
 
@@ -39,7 +47,11 @@ See [Quickstart](docs/QUICKSTART.md) for credential handling and safe first step
 
 ## Privacy and account rules
 
-Use one BRAIN account controlled by the participant, and do not share credentials or account IDs. Keep `.env`, candidate formulas, Alpha IDs, private PnL, and pending performance data out of version control and public logs. The source candidate catalog currently needs to be moved to a private local store before this repository is treated as safe for public distribution; removing a file from the current tree does not remove it from Git history.
+Use one BRAIN account controlled by the participant, and do not share credentials or account IDs. Keep `.env`, candidate formulas, Alpha IDs, private PnL, and pending performance data out of version control and public logs.
+
+Tracked source is free of candidate formulas: `src/taxonomy.rs` uses abstract placeholders and loads candidates from the ignored local store `data/private_candidates.json`. Downloaded field metadata (`data/fields_*.json`) is now untracked for the same reason.
+
+The remaining privacy blocker is Git history: earlier commits contain real field identifiers from previous candidate catalogs. Deleting them in a new commit does not remove them, so rewrite history (or keep the repository private) before treating this checkout as safe to publish. `scripts/sanitize_check.sh` is a useful pre-push signal, not proof: it reports when it cannot run its candidate or Alpha-ID scans.
 
 Authentication output may include account identifiers or email addresses. Sanitize logs before sharing them.
 

@@ -56,6 +56,6 @@ Use the BRAIN UI to select an expression and settings, or supply a privately hel
 ./target/release/alphafind sim --expr '<PRIVATE_EXPRESSION>' --universe TOP1000
 ```
 
-Before any submission, review the actual simulation results and all current platform criteria. `alphafind check` is not yet a trustworthy gate for incomplete API responses, and `alphafind submit` supports bypassing checks. Use the platform UI/API as the approval source until the client has fail-closed check parsing and complete coverage tests.
+Before any submission, review the actual simulation results and all current platform criteria. `alphafind check` now fails closed: it requires every core check to be present and every returned status to be an explicit `PASS`, and it rejects empty, pending, errored, unknown, and missing results. It is not version-aware and does not capture the raw response, so the platform UI/API stays the approval source. `alphafind submit` runs that gate first; `--skip-checks` is disabled unless `ALPHAFIND_ALLOW_SKIP_CHECKS=1` is set, and an ambiguous POST outcome is reported as unknown rather than as a failure.
 
 Read [BRAIN Rules and Submission](BRAIN_RULES_AND_SUBMISSION.md), [CLI Reference](CLI_REFERENCE.md), and [Architecture](ARCHITECTURE.md) before using automated workflows.

@@ -12,8 +12,8 @@ This reference describes command interfaces in `src/main.rs` as inspected on 202
 | `sim` | Create and poll one simulation on the main account. | Keep live expressions private. |
 | `screen` | Simulate candidates from the in-code catalog. | Tasks are spawned per candidate; `--workers` does not currently bound concurrency. Multi-account use must comply with BRAIN's account rules. |
 | `tune` | Try configured parameter variants for one expression. | A higher in-sample metric is not evidence of better OOS performance. |
-| `check` | Request platform submission check results. | The parser treats only explicit `FAIL` as failure; `PENDING`, `ERROR`, unknown, or missing checks can be misreported as PASS. Do not rely on it as an approval gate. |
-| `submit` | Send a submission request to BRAIN. | Has `--skip-checks`; use BRAIN's own status as authority. |
+| `check` | Request platform submission check results. | Fail-closed locally: requires every core check present and every returned status explicitly `PASS`; `PENDING`, `ERROR`, unknown, missing, and empty responses reject. Not version-aware and does not capture the raw response, so BRAIN remains the authority. |
+| `submit` | Send a submission request to BRAIN. | Runs the fail-closed check first. `--skip-checks` needs `ALPHAFIND_ALLOW_SKIP_CHECKS=1` and prints a bypass warning. An ambiguous POST outcome is reported as unknown and exits non-zero. |
 | `audit` | Compare candidate PnL with locally available portfolio PnLs. | Depends on date overlap and possibly stale cached series. |
 | `portfolio` | Calculate a local merged-PnL diagnostic. | Not BRAIN's official `isScore` calculation. |
 | `impact` | Estimate local portfolio change after adding a candidate. | Depends on included alphas, weights, date coverage, and cache freshness. |
@@ -62,7 +62,14 @@ alphafind health [--alpha-id <ALPHA_ID>] [--export <PATH>] [--all]
 alphafind check <ALPHA_ID>
 ```
 
-This calls the platform check endpoint. A local `PASS` should only be trusted after the client verifies that the response contains every expected check, every status is explicitly passing, and the payload belongs to the requested alpha and current settings. The current parser does not enforce those conditions reliably. Review the response in BRAIN.
+This calls the platform check endpoint and polls until no check is left `PENDING`. The local verdict is fail-closed:
+
+- an empty response fails;
+- every name in `CORE_SUBMISSION_CHECKS` must be present;
+- every returned check must be an explicit `PASS`;
+- `PENDING`, `ERROR`, `FAIL`, and unrecognized statuses all reject.
+
+The report table shows each returned status by name, so a pending or errored check is never displayed as a failure or a pass. Two caveats: the expected core list is hardcoded rather than version-aware, and the raw platform response is not captured. Treat the signed-in BRAIN interface as the authority.
 
 ### `submit`
 
@@ -71,7 +78,11 @@ alphafind submit <ALPHA_ID> [--name <NAME>] [--category <CATEGORY>] \
   [--color <COLOR>] [--tags <TAG,...>] [--skip-checks]
 ```
 
-This command can send a submission request. `--skip-checks` bypasses local preflight. Since the local preflight is incomplete, use the signed-in platform UI/API as the source of truth, and do not automate this command until the gate is fixed and covered by tests.
+This command sends an external submission request. It runs the same fail-closed check first and refuses to continue when the gate rejects.
+
+`--skip-checks` is disabled by default and aborts unless `ALPHAFIND_ALLOW_SKIP_CHECKS=1` (or `true`) is set; when it is set, the run prints a conspicuous bypass warning and the success message states that pre-flight checks were bypassed.
+
+The submission POST is non-idempotent. A transport failure is reported as an unknown outcome with instructions to verify the alpha stage in BRAIN, and the command exits non-zero instead of pretending the submission failed. Reconcile in the platform before retrying.
 
 ## Local portfolio diagnostics
 

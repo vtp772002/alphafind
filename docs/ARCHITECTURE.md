@@ -8,7 +8,7 @@ AlphaFind is an experimental Rust CLI that calls WorldQuant BRAIN endpoints and 
 |---|---|---|
 | CLI | `src/main.rs` | Parses commands and coordinates API/local workflows. |
 | API client | `src/client.rs` | Authenticates, requests simulations, polls results, fetches Alpha and portfolio data, and sends check/submit calls. |
-| Candidate catalog | `src/taxonomy.rs` | Stores candidate expressions/settings grouped by internal research labels. The expressions are private research material and should not be committed to a public repository. |
+| Candidate catalog | `src/taxonomy.rs` | Defines the research taxonomy and returns candidates loaded from the ignored local store `data/private_candidates.json` (override with `ALPHAFIND_CANDIDATES_PATH`), falling back to placeholder templates that contain no private field names. |
 | Screening | `src/screener.rs` | Assigns candidates across configured account clients and promotes promising candidates to the main client for another simulation/check. |
 | Parameter sweep | `src/autotuner.rs` | Tries configured variants of settings/expression transformations. It does not guarantee improved OOS results. |
 | Local portfolio analysis | `src/correlation.rs` | Computes correlations and local merged-PnL diagnostics from fetched/cached series. These are not official platform scores. |
@@ -17,7 +17,7 @@ AlphaFind is an experimental Rust CLI that calls WorldQuant BRAIN endpoints and 
 
 ## Screening and account constraints
 
-The screener creates one asynchronous task per candidate and assigns tasks to configured account clients in round-robin order. `workers_per_account` currently affects the displayed worker count; it does not bound task concurrency with a semaphore or fixed-size work queue. Candidate counts can therefore create more in-flight work than the printed worker total suggests.
+The screener consumes a bounded `mpsc` queue: `workers_per_account` worker tasks run per configured account, and each task holds that account's semaphore permit while a simulation is in flight. `workers_per_account` is therefore the maximum number of concurrent in-flight simulations per account, not a platform capacity figure. There is a short sleep between dispatches as politeness; it is not a rate limiter, and the CLI does not coordinate quotas across processes.
 
 The transfer lock is an in-process Tokio mutex. It serializes qualifying-candidate promotion inside one process; it is not a lock shared across CLI processes or machines.
 
@@ -32,13 +32,17 @@ Correlation and portfolio commands operate on data available in local caches and
 - the portfolio weighting method;
 - whether any request was paginated or truncated.
 
-As currently implemented, several fetch paths are not fully paginated and some commands reuse an existing cache instead of refreshing it. Correlation code returns a neutral-looking value when overlap is too short. Treat missing/stale/insufficient data as **unknown**, not as zero correlation or a passing audit.
+Alpha and dataset reads paginate (`/users/self/alphas` at 100 per page, `/data-sets` at 50 per page) and fail on a page error instead of silently truncating. Pairwise correlation fails closed: fewer than 30 overlapping dates, or a zero-variance series, returns no correlation rather than a neutral value, and the audit reports how many pairs were skipped for insufficient overlap. The local PnL cache reports its age and warns past 24 hours; field-usage cache entries older than 24 hours are excluded from weights.
+
+Remaining gap: not every Alpha/PnL read reports explicit active/OOS classification or exposes a refresh control, and cached series can still be reused without a forced refresh. Treat missing/stale/insufficient data as **unknown**, not as zero correlation or a passing audit.
 
 ## Submission path
 
-`alphafind submit` invokes the platform submit endpoint after a local check unless `--skip-checks` is supplied. The current check parser treats only the exact `FAIL` result as a failure. It can therefore pass when results are `PENDING`, `ERROR`, unknown, or absent from a partial response. It does not enforce every local portfolio policy. Until the parser verifies that every expected current check is present with an explicit `PASS`, use the BRAIN UI/API as the authority and consider disabling the CLI submit path.
+`alphafind submit` invokes the platform submit endpoint after a local check unless `--skip-checks` is supplied. The evaluator fails closed: it requires every name in `CORE_SUBMISSION_CHECKS` to be present and every returned check to be an explicit `PASS`; empty responses, `PENDING`, `ERROR`, missing core checks, and unrecognized statuses all fail. `--skip-checks` aborts unless `ALPHAFIND_ALLOW_SKIP_CHECKS=1` is set, and the run prints a bypass warning.
 
-Network retries around simulation creation also need idempotency review: retrying a non-idempotent request after an ambiguous response can create duplicate simulations. The API client should validate the host of URLs returned by the platform before attaching credentials.
+The gate is still not version-aware, does not capture the raw platform response, and does not include a separate local portfolio-policy gate. Treat the BRAIN UI/API as the authority and keep submission manual.
+
+Non-idempotent POST handling: simulation creation retries only when the request provably never created state — connection failures and explicit `429` responses. Timeouts, resets, and truncated responses fail closed with a reconciliation `fingerprint` instead of retrying. Submission follows the same rule and reports an unknown outcome rather than a failure. Automatic reconciliation against platform state is not implemented yet. The API client also rejects follow-up URLs outside the configured BRAIN host before attaching credentials.
 
 ## Heuristic modules
 
@@ -53,12 +57,22 @@ Rename outputs and docs accordingly, and show data provenance and assumption fla
 
 ## Changes required before relying on automated submission
 
-1. Make API checks fail closed: require a complete, versioned set of expected statuses, reject unknown/missing statuses, and capture the raw response safely.
-2. Enforce the platform's current submission settings and explicit local policy in separate gates; make bypasses conspicuous and unavailable by default.
-3. Add a bounded queue/rate limiter and idempotency handling to simulation dispatch.
-4. Add pagination, cache timestamps/refresh controls, and explicit coverage checks to Alpha/PnL reads.
-5. Restrict authenticated follow-up URLs to the configured BRAIN host.
-6. Move private expressions, Alpha IDs, and candidate metrics out of tracked files into a local, permission-restricted store; scan git history before public release.
-7. Add tests for API response parsing, pagination, cache staleness, low-overlap correlation, retries, and submission gates before enabling automatic submit.
+Done:
+
+1. Fail-closed check evaluation: missing core checks, `PENDING`, `ERROR`, empty, and unknown statuses all reject, covered by tests.
+2. Conspicuous bypass handling: `--skip-checks` requires an explicit environment opt-in and prints a bypass warning.
+3. Bounded simulation dispatch: `mpsc` work queue plus per-account semaphore, and no automatic retry of ambiguous non-idempotent POSTs.
+4. Pagination for Alpha and dataset reads, cache-age reporting for the local PnL cache and field-usage metadata, and fail-closed low-overlap correlation.
+5. Host allowlist for authenticated follow-up URLs.
+6. Private candidates, Alpha IDs, and downloaded field metadata out of tracked files, with a sanitizer that also scans for the private store's own literals.
+
+Still open:
+
+7. Version-aware check expectations plus safe raw-response capture.
+8. A separate local portfolio-policy gate (self-correlation, concentration, staleness) in front of submission.
+9. Automatic reconciliation for ambiguous simulation/submission outcomes, and cross-process rate limiting with platform-quota handling.
+10. Explicit active/OOS classification and refresh controls on every Alpha/PnL read.
+11. Correlation-coverage and account-policy boundary tests.
+12. Git history still contains real field identifiers from earlier candidate catalogs; purge or retire it before public distribution.
 
 See [BRAIN Rules and Submission](BRAIN_RULES_AND_SUBMISSION.md) for current official criteria and [CLI Reference](CLI_REFERENCE.md) for the command-level caveats.

@@ -61,7 +61,7 @@ Likewise, the platform's self-correlation criterion and AlphaFind's pairwise cor
 5. Track OOS behavior and internal portfolio overlap separately. Use local correlation and impact tools as diagnostics, with coverage and cache freshness visible.
 6. Recheck the current Challenge scoring schema and leaderboard before optimizing. Use the three equally weighted ranked components documented by the API; treat rank normalization, tie handling, and any later rule changes as unspecified unless BRAIN documents them.
 
-Until AlphaFind's check parser is fail-closed and has coverage for current BRAIN responses, treat `alphafind check` and `alphafind submit` as convenience tools, not authoritative approval. The submit command has a `--skip-checks` option, and its local preflight is not a substitute for BRAIN's own UI/API status.
+AlphaFind's check evaluator now fails closed: it requires every locally expected core check to be present and every returned status to be an explicit `PASS`, rejecting empty, `PENDING`, `ERROR`, unknown, and missing results. It is still not version-aware, its expected core list is maintained by hand, and it does not capture the raw platform response, so treat `alphafind check` and `alphafind submit` as convenience tooling rather than authoritative approval. `--skip-checks` is disabled unless `ALPHAFIND_ALLOW_SKIP_CHECKS=1` is set, and local preflight never replaces BRAIN's own UI/API status.
 
 ## Official sources
 
