@@ -8,11 +8,14 @@ use crate::allocation::{
     compute_hrp_weights, evaluate_candidate_admission, evaluate_candidate_swap,
     evaluate_turnover_entropy, identify_retirement_candidates,
 };
+use crate::client::evaluate_submission_checks;
 use crate::commands::{
     get_cache_dir, get_main_client, load_pnl_cache, load_portfolio_os, print_cache_status,
     write_private_file,
 };
-use crate::correlation::{audit_candidate, calculate_portfolio_impact, simulate_portfolio};
+use crate::correlation::{
+    audit_candidate, calculate_portfolio_impact, pearson_correlation, simulate_portfolio,
+};
 use crate::health::{
     evaluate_portfolio_health, print_detailed_alpha_table, print_health_report,
     print_single_alpha_diagnostic,
@@ -620,6 +623,8 @@ pub async fn cmd_allocate(
             .filter(|s| !s.is_empty())
             .collect();
 
+        let mut cand_pnls: Vec<(String, HashMap<String, f64>)> = Vec::new();
+
         for cand_id in ids {
             println!(
                 "\n  🚪 TIER 4: CANDIDATE ADMISSION DECISION GATE [{}]",
@@ -627,6 +632,8 @@ pub async fn cmd_allocate(
             );
             println!("  ─────────────────────────────────────────────────────────────────────────");
             println!("    Fetching PnL & evaluating local portfolio gate for {}...", cand_id);
+
+            let details = client.get_alpha_details(cand_id).await.ok();
 
             let cand_pnl = match client.fetch_daily_pnl(cand_id).await {
                 Ok(pnl) => pnl,
@@ -636,12 +643,63 @@ pub async fn cmd_allocate(
                 }
             };
 
-            let to = candidate_turnover.unwrap_or(0.20);
+            let to = candidate_turnover
+                .or_else(|| {
+                    details
+                        .as_ref()
+                        .and_then(|d| d.is.as_ref())
+                        .and_then(|is| is.turnover)
+                })
+                .unwrap_or(0.20);
+
+            if let Some(ref d) = details {
+                if let Some(ref s) = d.settings {
+                    println!(
+                        "    Settings:          Universe: {} | Neut: {} | Decay: {} | Trunc: {:.2}",
+                        s.universe.cyan(),
+                        s.neutralization,
+                        s.decay,
+                        s.truncation
+                    );
+                }
+            }
+
             let adm_report =
                 evaluate_candidate_admission(cand_id, to, &cand_pnl, &os_alphas, &pnl_cache);
 
-            if adm_report.max_pairwise_corr < 0.68 {
-                match client.check_submission(cand_id, 10).await {
+            // Check if details.is already contains a finalized check evaluation
+            let cached_eval = details
+                .as_ref()
+                .and_then(|d| d.is.as_ref())
+                .map(|is| (evaluate_submission_checks(is), is.clone()));
+
+            let has_cached_final_checks = cached_eval
+                .as_ref()
+                .map(|(ev, _)| ev.pending_checks.is_empty() && ev.missing_core_checks.is_empty())
+                .unwrap_or(false);
+
+            if has_cached_final_checks {
+                if let Some((ev, stats)) = cached_eval {
+                    let check_badge = if ev.passed {
+                        format!("✅ PASS ({})", ev.message).green().bold().to_string()
+                    } else {
+                        format!("❌ FAIL ({})", ev.message).red().bold().to_string()
+                    };
+                    println!("    Platform Checks:   {}", check_badge);
+                    if let (Some(sh), Some(fit), Some(ret), Some(turn)) =
+                        (stats.sharpe, stats.fitness, stats.returns, stats.turnover)
+                    {
+                        println!(
+                            "    IS Metrics:        Sharpe: {:.2} | Fitness: {:.2} | Return: {:.1}% | Turnover: {:.2}%",
+                            sh,
+                            fit,
+                            ret * 100.0,
+                            turn * 100.0
+                        );
+                    }
+                }
+            } else if adm_report.max_pairwise_corr < 0.68 {
+                match client.check_submission(cand_id, 60).await {
                     Ok((checks_passed, check_summary, stats)) => {
                         let check_badge = if checks_passed {
                             format!("✅ PASS ({})", check_summary).green().bold().to_string()
@@ -663,6 +721,21 @@ pub async fn cmd_allocate(
                     }
                     Err(e) => {
                         println!("    Platform Checks:   ⚠️  {}", e);
+                        if let Some(ref d) = details {
+                            if let Some(ref stats) = d.is {
+                                if let (Some(sh), Some(fit), Some(ret), Some(turn)) =
+                                    (stats.sharpe, stats.fitness, stats.returns, stats.turnover)
+                                {
+                                    println!(
+                                        "    IS Metrics:        Sharpe: {:.2} | Fitness: {:.2} | Return: {:.1}% | Turnover: {:.2}%",
+                                        sh,
+                                        fit,
+                                        ret * 100.0,
+                                        turn * 100.0
+                                    );
+                                }
+                            }
+                        }
                     }
                 }
             } else {
@@ -733,6 +806,52 @@ pub async fn cmd_allocate(
                     };
                     println!("      • Replacement Verdict:       {}", verdict_str);
                 }
+            }
+
+            cand_pnls.push((cand_id.to_string(), cand_pnl));
+        }
+
+        if cand_pnls.len() > 1 {
+            println!(
+                "\n  🔗 TIER 5: CANDIDATE MUTUAL CORRELATION MATRIX ({} Candidates)",
+                cand_pnls.len()
+            );
+            println!("  ─────────────────────────────────────────────────────────────────────────");
+            let mut high_pairs = 0usize;
+            for i in 0..cand_pnls.len() {
+                for j in (i + 1)..cand_pnls.len() {
+                    let (id_a, pnl_a) = &cand_pnls[i];
+                    let (id_b, pnl_b) = &cand_pnls[j];
+                    if let (Some(corr), days) = pearson_correlation(pnl_a, pnl_b) {
+                        if corr >= 0.45 {
+                            high_pairs += 1;
+                            let badge = if corr >= 0.70 {
+                                "❌ OVERLAP >= 70%".red().bold().to_string()
+                            } else if corr >= 0.60 {
+                                "⚠️  MODERATE (60-70%)".yellow().bold().to_string()
+                            } else {
+                                "✅ SAFE (<60%)".green().to_string()
+                            };
+                            println!(
+                                "    • {} vs {}: {:+6.2}% ({} days) -> {}",
+                                id_a.cyan(),
+                                id_b.cyan(),
+                                corr * 100.0,
+                                days,
+                                badge
+                            );
+                        }
+                    }
+                }
+            }
+            if high_pairs == 0 {
+                println!(
+                    "    ✅ All candidate pairs have mutual correlation < 45.0% (100% Orthogonal Batch!)."
+                );
+            }
+            let pnl_map: HashMap<String, HashMap<String, f64>> = cand_pnls.into_iter().collect();
+            if let Ok(json_str) = serde_json::to_string(&pnl_map) {
+                let _ = std::fs::write("/tmp/qualified_pnls.json", json_str);
             }
         }
     }

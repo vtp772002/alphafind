@@ -658,9 +658,11 @@ impl BrainClient {
 
             let eval = evaluate_submission_checks(&stats);
 
-            // If checks are still pending calculation, continue polling
-            if !eval.pending_checks.is_empty() {
-                let wait = retry_after.unwrap_or(3.0);
+            // If checks are still pending calculation (or a transient server ERROR on early attempts), continue polling
+            let has_transient_error =
+                _attempt < 4 && eval.failed_checks.iter().any(|f| f.contains("ERROR"));
+            if !eval.pending_checks.is_empty() || has_transient_error {
+                let wait = retry_after.unwrap_or(3.5);
                 sleep(Duration::from_secs_f64(wait)).await;
                 continue;
             }

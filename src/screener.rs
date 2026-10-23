@@ -320,9 +320,21 @@ impl MultiAccountScreener {
                                 (final_aid, final_fit, final_sh, final_turn, final_ret)
                             };
 
-                            let (check_pass, check_msg, _) = match main_client.check_submission(&main_aid, 45).await {
-                                Ok(res) => res,
-                                Err(_) => continue,
+                            let (check_pass, check_msg, _) = {
+                                let _check_lock = transfer_lock.lock().await;
+                                tokio::time::sleep(std::time::Duration::from_secs_f64(2.5)).await;
+                                match main_client.check_submission(&main_aid, 60).await {
+                                    Ok(res) => res,
+                                    Err(e) => {
+                                        println!(
+                                            "  {} [Check Error on Main] {}: {}",
+                                            "⚠️".yellow(),
+                                            main_aid,
+                                            e
+                                        );
+                                        continue;
+                                    }
+                                }
                             };
                             if check_pass {
                                 println!(

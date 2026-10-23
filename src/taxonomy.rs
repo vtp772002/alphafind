@@ -56,8 +56,12 @@ impl FactorPillar {
 /// Attempts to load private candidate definitions from a local permission-restricted JSON store.
 /// Per AGENTS.md, concrete candidate formulas are excluded from Git-tracked source code.
 fn load_private_candidates() -> Option<Vec<CandidateAlpha>> {
-    let path = std::env::var("ALPHAFIND_CANDIDATES_PATH")
-        .unwrap_or_else(|_| "data/private_candidates.json".to_string());
+    let default_path = if std::path::Path::new("/tmp/alphafind_candidates.json").exists() {
+        "/tmp/alphafind_candidates.json".to_string()
+    } else {
+        "data/private_candidates.json".to_string()
+    };
+    let path = std::env::var("ALPHAFIND_CANDIDATES_PATH").unwrap_or(default_path);
     if std::path::Path::new(&path).exists() {
         if let Ok(content) = std::fs::read_to_string(&path) {
             if let Ok(values) = serde_json::from_str::<Vec<serde_json::Value>>(&content) {
