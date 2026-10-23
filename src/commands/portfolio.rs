@@ -611,75 +611,128 @@ pub async fn cmd_allocate(
         }
     }
 
-    // 6. Section 4: Candidate Admission Decision Gate (if candidate_id provided)
-    if let Some(ref cand_id) = candidate_id {
-        println!(
-            "\n  🚪 TIER 4: CANDIDATE ADMISSION DECISION GATE [{}]",
-            cand_id.yellow().bold()
-        );
-        println!("  ─────────────────────────────────────────────────────────────────────────");
-        println!("    Fetching candidate PnL for {}...", cand_id);
+    // 6. Section 4: Candidate Admission Decision Gate (if candidate_id provided, supports comma-separated IDs)
+    if let Some(ref cand_ids_raw) = candidate_id {
         let client = get_main_client()?;
-        let cand_pnl = client.fetch_daily_pnl(cand_id).await?;
-        let to = candidate_turnover.unwrap_or(0.35);
+        let ids: Vec<&str> = cand_ids_raw
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .collect();
 
-        let adm_report =
-            evaluate_candidate_admission(cand_id, to, &cand_pnl, &os_alphas, &pnl_cache);
+        for cand_id in ids {
+            println!(
+                "\n  🚪 TIER 4: CANDIDATE ADMISSION DECISION GATE [{}]",
+                cand_id.yellow().bold()
+            );
+            println!("  ─────────────────────────────────────────────────────────────────────────");
+            println!("    Fetching PnL & evaluating local portfolio gate for {}...", cand_id);
 
-        println!("    Admission Verdict: {}\n", adm_report.verdict.badge());
-        println!("    Decision Metrics Delta:");
-        println!(
-            "      • Merged Sharpe Delta:       {:+0.4} ({:.2} -> {:.2})",
-            adm_report.sharpe_delta, adm_report.baseline_sharpe, adm_report.merged_sharpe
-        );
-        println!(
-            "      • Volatility Delta:          {:+0.0} (${:.0} -> ${:.0})",
-            adm_report.vol_delta, adm_report.baseline_vol, adm_report.merged_vol
-        );
-        println!(
-            "      • Turnover Diversity Delta:  {:+0.1}% ({:.1}% -> {:.1}%)",
-            adm_report.entropy_delta,
-            adm_report.baseline_entropy_score,
-            adm_report.merged_entropy_score
-        );
-        println!(
-            "      • Max Correlation:           +{:.2}% vs {} (Safety Buffer: {:.2}%)",
-            adm_report.max_pairwise_corr * 100.0,
-            adm_report.most_correlated_id,
-            adm_report.safety_buffer_pct
-        );
-        println!("\n    Decision Rationale:");
-        for r in &adm_report.rationale {
-            println!("      👉 {}", r);
-        }
+            let cand_pnl = match client.fetch_daily_pnl(cand_id).await {
+                Ok(pnl) => pnl,
+                Err(e) => {
+                    println!("    ⚠️  Skipping {}: {}", cand_id.yellow(), e);
+                    continue;
+                }
+            };
 
-        if let Some(worst) = retirement_cands.first() {
-            if let Some(swap_rep) =
-                evaluate_candidate_swap(cand_id, &cand_pnl, &os_alphas, &pnl_cache, &worst.alpha_id)
-            {
-                println!("\n    🔄 REPLACEMENT SWAP SCENARIO (60-Alpha Milestone Simulation):");
+            let to = candidate_turnover.unwrap_or(0.20);
+            let adm_report =
+                evaluate_candidate_admission(cand_id, to, &cand_pnl, &os_alphas, &pnl_cache);
+
+            if adm_report.max_pairwise_corr < 0.68 {
+                match client.check_submission(cand_id, 10).await {
+                    Ok((checks_passed, check_summary, stats)) => {
+                        let check_badge = if checks_passed {
+                            format!("✅ PASS ({})", check_summary).green().bold().to_string()
+                        } else {
+                            format!("❌ FAIL ({})", check_summary).red().bold().to_string()
+                        };
+                        println!("    Platform Checks:   {}", check_badge);
+                        if let (Some(sh), Some(fit), Some(ret), Some(turn)) =
+                            (stats.sharpe, stats.fitness, stats.returns, stats.turnover)
+                        {
+                            println!(
+                                "    IS Metrics:        Sharpe: {:.2} | Fitness: {:.2} | Return: {:.1}% | Turnover: {:.2}%",
+                                sh,
+                                fit,
+                                ret * 100.0,
+                                turn * 100.0
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        println!("    Platform Checks:   ⚠️  {}", e);
+                    }
+                }
+            } else {
                 println!(
-                    "      • Replacing Bottom Drag:     [{}] (HRP Weight: {:.2}%, HR: {:.2}x)",
-                    worst.alpha_id.yellow(),
-                    worst.hrp_weight_pct,
-                    worst.health_ratio
+                    "    Platform Checks:   ⏭️  Skipped server check (local rho = {:.2}% >= 68.0% vs {})",
+                    adm_report.max_pairwise_corr * 100.0,
+                    adm_report.most_correlated_id
                 );
-                println!(
-                    "      • Swapped Sharpe Impact:     {:+0.4} ({:.2} -> {:.2})",
-                    swap_rep.sharpe_delta, swap_rep.baseline_sharpe, swap_rep.swapped_sharpe
-                );
-                println!(
-                    "      • Swapped Volatility Impact: {:+0.0} (${:.0} -> ${:.0})",
-                    swap_rep.vol_delta, swap_rep.baseline_vol, swap_rep.swapped_vol
-                );
-                let verdict_str = if swap_rep.is_net_improvement {
-                    "🌟 HIGH VALUE REPLACEMENT (Surges Sharpe while keeping portfolio size constant)".green().bold()
-                } else {
-                    "⚠️ DILUTIVE SWAP (Net negative impact vs keeping baseline)"
-                        .yellow()
-                        .bold()
-                };
-                println!("      • Replacement Verdict:       {}", verdict_str);
+            }
+            println!("    Admission Verdict: {}\n", adm_report.verdict.badge());
+            println!("    Decision Metrics Delta:");
+            println!(
+                "      • Merged Sharpe Delta:       {:+0.4} ({:.2} -> {:.2})",
+                adm_report.sharpe_delta, adm_report.baseline_sharpe, adm_report.merged_sharpe
+            );
+            println!(
+                "      • Volatility Delta:          {:+0.0} (${:.0} -> ${:.0})",
+                adm_report.vol_delta, adm_report.baseline_vol, adm_report.merged_vol
+            );
+            println!(
+                "      • Turnover Diversity Delta:  {:+0.1}% ({:.1}% -> {:.1}%)",
+                adm_report.entropy_delta,
+                adm_report.baseline_entropy_score,
+                adm_report.merged_entropy_score
+            );
+            println!(
+                "      • Max Correlation:           +{:.2}% vs {} (Safety Buffer: {:.2}%)",
+                adm_report.max_pairwise_corr * 100.0,
+                adm_report.most_correlated_id,
+                adm_report.safety_buffer_pct
+            );
+            println!("\n    Decision Rationale:");
+            for r in &adm_report.rationale {
+                println!("      👉 {}", r);
+            }
+
+            if let Some(worst) = retirement_cands.first() {
+                if let Some(swap_rep) = evaluate_candidate_swap(
+                    cand_id,
+                    &cand_pnl,
+                    &os_alphas,
+                    &pnl_cache,
+                    &worst.alpha_id,
+                ) {
+                    println!("\n    🔄 REPLACEMENT SWAP SCENARIO (60-Alpha Milestone Simulation):");
+                    println!(
+                        "      • Replacing Bottom Drag:     [{}] (HRP Weight: {:.2}%, HR: {:.2}x)",
+                        worst.alpha_id.yellow(),
+                        worst.hrp_weight_pct,
+                        worst.health_ratio
+                    );
+                    println!(
+                        "      • Swapped Sharpe Impact:     {:+0.4} ({:.2} -> {:.2})",
+                        swap_rep.sharpe_delta, swap_rep.baseline_sharpe, swap_rep.swapped_sharpe
+                    );
+                    println!(
+                        "      • Swapped Volatility Impact: {:+0.0} (${:.0} -> ${:.0})",
+                        swap_rep.vol_delta, swap_rep.baseline_vol, swap_rep.swapped_vol
+                    );
+                    let verdict_str = if swap_rep.is_net_improvement {
+                        "🌟 HIGH VALUE REPLACEMENT (Surges Sharpe while keeping portfolio size constant)"
+                            .green()
+                            .bold()
+                    } else {
+                        "⚠️ DILUTIVE SWAP (Net negative impact vs keeping baseline)"
+                            .yellow()
+                            .bold()
+                    };
+                    println!("      • Replacement Verdict:       {}", verdict_str);
+                }
             }
         }
     }

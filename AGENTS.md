@@ -38,8 +38,8 @@ Do not describe a heuristic or internal target as an official BRAIN threshold. T
 
 ## Account concurrency and screening
 
-- The screener consumes a bounded `mpsc` work queue and holds a per-account semaphore permit for each in-flight simulation, so `workers_per_account` is the maximum in-flight simulations per account. Do not present that number as a platform capacity limit: the CLI has no cross-process quota coordination, and the per-dispatch sleep is politeness, not a rate limiter.
-- Do not increase screening volume or concurrency until there is cross-process rate limiting and handling for platform quotas and ambiguous requests.
+- **Project policy**: When searching for or screening new candidate alphas, always run 3 concurrent simulation workers (`--workers 3`, matching `DEFAULT_WORKERS_PER_ACCOUNT = 3` in `src/config.rs`) on the primary account within a single CLI process.
+- The screener consumes a bounded `mpsc` work queue and holds a per-account semaphore permit for each in-flight simulation, so `workers_per_account` (`3`) is the maximum in-flight simulations per account in that process. Because the CLI has no cross-process quota coordination and the per-dispatch sleep is politeness rather than a cross-process rate limiter, do not run multiple concurrent CLI screening processes at the same time or increase concurrency above `3` until cross-process rate limiting and platform-quota handling are in place.
 - `transfer_lock` is a process-local mutex; it is not a lock across machines or CLI processes.
 - Do not describe worker-account promotion as compliant unless the account holders and platform rules permit the workflow.
 

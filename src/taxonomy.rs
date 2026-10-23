@@ -60,8 +60,14 @@ fn load_private_candidates() -> Option<Vec<CandidateAlpha>> {
         .unwrap_or_else(|_| "data/private_candidates.json".to_string());
     if std::path::Path::new(&path).exists() {
         if let Ok(content) = std::fs::read_to_string(&path) {
-            if let Ok(candidates) = serde_json::from_str::<Vec<CandidateAlpha>>(&content) {
-                return Some(candidates);
+            if let Ok(values) = serde_json::from_str::<Vec<serde_json::Value>>(&content) {
+                let candidates: Vec<CandidateAlpha> = values
+                    .into_iter()
+                    .filter_map(|v| serde_json::from_value::<CandidateAlpha>(v).ok())
+                    .collect();
+                if !candidates.is_empty() {
+                    return Some(candidates);
+                }
             }
         }
     }
@@ -86,12 +92,16 @@ pub fn get_curated_candidates(
             .into_iter()
             .filter(|c| {
                 if let Some(p) = pillar {
-                    if c.pillar != p.as_str() {
+                    if !c.pillar.eq_ignore_ascii_case(p.as_str())
+                        && FactorPillar::from_str(&c.pillar) != Some(p)
+                    {
                         return false;
                     }
                 }
                 if let Some(target_u) = universe {
-                    if c.universe != target_u {
+                    if !target_u.eq_ignore_ascii_case("ALL")
+                        && !c.universe.eq_ignore_ascii_case(target_u)
+                    {
                         return false;
                     }
                 }
