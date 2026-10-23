@@ -6,7 +6,74 @@ use std::fs;
 use std::path::Path;
 
 use crate::client::{SubmitStatus, AMBIGUOUS_SUBMISSION_NOTE};
-use crate::commands::get_main_client;
+use crate::commands::{
+    cache_age_label, get_main_client, load_pnl_cache, load_portfolio_os, write_private_file,
+};
+use crate::correlation::audit_candidate;
+use crate::models::SubmittableAlphaRecord;
+
+/// Updates `submitted` to `true` for `alpha_id` in a `submittable_alphas.csv` ledger.
+///
+/// Uses structured CSV deserialization/serialization first (where Rust `bool` serializes as
+/// lowercase `false`/`true`), and falls back to case-insensitive token replacement if the file
+/// has custom columns. Restricts file permissions to `0600` on Unix.
+pub fn mark_alpha_submitted_in_csv(csv_path: &Path, alpha_id: &str) -> Result<bool> {
+    if !csv_path.exists() {
+        return Ok(false);
+    }
+
+    if let Ok(mut rdr) = csv::Reader::from_path(csv_path) {
+        let parsed: std::result::Result<Vec<SubmittableAlphaRecord>, _> =
+            rdr.deserialize::<SubmittableAlphaRecord>().collect();
+        if let Ok(mut records) = parsed {
+            let mut matched = false;
+            for rec in &mut records {
+                if rec.alpha_id == alpha_id {
+                    rec.submitted = true;
+                    matched = true;
+                }
+            }
+            if matched {
+                let mut wtr = csv::WriterBuilder::new()
+                    .has_headers(true)
+                    .from_writer(Vec::new());
+                for rec in &records {
+                    wtr.serialize(rec)?;
+                }
+                wtr.flush()?;
+                let bytes = wtr.into_inner()?;
+                write_private_file(csv_path, bytes)?;
+                return Ok(true);
+            }
+        }
+    }
+
+    let content = fs::read_to_string(csv_path)?;
+    let mut matched = false;
+    let prefix = format!("{},", alpha_id);
+    let updated = content
+        .lines()
+        .map(|line| {
+            if line.starts_with(&prefix) {
+                let replaced = line
+                    .replace(",false,", ",true,")
+                    .replace(",False,", ",True,");
+                if replaced != line {
+                    matched = true;
+                }
+                replaced
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    if matched {
+        write_private_file(csv_path, format!("{updated}\n"))?;
+    }
+    Ok(matched)
+}
 
 /// Environment variable that must be set for `--skip-checks` to be honored.
 ///
@@ -213,6 +280,44 @@ pub async fn cmd_submit(
         }
         checks_confirmed = true;
         println!("  {} Submission checks confirmed!", "✅".green());
+
+        // Separate Local Portfolio-Policy Gate (self-correlation, staleness, overlap)
+        if Path::new("portfolio_os.json").exists() {
+            println!("  Evaluating local portfolio-policy gate (separate from platform check)...");
+            if let Ok(os_alphas) = load_portfolio_os() {
+                if !os_alphas.is_empty() {
+                    let (pnl_cache, cache_age) = load_pnl_cache();
+                    let (age_label, is_stale) = cache_age_label(cache_age);
+                    if is_stale {
+                        println!(
+                            "  {} Local PnL cache is {} (stale or missing). Run 'alphafind portfolio --refresh' to keep local policy checks fresh.",
+                            "⚠️  [LOCAL POLICY WARNING]".yellow().bold(),
+                            age_label
+                        );
+                    }
+                    if !pnl_cache.is_empty() {
+                        if let Ok(cand_pnl) = client.fetch_daily_pnl(&alpha_id).await {
+                            let audit = audit_candidate(&alpha_id, &cand_pnl, &pnl_cache);
+                            if !audit.is_within_correlation_proxy {
+                                anyhow::bail!(
+                                    "Local portfolio-policy gate rejected {}: max local correlation ({:?} vs {:?}, valid pairs: {}) failed the < 0.70 fail-closed local check.",
+                                    alpha_id,
+                                    audit.max_correlation,
+                                    audit.most_correlated_id,
+                                    audit.valid_comparisons
+                                );
+                            }
+                            println!(
+                                "  {} Local portfolio-policy gate passed (max local rho: {:+.2}% across {} active OS alphas).",
+                                "✅".green(),
+                                audit.max_correlation.unwrap_or(0.0) * 100.0,
+                                audit.valid_comparisons
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // Update metadata if specified
@@ -250,27 +355,22 @@ pub async fn cmd_submit(
             );
 
             // Update submittable_alphas.csv
-            let csv_path = "submittable_alphas.csv";
-            if Path::new(csv_path).exists() {
-                if let Ok(content) = fs::read_to_string(csv_path) {
-                    let updated = content
-                        .lines()
-                        .map(|line| {
-                            if line.starts_with(&format!("{},", alpha_id)) {
-                                line.replace(",False,", ",True,")
-                            } else {
-                                line.to_string()
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                        .join("\n");
-                    if let Err(e) = fs::write(csv_path, &updated) {
-                        eprintln!("  ⚠️  Warning: Failed to write cache: {}", e);
-                    } else {
+            let csv_path = Path::new("submittable_alphas.csv");
+            if csv_path.exists() {
+                match mark_alpha_submitted_in_csv(csv_path, &alpha_id) {
+                    Ok(true) => {
                         println!(
-                            "  💾 Marked {} as Submitted=True in {}",
+                            "  💾 Marked {} as submitted=true in {}",
                             alpha_id.green(),
-                            csv_path
+                            csv_path.display()
+                        );
+                    }
+                    Ok(false) => {}
+                    Err(e) => {
+                        eprintln!(
+                            "  ⚠️  Warning: Failed to update {}: {}",
+                            csv_path.display(),
+                            e
                         );
                     }
                 }

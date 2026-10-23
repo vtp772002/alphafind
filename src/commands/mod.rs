@@ -42,7 +42,138 @@ pub fn get_cache_dir() -> PathBuf {
         .unwrap_or_else(|_| ".".to_string());
     let cache_dir = PathBuf::from(home).join(".cache").join("alphafind");
     let _ = fs::create_dir_all(&cache_dir);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&cache_dir, fs::Permissions::from_mode(0o700));
+    }
     cache_dir
+}
+
+/// Writes confidential research or portfolio data to disk and restricts permissions to `0600` on Unix.
+pub fn write_private_file<P: AsRef<std::path::Path>, C: AsRef<[u8]>>(
+    path: P,
+    contents: C,
+) -> Result<()> {
+    let path_ref = path.as_ref();
+    fs::write(path_ref, contents)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(path_ref, fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
+}
+
+/// Explicit active/Out-of-Sample classification for a portfolio alpha record.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlphaClassification {
+    /// Confirmed Out-of-Sample and Active (`stage == "OS"` and `status == "ACTIVE"`).
+    ActiveOs,
+    /// Submitted or pending OOS processing (`status` is `SUBMITTED` or `UNPROCESSED`, or `stage == "OS"`).
+    PendingOrSubmittedOs,
+    /// Decommissioned, inactive, or explicitly In-Sample (`stage == "IS"`).
+    InactiveOrNonOs,
+    /// Stage or status fields are missing or unrecognized in the local snapshot.
+    Unclassified,
+}
+
+/// Classifies a [`crate::models::PortfolioAlpha`] by its explicit `stage` and `status` metadata.
+pub fn classify_portfolio_alpha(alpha: &crate::models::PortfolioAlpha) -> AlphaClassification {
+    let stage = alpha.stage.as_deref().map(str::trim).unwrap_or("");
+    let status = alpha.status.as_deref().map(str::trim).unwrap_or("");
+
+    if status.eq_ignore_ascii_case("DECOMMISSIONED")
+        || status.eq_ignore_ascii_case("INACTIVE")
+        || status.eq_ignore_ascii_case("RETIRED")
+        || stage.eq_ignore_ascii_case("IS")
+        || stage.eq_ignore_ascii_case("IN_SAMPLE")
+    {
+        return AlphaClassification::InactiveOrNonOs;
+    }
+
+    let is_os_stage =
+        stage.eq_ignore_ascii_case("OS") || stage.eq_ignore_ascii_case("OUT_OF_SAMPLE");
+    let is_active_status = status.eq_ignore_ascii_case("ACTIVE");
+
+    if is_os_stage && is_active_status {
+        AlphaClassification::ActiveOs
+    } else if is_os_stage
+        || is_active_status
+        || status.eq_ignore_ascii_case("SUBMITTED")
+        || status.eq_ignore_ascii_case("UNPROCESSED")
+        || alpha
+            .date_submitted
+            .as_deref()
+            .is_some_and(|d| !d.trim().is_empty())
+    {
+        AlphaClassification::PendingOrSubmittedOs
+    } else {
+        AlphaClassification::Unclassified
+    }
+}
+
+/// Loads `portfolio_os.json`, reports its cache age and explicit active/OOS classification breakdown,
+/// and filters out explicitly inactive/non-OS records.
+pub fn load_portfolio_os() -> Result<Vec<crate::models::PortfolioAlpha>> {
+    let port_path = std::path::Path::new("portfolio_os.json");
+    if !port_path.exists() {
+        anyhow::bail!("portfolio_os.json not found! Run 'alphafind sync' first.");
+    }
+    let age = fs::metadata(port_path)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| std::time::SystemTime::now().duration_since(t).ok());
+    let (age_label, stale) = cache_age_label(age);
+
+    let port_data = fs::read_to_string(port_path)?;
+    let raw_alphas: Vec<crate::models::PortfolioAlpha> = serde_json::from_str(&port_data)?;
+
+    let mut active_os = 0usize;
+    let mut pending_os = 0usize;
+    let mut inactive = 0usize;
+    let mut unclassified = 0usize;
+    let mut retained = Vec::with_capacity(raw_alphas.len());
+
+    for alpha in raw_alphas {
+        match classify_portfolio_alpha(&alpha) {
+            AlphaClassification::ActiveOs => {
+                active_os += 1;
+                retained.push(alpha);
+            }
+            AlphaClassification::PendingOrSubmittedOs => {
+                pending_os += 1;
+                retained.push(alpha);
+            }
+            AlphaClassification::Unclassified => {
+                unclassified += 1;
+                retained.push(alpha);
+            }
+            AlphaClassification::InactiveOrNonOs => {
+                inactive += 1;
+            }
+        }
+    }
+
+    if stale {
+        println!(
+            "  {} portfolio_os.json was updated {} (exceeds {}h freshness policy). Run 'alphafind sync' to refresh.",
+            "⚠️  [PORTFOLIO SNAPSHOT STALE]".yellow().bold(),
+            age_label.yellow(),
+            PNL_CACHE_MAX_AGE_HOURS
+        );
+    } else {
+        println!(
+            "  ℹ️  Portfolio snapshot (portfolio_os.json): synced {} | Active OS: {} | Submitted/Pending OS: {} | Unclassified: {} | Excluded Non-OS/Inactive: {}",
+            age_label.cyan(),
+            active_os,
+            pending_os,
+            unclassified,
+            inactive
+        );
+    }
+
+    Ok(retained)
 }
 
 /// Loads the local PnL cache along with its age and freshness information.

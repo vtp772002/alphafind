@@ -5,21 +5,22 @@
 //! and automated hyperparameter optimization.
 //!
 //! ## Core Architecture Modules
-//! - [`autotuner`]: Grid & coordinate search for alpha hyperparameter optimization (decay, universe, neutralization).
+//! - [`allocation`]: Turnover Shannon entropy, Hierarchical Risk Parity (HRP) weights, and fail-closed candidate admission gate.
+//! - [`autotuner`]: Delay, exponent, and neutralization parameter sweeps with delay-aware platform thresholds.
 //! - [`client`]: Fail-closed, SSRF-safe HTTP client for BRAIN API simulation & submission checks.
 //! - [`commands`]: CLI command handler modules (auth, simulation, submission, portfolio, research).
 //! - [`config`]: Quant thresholds and configuration partitions (platform rules, project policies, research hypotheses).
-//! - [`correlation`]: Pearson correlation engine, portfolio simulation, and orthogonality audits.
-//! - [`crowd`]: Crowd overlap, submission velocity analysis, and crowd health metrics.
-//! - [`crowd_allocation`]: Optimal allocation weights under crowd decay constraints.
-//! - [`crowd_model`]: Synthetic crowd PnL modeling and cross-sectional crowd simulation.
-//! - [`forecast`]: PnL trajectory forecasting, return modeling, and turnover projections.
+//! - [`correlation`]: Fail-closed Pearson correlation engine, portfolio merge simulation, and orthogonality audits.
+//! - [`crowd`]: Live dataset census analysis (`radar`) and deprecated static crowd heuristics.
+//! - [`crowd_allocation`]: Formula field extraction, dataset mapping, and field-usage cache management.
+//! - [`crowd_model`]: Usage-weighted local profile PnL basket sensitivity diagnostics.
+//! - [`forecast`]: Portfolio factor/universe deficit audit and rule-based hypothesis archetypes (`blueprint`).
 //! - [`health`]: Multi-horizon decay analytics, performance degradation scoring, and health audits.
-//! - [`matrix`]: Pairwise correlation matrix generation, cluster analysis, and heatmap visualization.
+//! - [`matrix`]: Configured dataset-interaction heuristic matrix and multi-dataset formula analysis.
 //! - [`models`]: Type definitions, data models, and serialization schemas.
-//! - [`screener`]: Multi-threaded alpha candidate generator and expression screening engine.
-//! - [`shadow`]: Shadow benchmark correlation, crowd-clone risk estimation, and portfolio safety buffer.
-//! - [`taxonomy`]: Mathematical strategy classification, alpha style categorization, and expression templates.
+//! - [`screener`]: Bounded worker-queue alpha candidate screener with per-account semaphore concurrency control.
+//! - [`shadow`]: Legacy synthetic-proxy correlation helpers (not used by the `shadow` CLI command).
+//! - [`taxonomy`]: Strategy pillar classification and candidate template loading from local ignored storage.
 
 pub mod allocation;
 pub mod autotuner;

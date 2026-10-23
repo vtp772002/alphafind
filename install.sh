@@ -95,11 +95,15 @@ echo ""
 render_progress 0 "[2/5] Downloading repository" "Connecting to GitHub..."
 
 if [ -d "$INSTALL_DIR/.git" ]; then
-    render_progress 20 "[2/5] Updating repository" "Fetching main branch..."
+    render_progress 20 "[2/5] Updating repository" "Checking working tree..."
     cd "$INSTALL_DIR"
+    if [ -n "$(git status --porcelain)" ]; then
+        echo -e "\n${RED}❌ Existing checkout at ${INSTALL_DIR} has uncommitted changes. Aborting update to prevent data loss.${NC}"
+        exit 1
+    fi
     git fetch origin main > /dev/null 2>&1
-    render_progress 70 "[2/5] Updating repository" "Syncing working tree..."
-    git reset --hard origin/main > /dev/null 2>&1
+    render_progress 70 "[2/5] Updating repository" "Fast-forwarding main..."
+    git pull --ff-only origin main > /dev/null 2>&1
     render_progress 100 "[2/5] Updating repository" "Updated to latest"
     echo ""
 else
@@ -192,11 +196,13 @@ render_progress 30 "[5/5] Configuring environment" "Checking .env template..."
 if [ ! -f "$INSTALL_DIR/.env" ]; then
     if [ -f "$INSTALL_DIR/.env.example" ]; then
         cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"
-        render_progress 100 "[5/5] Configuring environment" ".env initialized"
+        chmod 600 "$INSTALL_DIR/.env"
+        render_progress 100 "[5/5] Configuring environment" ".env initialized (0600)"
     else
         render_progress 100 "[5/5] Configuring environment" "Ready"
     fi
 else
+    chmod 600 "$INSTALL_DIR/.env" 2>/dev/null || true
     render_progress 100 "[5/5] Configuring environment" "Preserved existing .env"
 fi
 echo ""
@@ -214,11 +220,11 @@ echo -e "${BOLD}⚡ Binary Location:${NC}      ${CYAN}${BIN_DIR}/alphafind${NC}"
 echo -e "\n${BOLD}🚀 Quickstart Guide:${NC}"
 echo -e "  1. Switch to the installation directory:"
 echo -e "     ${CYAN}cd ${INSTALL_DIR}${NC}"
-echo -e "\n  2. Configure your WorldQuant BRAIN credentials in ${YELLOW}.env${NC}:"
+echo -e "\n  2. Configure your WorldQuant BRAIN credentials in ${YELLOW}.env${NC} (mode 0600):"
 echo -e "     ${YELLOW}nano .env${NC}"
-echo -e "\n  3. Test connection across your accounts:"
+echo -e "\n  3. Test connection on your primary account:"
 echo -e "     ${CYAN}alphafind auth${NC}"
 echo -e "\n  4. Synchronize your active Out-of-Sample portfolio:"
 echo -e "     ${CYAN}alphafind sync${NC}"
-echo -e "\n  5. Launch distributed 9-worker alpha mining:"
-echo -e "     ${CYAN}alphafind screen --pillar OPTIONS --universe TOP1000${NC}\n"
+echo -e "\n  5. Run single-account candidate screening:"
+echo -e "     ${CYAN}alphafind screen --single-account --pillar OPTIONS --universe TOP1000${NC}\n"

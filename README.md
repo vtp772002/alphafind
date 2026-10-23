@@ -8,9 +8,9 @@ This is a research prototype. The submission gate is deliberately conservative: 
 
 Known gaps, stated plainly:
 
-- The local check evaluator is fail-closed but not version-aware, and the expected core check list is hardcoded.
+- The local check evaluator is fail-closed (and `submit` includes a separate local portfolio-policy gate), but it is not version-aware and the expected core check list is hardcoded.
 - Simulation and submission POSTs are non-idempotent; ambiguous transport failures fail closed with a reconciliation fingerprint instead of being retried, and no automatic reconciliation exists yet.
-- Cache age is reported for the local PnL cache and field metadata, not for every Alpha/PnL read.
+- Portfolio and PnL reads report `portfolio_os.json` and `portfolio_pnl.json` cache age, active/OOS classification counts, and support `--refresh` for live PnL re-fetching.
 - Git history still contains real field identifiers from earlier candidate catalogs. That is a release blocker for public distribution; see [Architecture](docs/ARCHITECTURE.md).
 - Research reports (`radar`, `matrix`, `blueprint`, `shadow`) use heuristics and local, user-owned PnL. They do not measure platform-wide co-movement or forecast official Uniqueness.
 
@@ -20,7 +20,7 @@ Current official BRAIN rules and verified submission criteria are summarized in 
 
 - Rust CLI and asynchronous BRAIN API client.
 - Simulation, screening, parameter sweep, and submission commands.
-- Local PnL correlation, portfolio, impact, and health diagnostics.
+- Local PnL correlation, portfolio, impact, health, and HRP allocation/admission (`allocate`) diagnostics with `--refresh` controls.
 - Dataset census and heuristic research reports.
 
 These are implementation features, not claims that results are complete, production-grade, or platform-approved.
@@ -34,7 +34,7 @@ cargo build --release
 ./target/release/alphafind --help
 ```
 
-See [Quickstart](docs/QUICKSTART.md) for credential handling and safe first steps. Review the installer before running it: its current update path includes a hard reset of the working checkout.
+See [Quickstart](docs/QUICKSTART.md) for credential handling and safe first steps. The installer (`install.sh`) checks for a clean working tree and updates via `git pull --ff-only`, setting `0600` permissions on `.env`.
 
 ## Documentation
 

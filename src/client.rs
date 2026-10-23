@@ -296,11 +296,15 @@ impl BrainClient {
         let mut default_headers = HeaderMap::new();
         default_headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
 
-        let client = reqwest::Client::builder()
+        let mut builder = reqwest::Client::builder()
             .cookie_store(true)
             .gzip(true)
             .timeout(Duration::from_secs(60))
-            .default_headers(default_headers)
+            .default_headers(default_headers);
+        if base_url.contains("127.0.0.1") || base_url.contains("localhost") {
+            builder = builder.no_proxy();
+        }
+        let client = builder
             .build()
             .context("Failed to build reqwest HTTP client")?;
 

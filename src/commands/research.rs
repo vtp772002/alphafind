@@ -8,7 +8,7 @@ use std::path::Path;
 
 use crate::commands::{
     field_config_label, format_count, get_cache_dir, get_main_client, load_pnl_cache,
-    print_cache_status, profile_field_config,
+    load_portfolio_os, print_cache_status, profile_field_config, write_private_file,
 };
 use crate::correlation::pearson_correlation;
 use crate::crowd_allocation::{
@@ -182,8 +182,7 @@ pub async fn cmd_shadow(
 
     let portfolio_path = Path::new("portfolio_os.json");
     let (portfolio, portfolio_available): (Vec<PortfolioAlpha>, bool) = if portfolio_path.exists() {
-        let data = fs::read_to_string(portfolio_path)?;
-        (serde_json::from_str(&data)?, true)
+        (load_portfolio_os()?, true)
     } else {
         (Vec::new(), false)
     };
@@ -294,7 +293,7 @@ pub async fn cmd_shadow(
 
     let cache_path = get_cache_dir().join("data_field_usage.json");
     if let Ok(contents) = serde_json::to_vec_pretty(&field_cache) {
-        let _ = fs::write(cache_path, contents);
+        let _ = write_private_file(cache_path, contents);
     }
 
     let mut cached_mapping_fields: HashMap<String, DataFieldEntry> = HashMap::new();
@@ -488,7 +487,7 @@ pub async fn cmd_shadow(
         }
     }
     if let Ok(contents) = serde_json::to_vec(&pnl_cache) {
-        let _ = fs::write(&pnl_cache_path, contents);
+        let _ = write_private_file(&pnl_cache_path, contents);
     }
     if stale_pnl_count > 0 {
         println!(
@@ -1026,12 +1025,7 @@ pub async fn cmd_matrix(
 /// Generates rule-based portfolio gap and candidate suggestions.
 pub async fn cmd_blueprint(universe: Option<String>, export: Option<String>) -> Result<()> {
     // 1. Load active OS portfolio
-    let port_path = "portfolio_os.json";
-    if !Path::new(port_path).exists() {
-        anyhow::bail!("portfolio_os.json not found! Run 'alphafind sync' first.");
-    }
-    let port_data = fs::read_to_string(port_path)?;
-    let os_alphas: Vec<PortfolioAlpha> = serde_json::from_str(&port_data)?;
+    let os_alphas = load_portfolio_os()?;
 
     // 2. Load cached baseline PnLs
     let (pnl_cache, cache_age) = load_pnl_cache();

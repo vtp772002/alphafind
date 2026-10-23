@@ -3,14 +3,15 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
 use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
 
 use crate::allocation::{
     compute_hrp_weights, evaluate_candidate_admission, evaluate_candidate_swap,
     evaluate_turnover_entropy, identify_retirement_candidates,
 };
-use crate::commands::{get_cache_dir, get_main_client, load_pnl_cache, print_cache_status};
+use crate::commands::{
+    get_cache_dir, get_main_client, load_pnl_cache, load_portfolio_os, print_cache_status,
+    write_private_file,
+};
 use crate::correlation::{audit_candidate, calculate_portfolio_impact, simulate_portfolio};
 use crate::health::{
     evaluate_portfolio_health, print_detailed_alpha_table, print_health_report,
@@ -18,8 +19,54 @@ use crate::health::{
 };
 use crate::models::PortfolioAlpha;
 
+/// Loads the local PnL cache and refreshes missing (or all, when `refresh` is `true`) active OS alphas.
+async fn load_or_refresh_os_pnl_cache(
+    os_alphas: &[PortfolioAlpha],
+    refresh: bool,
+) -> Result<HashMap<String, HashMap<String, f64>>> {
+    let (mut pnl_cache, cache_age) = load_pnl_cache();
+    let cache_file = get_cache_dir().join("portfolio_pnl.json");
+    if refresh {
+        println!(
+            "  🔄 --refresh requested: forcing live PnL re-fetch for all {} active OS alphas...",
+            os_alphas.len()
+        );
+    } else {
+        print_cache_status(cache_age, pnl_cache.len());
+    }
+
+    let mut fetch_ids = Vec::new();
+    for a in os_alphas {
+        if refresh || !pnl_cache.contains_key(&a.id) {
+            fetch_ids.push(a.id.clone());
+        }
+    }
+
+    if !fetch_ids.is_empty() {
+        let client = get_main_client()?;
+        if !refresh {
+            println!(
+                "  Fetching PnL for {} active OS alphas not in cache...",
+                fetch_ids.len()
+            );
+        }
+        for id in fetch_ids {
+            if let Ok(pnl) = client.fetch_daily_pnl(&id).await {
+                pnl_cache.insert(id, pnl);
+            }
+        }
+        if let Ok(serialized) = serde_json::to_string(&pnl_cache) {
+            if let Err(e) = write_private_file(&cache_file, &serialized) {
+                eprintln!("  ⚠️  Warning: Failed to write cache: {}", e);
+            }
+        }
+    }
+
+    Ok(pnl_cache)
+}
+
 /// Audits Pearson correlation over overlapping local PnL dates against active OS Alphas.
-pub async fn cmd_audit(alpha_id: String, label: Option<String>) -> Result<()> {
+pub async fn cmd_audit(alpha_id: String, label: Option<String>, refresh: bool) -> Result<()> {
     let label_str = label.as_deref().unwrap_or(&alpha_id);
     println!(
         "{}",
@@ -47,43 +94,11 @@ pub async fn cmd_audit(alpha_id: String, label: Option<String>) -> Result<()> {
     let cand_pnl = client.fetch_daily_pnl(&alpha_id).await?;
     println!("  Candidate PnL records: {} trading days.", cand_pnl.len());
 
-    // Load OS Portfolio
-    let port_path = "portfolio_os.json";
-    if !Path::new(port_path).exists() {
-        anyhow::bail!("portfolio_os.json not found! Run 'alphafind sync' first.");
-    }
-    let port_data = fs::read_to_string(port_path)?;
-    let os_alphas: Vec<PortfolioAlpha> = serde_json::from_str(&port_data)?;
+    // Load OS Portfolio (with cache age & active/OOS classification report)
+    let os_alphas = load_portfolio_os()?;
 
-    // Load or fetch cached baseline PnLs
-    let (mut pnl_cache, cache_age) = load_pnl_cache();
-    let cache_file = get_cache_dir().join("portfolio_pnl.json");
-    print_cache_status(cache_age, pnl_cache.len());
-
-    let mut missing_ids = Vec::new();
-    for a in &os_alphas {
-        if !pnl_cache.contains_key(&a.id) {
-            missing_ids.push(a.id.clone());
-        }
-    }
-
-    if !missing_ids.is_empty() {
-        println!(
-            "  Fetching PnL for {} active OS alphas not in cache...",
-            missing_ids.len()
-        );
-        for id in missing_ids {
-            if let Ok(pnl) = client.fetch_daily_pnl(&id).await {
-                pnl_cache.insert(id, pnl);
-            }
-        }
-        // Save updated cache
-        if let Ok(serialized) = serde_json::to_string(&pnl_cache) {
-            if let Err(e) = fs::write(&cache_file, &serialized) {
-                eprintln!("  ⚠️  Warning: Failed to write cache: {}", e);
-            }
-        }
-    }
+    // Load or refresh cached baseline PnLs
+    let pnl_cache = load_or_refresh_os_pnl_cache(&os_alphas, refresh).await?;
 
     // Run Audit
     let report = audit_candidate(&alpha_id, &cand_pnl, &pnl_cache);
@@ -170,7 +185,7 @@ pub async fn cmd_audit(alpha_id: String, label: Option<String>) -> Result<()> {
 }
 
 /// Simulates merged multi-alpha Out-of-Sample portfolio Sharpe and diversification metrics.
-pub async fn cmd_portfolio() -> Result<()> {
+pub async fn cmd_portfolio(refresh: bool) -> Result<()> {
     println!(
         "{}",
         "═════════════════════════════════════════════════════════════════════════".cyan()
@@ -186,41 +201,8 @@ pub async fn cmd_portfolio() -> Result<()> {
         "═════════════════════════════════════════════════════════════════════════".cyan()
     );
 
-    let port_path = "portfolio_os.json";
-    if !Path::new(port_path).exists() {
-        anyhow::bail!("portfolio_os.json not found! Run 'alphafind sync' first.");
-    }
-    let port_data = fs::read_to_string(port_path)?;
-    let os_alphas: Vec<PortfolioAlpha> = serde_json::from_str(&port_data)?;
-
-    let (mut pnl_cache, cache_age) = load_pnl_cache();
-    let cache_file = get_cache_dir().join("portfolio_pnl.json");
-    print_cache_status(cache_age, pnl_cache.len());
-
-    let mut missing_ids = Vec::new();
-    for a in &os_alphas {
-        if !pnl_cache.contains_key(&a.id) {
-            missing_ids.push(a.id.clone());
-        }
-    }
-
-    if !missing_ids.is_empty() {
-        let client = get_main_client()?;
-        println!(
-            "  Fetching PnL for {} active OS alphas not in cache...",
-            missing_ids.len()
-        );
-        for id in missing_ids {
-            if let Ok(pnl) = client.fetch_daily_pnl(&id).await {
-                pnl_cache.insert(id, pnl);
-            }
-        }
-        if let Ok(serialized) = serde_json::to_string(&pnl_cache) {
-            if let Err(e) = fs::write(&cache_file, &serialized) {
-                eprintln!("  ⚠️  Warning: Failed to write cache: {}", e);
-            }
-        }
-    }
+    let os_alphas = load_portfolio_os()?;
+    let pnl_cache = load_or_refresh_os_pnl_cache(&os_alphas, refresh).await?;
 
     let pnl_refs: Vec<&HashMap<String, f64>> = os_alphas
         .iter()
@@ -269,7 +251,7 @@ pub async fn cmd_portfolio() -> Result<()> {
 }
 
 /// Simulates exact portfolio merge impact for a candidate Alpha.
-pub async fn cmd_impact(alpha_id: String) -> Result<()> {
+pub async fn cmd_impact(alpha_id: String, refresh: bool) -> Result<()> {
     println!(
         "{}",
         "═════════════════════════════════════════════════════════════════════════".cyan()
@@ -296,12 +278,18 @@ pub async fn cmd_impact(alpha_id: String) -> Result<()> {
     let cand_pnl = client.fetch_daily_pnl(&alpha_id).await?;
     println!("  Candidate PnL records: {} trading days.", cand_pnl.len());
 
-    // Load active OS alphas PnL cache
-    let (pnl_cache, cache_age) = load_pnl_cache();
+    // Load active OS alphas and PnL cache
+    let pnl_cache = if std::path::Path::new("portfolio_os.json").exists() {
+        let os_alphas = load_portfolio_os()?;
+        load_or_refresh_os_pnl_cache(&os_alphas, refresh).await?
+    } else {
+        let (pnl_cache, cache_age) = load_pnl_cache();
+        print_cache_status(cache_age, pnl_cache.len());
+        pnl_cache
+    };
     if pnl_cache.is_empty() {
         anyhow::bail!("portfolio_pnl.json not found or empty! Run 'alphafind portfolio' first.");
     }
-    print_cache_status(cache_age, pnl_cache.len());
 
     let impact = calculate_portfolio_impact(&alpha_id, &cand_pnl, &pnl_cache)
         .context("Failed to compute portfolio merge impact (insufficient overlapping days)")?;
@@ -423,41 +411,14 @@ pub async fn cmd_impact(alpha_id: String) -> Result<()> {
 }
 
 /// Diagnoses active OS portfolio health, alpha decay ratios, half-life, and marginal Sharpe impact.
-pub async fn cmd_health(alpha_id: Option<String>, export: Option<String>, all: bool) -> Result<()> {
-    let port_path = "portfolio_os.json";
-    if !Path::new(port_path).exists() {
-        anyhow::bail!("portfolio_os.json not found! Run 'alphafind sync' first.");
-    }
-    let port_data = fs::read_to_string(port_path)?;
-    let os_alphas: Vec<PortfolioAlpha> = serde_json::from_str(&port_data)?;
-
-    let (mut pnl_cache, cache_age) = load_pnl_cache();
-    let cache_file = get_cache_dir().join("portfolio_pnl.json");
-    print_cache_status(cache_age, pnl_cache.len());
-
-    let mut missing_ids = Vec::new();
-    for a in &os_alphas {
-        if !pnl_cache.contains_key(&a.id) {
-            missing_ids.push(a.id.clone());
-        }
-    }
-
-    if !missing_ids.is_empty() {
-        if let Ok(client) = get_main_client() {
-            println!(
-                "  Fetching PnL for {} active OS alphas not in cache...",
-                missing_ids.len()
-            );
-            for id in missing_ids {
-                if let Ok(pnl) = client.fetch_daily_pnl(&id).await {
-                    pnl_cache.insert(id, pnl);
-                }
-            }
-            if let Ok(serialized) = serde_json::to_string(&pnl_cache) {
-                let _ = fs::write(&cache_file, &serialized);
-            }
-        }
-    }
+pub async fn cmd_health(
+    alpha_id: Option<String>,
+    export: Option<String>,
+    all: bool,
+    refresh: bool,
+) -> Result<()> {
+    let os_alphas = load_portfolio_os()?;
+    let pnl_cache = load_or_refresh_os_pnl_cache(&os_alphas, refresh).await?;
 
     let report = evaluate_portfolio_health(&os_alphas, &pnl_cache, None).context(
         "Failed to evaluate portfolio health (insufficient data or overlapping trading days < 60)",
@@ -486,7 +447,7 @@ pub async fn cmd_health(alpha_id: Option<String>, export: Option<String>, all: b
 
     if let Some(ref export_path) = export {
         let serialized = serde_json::to_string_pretty(&report)?;
-        fs::write(export_path, serialized)?;
+        write_private_file(export_path, serialized)?;
         println!(
             "  💾 Full Master Portfolio Health Report exported to: {}\n",
             export_path.green().bold()
@@ -503,6 +464,7 @@ pub async fn cmd_allocate(
     candidate_turnover: Option<f64>,
     trim: bool,
     export: Option<String>,
+    refresh: bool,
 ) -> Result<()> {
     println!(
         "{}",
@@ -520,39 +482,10 @@ pub async fn cmd_allocate(
     );
 
     // 1. Load active OS alphas
-    let port_path = "portfolio_os.json";
-    if !Path::new(port_path).exists() {
-        anyhow::bail!("portfolio_os.json not found! Run 'alphafind sync' first.");
-    }
-    let port_data = fs::read_to_string(port_path)?;
-    let os_alphas: Vec<PortfolioAlpha> = serde_json::from_str(&port_data)?;
+    let os_alphas = load_portfolio_os()?;
 
-    // 2. Load cached PnLs
-    let (mut pnl_cache, cache_age) = load_pnl_cache();
-    let cache_file = get_cache_dir().join("portfolio_pnl.json");
-    print_cache_status(cache_age, pnl_cache.len());
-
-    let client = get_main_client()?;
-    let mut missing_ids = Vec::new();
-    for a in &os_alphas {
-        if !pnl_cache.contains_key(&a.id) {
-            missing_ids.push(a.id.clone());
-        }
-    }
-    if !missing_ids.is_empty() {
-        println!(
-            "  Fetching PnL for {} active OS alphas not in cache...",
-            missing_ids.len()
-        );
-        for id in missing_ids {
-            if let Ok(pnl) = client.fetch_daily_pnl(&id).await {
-                pnl_cache.insert(id, pnl);
-            }
-        }
-        if let Ok(serialized) = serde_json::to_string(&pnl_cache) {
-            let _ = fs::write(&cache_file, &serialized);
-        }
-    }
+    // 2. Load or refresh cached PnLs
+    let pnl_cache = load_or_refresh_os_pnl_cache(&os_alphas, refresh).await?;
 
     // 3. Section 1: Turnover Entropy & Temporal Balance
     let entropy_rep = evaluate_turnover_entropy(&os_alphas);
@@ -686,6 +619,7 @@ pub async fn cmd_allocate(
         );
         println!("  ─────────────────────────────────────────────────────────────────────────");
         println!("    Fetching candidate PnL for {}...", cand_id);
+        let client = get_main_client()?;
         let cand_pnl = client.fetch_daily_pnl(cand_id).await?;
         let to = candidate_turnover.unwrap_or(0.35);
 
@@ -756,7 +690,7 @@ pub async fn cmd_allocate(
             "hrp_weights": hrp_weights,
             "retirement_candidates": retirement_cands,
         });
-        fs::write(export_path, serde_json::to_string_pretty(&export_data)?)?;
+        write_private_file(export_path, serde_json::to_string_pretty(&export_data)?)?;
         println!(
             "\n  💾 Allocation diagnostic report exported to: {}\n",
             export_path.green().bold()

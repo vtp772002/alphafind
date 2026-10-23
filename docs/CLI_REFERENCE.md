@@ -10,18 +10,19 @@ This reference describes command interfaces in `src/main.rs` as inspected on 202
 | `sync` | Fetch portfolio metadata into the local portfolio file. | Fetch paths have pagination/classification and freshness limitations; verify against BRAIN. |
 | `score` | Fetch profile/competition information. | Platform scoring formulas are not reproduced by this command. |
 | `sim` | Create and poll one simulation on the main account. | Keep live expressions private. |
-| `screen` | Simulate candidates from the in-code catalog. | Tasks are spawned per candidate; `--workers` does not currently bound concurrency. Multi-account use must comply with BRAIN's account rules. |
+| `screen` | Simulate candidates from the local or fallback catalog. | Consumes a bounded `mpsc` queue with a per-account semaphore (`--workers` bounds in-flight simulations per account, not cross-process platform quota). Use `--single-account` (`ALPHAFIND_SINGLE_ACCOUNT=1`) to comply with single-account rules. |
 | `tune` | Try configured parameter variants for one expression. | A higher in-sample metric is not evidence of better OOS performance. |
 | `check` | Request platform submission check results. | Fail-closed locally: requires every core check present and every returned status explicitly `PASS`; `PENDING`, `ERROR`, unknown, missing, and empty responses reject. Not version-aware and does not capture the raw response, so BRAIN remains the authority. |
-| `submit` | Send a submission request to BRAIN. | Runs the fail-closed check first. `--skip-checks` needs `ALPHAFIND_ALLOW_SKIP_CHECKS=1` and prints a bypass warning. An ambiguous POST outcome is reported as unknown and exits non-zero. |
-| `audit` | Compare candidate PnL with locally available portfolio PnLs. | Depends on date overlap and possibly stale cached series. |
-| `portfolio` | Calculate a local merged-PnL diagnostic. | Not BRAIN's official `isScore` calculation. |
-| `impact` | Estimate local portfolio change after adding a candidate. | Depends on included alphas, weights, date coverage, and cache freshness. |
+| `submit` | Send a submission request to BRAIN. | Runs the fail-closed platform check gate plus a separate local portfolio-policy gate (self-correlation `< 0.70` and staleness check). `--skip-checks` needs `ALPHAFIND_ALLOW_SKIP_CHECKS=1` and prints a bypass warning. An ambiguous POST outcome is reported as unknown and exits non-zero. |
+| `audit` | Compare candidate PnL with locally available portfolio PnLs. | Reports active/OOS classification and cache age; supports `--refresh`. Fails closed when overlap `< 30` days. |
+| `portfolio` | Calculate a local merged-PnL diagnostic. | Reports active/OOS classification and cache age; supports `--refresh`. Not BRAIN's official `isScore` calculation. |
+| `impact` | Estimate local portfolio change after adding a candidate. | Depends on included alphas, weights, date coverage (`>= 100` days), and cache freshness (`--refresh`). |
 | `radar` | Display dataset census fields returned by the API. | Census fields are time-sensitive; this is not a validated alpha uniqueness forecast. |
 | `matrix` | Display configured dataset interaction heuristics. | Uses hard-coded affinity assumptions, not measured platform-wide alpha co-occurrence. |
-| `blueprint` | Produce rule-based portfolio gap suggestions. | Fixed archetypes are hypotheses, not statistically validated forecasts. |
+| `blueprint` | Produce rule-based portfolio gap suggestions. | Computes actual merged Sharpe/correlation when overlap is sufficient (otherwise `N/A`); fixed archetypes are hypotheses, not validated forecasts. |
 | `shadow` | Inspect live BRAIN dataset/field usage, local profile allocations, and optional local PnL sensitivity. | It does not predict competitor PnL or future official Uniqueness. |
-| `health` | Print local portfolio diagnostics. | Results inherit portfolio classification, data coverage, and cache limitations. |
+| `health` | Print local portfolio decay, half-life, and marginal Sharpe diagnostics. | Reports active/OOS classification and cache age; supports `--refresh`. |
+| `allocate` | Compute turnover Shannon entropy, HRP risk weights, retirement candidates, and fail-closed candidate admission (`Go`/`No-Go`). | Fails closed (`UNKNOWN` / `NoGo`) when PnL series are missing, flatline, or have `< 30` (`< 100` for merge) overlapping days; supports `--refresh`. |
 
 ## Usage synopsis
 
@@ -32,16 +33,16 @@ alphafind score
 alphafind sim --expr <PRIVATE_EXPRESSION> [--universe TOP1000] [--decay 5]
               [--neutralization SUBINDUSTRY] [--truncation 0.05]
 alphafind screen [--pillar <PILLAR>] [--universe TOP1000]
-                 [--min-fitness 1.50] [--workers 3] [--no-tune]
+                 [--min-fitness 1.50] [--workers 3] [--no-tune] [--single-account]
 alphafind tune --expr <PRIVATE_EXPRESSION> [--universe TOP1000]
                 [--target-fitness 1.50] [--decay 10]
                 [--neutralization SUBINDUSTRY]
 alphafind check <ALPHA_ID>
 alphafind submit <ALPHA_ID> [--name <NAME>] [--category <CATEGORY>]
                   [--color <COLOR>] [--tags <TAG,...>] [--skip-checks]
-alphafind audit <ALPHA_ID> [--label <LABEL>]
-alphafind portfolio
-alphafind impact <ALPHA_ID>
+alphafind audit <ALPHA_ID> [--label <LABEL>] [--refresh]
+alphafind portfolio [--refresh]
+alphafind impact <ALPHA_ID> [--refresh]
 alphafind radar [--region USA] [--universe <UNIVERSE>] [--top 15]
                  [--filter <KEYWORD>] [--green-only]
 alphafind matrix [--universe TOP200] [--expr <PRIVATE_EXPRESSION>]
@@ -49,7 +50,9 @@ alphafind matrix [--universe TOP200] [--expr <PRIVATE_EXPRESSION>]
 alphafind blueprint [--universe <UNIVERSE>] [--export <PATH>]
 alphafind shadow [--candidate <ALPHA_ID> | --expr <PRIVATE_EXPRESSION>]
                  [--region USA] [--universe TOP1000] [--delay 1] [--simulate]
-alphafind health [--alpha-id <ALPHA_ID>] [--export <PATH>] [--all]
+alphafind health [--alpha-id <ALPHA_ID>] [--export <PATH>] [--all] [--refresh]
+alphafind allocate [--candidate <ALPHA_ID>] [--turnover <FLOAT>]
+                   [--trim] [--export <PATH>] [--refresh]
 ```
 
 `<PRIVATE_EXPRESSION>` is a placeholder, not literal Fast Expression syntax. Do not replace it with a pending candidate in tracked documentation or a public issue.

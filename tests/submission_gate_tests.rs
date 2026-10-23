@@ -192,3 +192,128 @@ fn test_cache_age_label_flags_stale_and_unknown_ages() {
     assert!(!stale);
     assert!(label.contains('s'), "short ages report seconds: {label}");
 }
+
+#[test]
+fn test_mark_alpha_submitted_in_csv_updates_lowercase_serde_bool() {
+    use alphafind::commands::submission::mark_alpha_submitted_in_csv;
+    use alphafind::models::SubmittableAlphaRecord;
+
+    let tmp_path = std::env::temp_dir().join(format!(
+        "alphafind_test_submittable_{}.csv",
+        std::process::id()
+    ));
+
+    let records = vec![
+        SubmittableAlphaRecord {
+            alpha_id: "ALPHA_ONE".to_string(),
+            name: "First".to_string(),
+            universe: "TOP1000".to_string(),
+            sharpe: 1.85,
+            fitness: 1.55,
+            turnover: 18.2,
+            annual_return: 14.5,
+            submitted: false,
+            expression: "rank(<FIELD>)".to_string(),
+            settings: "{}".to_string(),
+        },
+        SubmittableAlphaRecord {
+            alpha_id: "ALPHA_TWO".to_string(),
+            name: "Second".to_string(),
+            universe: "TOP3000".to_string(),
+            sharpe: 2.10,
+            fitness: 1.70,
+            turnover: 22.0,
+            annual_return: 16.0,
+            submitted: false,
+            expression: "rank(<OTHER_FIELD>)".to_string(),
+            settings: "{}".to_string(),
+        },
+    ];
+
+    {
+        let mut wtr = csv::WriterBuilder::new()
+            .has_headers(true)
+            .from_path(&tmp_path)
+            .unwrap();
+        for r in &records {
+            wtr.serialize(r).unwrap();
+        }
+        wtr.flush().unwrap();
+    }
+
+    let updated = mark_alpha_submitted_in_csv(&tmp_path, "ALPHA_ONE").unwrap();
+    assert!(updated, "ALPHA_ONE should be marked as submitted");
+
+    let mut rdr = csv::Reader::from_path(&tmp_path).unwrap();
+    let loaded: Vec<SubmittableAlphaRecord> = rdr
+        .deserialize::<SubmittableAlphaRecord>()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(loaded.len(), 2);
+    assert!(loaded[0].submitted, "ALPHA_ONE must have submitted == true");
+    assert!(
+        !loaded[1].submitted,
+        "ALPHA_TWO must remain submitted == false"
+    );
+
+    let _ = std::fs::remove_file(&tmp_path);
+}
+
+#[test]
+fn test_delay_thresholds_and_portfolio_alpha_classification() {
+    use alphafind::commands::{classify_portfolio_alpha, AlphaClassification};
+    use alphafind::config::quant::{
+        min_fitness_for_delay, min_sharpe_for_delay, turnover_within_platform_bounds,
+    };
+    use alphafind::models::PortfolioAlpha;
+
+    // Delay 0 vs Delay 1 official thresholds
+    assert!((min_sharpe_for_delay(0) - 2.00).abs() < 1e-9);
+    assert!((min_sharpe_for_delay(1) - 1.25).abs() < 1e-9);
+    assert!((min_fitness_for_delay(0) - 1.30).abs() < 1e-9);
+    assert!((min_fitness_for_delay(1) - 1.00).abs() < 1e-9);
+
+    // Exclusive turnover bounds (1%, 70%)
+    assert!(!turnover_within_platform_bounds(0.01));
+    assert!(turnover_within_platform_bounds(0.0101));
+    assert!(turnover_within_platform_bounds(0.6999));
+    assert!(!turnover_within_platform_bounds(0.70));
+
+    let base_alpha = PortfolioAlpha {
+        id: "A1".to_string(),
+        name: None,
+        status: Some("ACTIVE".to_string()),
+        stage: Some("OS".to_string()),
+        date_submitted: None,
+        universe: None,
+        decay: None,
+        category: None,
+        color: None,
+        sharpe: None,
+        fitness: None,
+        returns: None,
+        turnover: None,
+        direct_url: None,
+        code: None,
+        tags: None,
+        settings: None,
+    };
+    assert_eq!(
+        classify_portfolio_alpha(&base_alpha),
+        AlphaClassification::ActiveOs
+    );
+
+    let mut decommissioned = base_alpha.clone();
+    decommissioned.status = Some("DECOMMISSIONED".to_string());
+    assert_eq!(
+        classify_portfolio_alpha(&decommissioned),
+        AlphaClassification::InactiveOrNonOs
+    );
+
+    let mut in_sample = base_alpha.clone();
+    in_sample.stage = Some("IS".to_string());
+    assert_eq!(
+        classify_portfolio_alpha(&in_sample),
+        AlphaClassification::InactiveOrNonOs
+    );
+}

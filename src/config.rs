@@ -24,6 +24,35 @@ pub mod platform_rules {
 
     /// Delay 1 minimum Sharpe ratio requirement (> 1.25).
     pub const MIN_SHARPE_DELAY_1: f64 = 1.25;
+
+    /// Delay 0 minimum Fitness requirement (> 1.3).
+    pub const MIN_FITNESS_DELAY_0: f64 = 1.30;
+
+    /// Delay 1 minimum Fitness requirement (> 1.0).
+    pub const MIN_FITNESS_DELAY_1: f64 = 1.00;
+
+    /// Returns the minimum Sharpe threshold published in BRAIN Learn for the given delay.
+    pub fn min_sharpe_for_delay(delay: i32) -> f64 {
+        if delay == 0 {
+            MIN_SHARPE_DELAY_0
+        } else {
+            MIN_SHARPE_DELAY_1
+        }
+    }
+
+    /// Returns the minimum Fitness threshold published in BRAIN Learn for the given delay.
+    pub fn min_fitness_for_delay(delay: i32) -> f64 {
+        if delay == 0 {
+            MIN_FITNESS_DELAY_0
+        } else {
+            MIN_FITNESS_DELAY_1
+        }
+    }
+
+    /// Checks whether turnover is strictly within the BRAIN Learn (1%, 70%) band.
+    pub fn turnover_within_platform_bounds(turnover: f64) -> bool {
+        turnover > MIN_TURNOVER && turnover < MAX_TURNOVER
+    }
 }
 
 /// Project-chosen safety and sample coverage thresholds

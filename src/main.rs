@@ -43,10 +43,18 @@ enum Commands {
         /// Optional label / description
         #[arg(short, long)]
         label: Option<String>,
+
+        /// Force live re-fetch of all active OS Alpha PnLs before auditing
+        #[arg(long)]
+        refresh: bool,
     },
 
     /// Simulate merged multi-alpha Out-of-Sample portfolio Sharpe and diversification metrics
-    Portfolio,
+    Portfolio {
+        /// Force live re-fetch of all active OS Alpha PnLs before simulating
+        #[arg(long)]
+        refresh: bool,
+    },
 
     /// Submit an Alpha to Out-of-Sample (OS) after pre-flight check verification
     Submit {
@@ -174,6 +182,10 @@ enum Commands {
     Impact {
         /// Candidate Alpha ID (e.g., A1b2C3d4)
         alpha_id: String,
+
+        /// Force live re-fetch of all active OS Alpha PnLs before simulating impact
+        #[arg(long)]
+        refresh: bool,
     },
 
     /// Configured dataset-interaction heuristic and multi-dataset formula analysis
@@ -246,6 +258,10 @@ enum Commands {
         /// Show full table of all active alphas
         #[arg(short, long)]
         all: bool,
+
+        /// Force live re-fetch of all active OS Alpha PnLs before evaluating health
+        #[arg(long)]
+        refresh: bool,
     },
 
     /// Diagnose temporal turnover entropy, HRP risk weights, and evaluate candidate admission decisions
@@ -265,6 +281,10 @@ enum Commands {
         /// Export allocation diagnostic JSON to file
         #[arg(long)]
         export: Option<String>,
+
+        /// Force live re-fetch of all active OS Alpha PnLs before evaluating allocation
+        #[arg(long)]
+        refresh: bool,
     },
 }
 
@@ -277,8 +297,12 @@ async fn main() -> Result<()> {
         Commands::Sync => cmd_sync().await,
         Commands::Score => cmd_score().await,
         Commands::Check { alpha_id } => cmd_check(alpha_id).await,
-        Commands::Audit { alpha_id, label } => cmd_audit(alpha_id, label).await,
-        Commands::Portfolio => cmd_portfolio().await,
+        Commands::Audit {
+            alpha_id,
+            label,
+            refresh,
+        } => cmd_audit(alpha_id, label, refresh).await,
+        Commands::Portfolio { refresh } => cmd_portfolio(refresh).await,
         Commands::Submit {
             alpha_id,
             name,
@@ -326,7 +350,7 @@ async fn main() -> Result<()> {
             decay,
             neutralization,
         } => cmd_tune(expr, universe, target_fitness, decay, neutralization).await,
-        Commands::Impact { alpha_id } => cmd_impact(alpha_id).await,
+        Commands::Impact { alpha_id, refresh } => cmd_impact(alpha_id, refresh).await,
         Commands::Matrix {
             universe,
             expr,
@@ -346,12 +370,14 @@ async fn main() -> Result<()> {
             alpha_id,
             export,
             all,
-        } => cmd_health(alpha_id, export, all).await,
+            refresh,
+        } => cmd_health(alpha_id, export, all, refresh).await,
         Commands::Allocate {
             candidate,
             turnover,
             trim,
             export,
-        } => cmd_allocate(candidate, turnover, trim, export).await,
+            refresh,
+        } => cmd_allocate(candidate, turnover, trim, export, refresh).await,
     }
 }

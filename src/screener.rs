@@ -5,6 +5,9 @@ use tokio::sync::Mutex;
 
 use crate::autotuner::FitnessAutoTuner;
 use crate::client::BrainClient;
+use crate::config::quant::{
+    min_fitness_for_delay, min_sharpe_for_delay, turnover_within_platform_bounds,
+};
 use crate::models::{CandidateAlpha, SubmittableAlphaRecord};
 
 /// A single authenticated BRAIN account worker used for distributed screening.
@@ -240,11 +243,15 @@ impl MultiAccountScreener {
                             turn * 100.0
                         );
 
+                        let effective_min_fitness =
+                            min_fitness.max(min_fitness_for_delay(settings.delay));
+                        let min_sharpe = min_sharpe_for_delay(settings.delay);
+
                         // Auto-tune if promising
                         let (final_aid, final_fit, final_sh, final_ret, final_turn, final_settings, final_expr) =
-                            if fit < min_fitness && sh >= 1.25 && ret >= 0.05 && enable_tuning {
+                            if fit < effective_min_fitness && sh >= min_sharpe && ret >= 0.05 && enable_tuning {
                                 let tuner = FitnessAutoTuner::new(&client);
-                                if let Ok(Some(tuned)) = tuner.tune_hyperparameters(&cand.expression, &settings, min_fitness).await {
+                                if let Ok(Some(tuned)) = tuner.tune_hyperparameters(&cand.expression, &settings, effective_min_fitness).await {
                                     let t_st = tuned.details.is.unwrap_or_default();
                                     (
                                         tuned.details.id,
@@ -263,12 +270,15 @@ impl MultiAccountScreener {
                             };
 
                         // Check submission criteria
-                        if final_fit >= min_fitness && final_sh >= 1.25 && (0.01..=0.70).contains(&final_turn) {
+                        if final_fit >= effective_min_fitness
+                            && final_sh >= min_sharpe_for_delay(final_settings.delay)
+                            && turnover_within_platform_bounds(final_turn)
+                        {
                             println!(
                                 "{}",
                                 format!(
                                     "  🎯 [HIGH-CONVICTION] Alpha {} qualified! (Fit: {:.2} >= {:.2})",
-                                    final_aid, final_fit, min_fitness
+                                    final_aid, final_fit, effective_min_fitness
                                 )
                                 .green()
                                 .bold()
@@ -399,6 +409,11 @@ impl MultiAccountScreener {
         }
 
         wtr.flush()?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(csv_path, std::fs::Permissions::from_mode(0o600));
+        }
         Ok(())
     }
 }

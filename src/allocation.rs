@@ -180,23 +180,9 @@ pub fn compute_hrp_weights(
         }];
     }
 
-    // Find intersection of common trading dates across cached alphas
-    let mut common_dates: Option<std::collections::BTreeSet<String>> = None;
-    for a in alphas {
-        if let Some(series) = pnl_cache.get(&a.id) {
-            let dates: std::collections::BTreeSet<String> = series.keys().cloned().collect();
-            common_dates = match common_dates {
-                None => Some(dates),
-                Some(acc) => Some(acc.intersection(&dates).cloned().collect()),
-            };
-        }
-    }
-
-    let dates: Vec<String> = common_dates.unwrap_or_default().into_iter().collect();
-    if dates.len() < 30 {
-        // Fall back to equal weights if insufficient overlapping history
-        let eq_w = 1.0 / n as f64;
-        return alphas
+    let eq_w = 1.0 / n as f64;
+    let unknown_fallback = |reason: &str| -> Vec<HrpAlphaWeight> {
+        alphas
             .iter()
             .map(|a| HrpAlphaWeight {
                 alpha_id: a.id.clone(),
@@ -205,9 +191,32 @@ pub fn compute_hrp_weights(
                 hrp_weight: eq_w,
                 equal_weight: eq_w,
                 health_ratio: 1.0,
-                verdict: "EQUAL_FALLBACK".to_string(),
+                verdict: format!("UNKNOWN ({reason})"),
             })
+            .collect()
+    };
+
+    // Find intersection of common trading dates with finite PnL across ALL alphas.
+    // Fail closed if any alpha is missing from the PnL cache.
+    let mut common_dates: Option<std::collections::BTreeSet<String>> = None;
+    for a in alphas {
+        let Some(series) = pnl_cache.get(&a.id) else {
+            return unknown_fallback("MISSING PNL SERIES");
+        };
+        let dates: std::collections::BTreeSet<String> = series
+            .iter()
+            .filter(|(_, v)| v.is_finite())
+            .map(|(k, _)| k.clone())
             .collect();
+        common_dates = match common_dates {
+            None => Some(dates),
+            Some(acc) => Some(acc.intersection(&dates).cloned().collect()),
+        };
+    }
+
+    let dates: Vec<String> = common_dates.unwrap_or_default().into_iter().collect();
+    if dates.len() < 30 {
+        return unknown_fallback("INSUFFICIENT OVERLAP <30D");
     }
 
     let t = dates.len();
@@ -215,13 +224,18 @@ pub fn compute_hrp_weights(
     // Build PnL matrix: n x t
     let mut pnl_matrix: Vec<Vec<f64>> = Vec::with_capacity(n);
     for a in alphas {
+        let Some(series) = pnl_cache.get(&a.id) else {
+            return unknown_fallback("MISSING PNL SERIES");
+        };
         let mut row = Vec::with_capacity(t);
-        if let Some(series) = pnl_cache.get(&a.id) {
-            for d in &dates {
-                row.push(*series.get(d).unwrap_or(&0.0));
+        for d in &dates {
+            let Some(&val) = series.get(d) else {
+                return unknown_fallback("MISSING DATE PNL");
+            };
+            if !val.is_finite() {
+                return unknown_fallback("NON-FINITE PNL");
             }
-        } else {
-            row.resize(t, 0.0);
+            row.push(val);
         }
         pnl_matrix.push(row);
     }
@@ -236,7 +250,10 @@ pub fn compute_hrp_weights(
             .map(|&x| (x - mean_i).powi(2))
             .sum::<f64>()
             / (t - 1) as f64;
-        vars[i] = var_i.max(1e-8);
+        if !var_i.is_finite() || var_i <= 1e-12 {
+            return unknown_fallback("ZERO VARIANCE SERIES");
+        }
+        vars[i] = var_i;
         cov[i][i] = vars[i];
 
         for j in 0..i {
@@ -456,21 +473,36 @@ pub fn evaluate_candidate_admission(
         None => (0.0, 0.0),
     };
 
-    // Pairwise correlations against baseline
-    let mut max_corr = -1.0f64;
+    // Pairwise correlations against baseline (require >= 30 overlapping days per pair)
+    let mut max_corr: Option<f64> = None;
     let mut top_match = "N/A".to_string();
+    let mut valid_corr_pairs = 0usize;
+    let mut missing_or_short_pairs = 0usize;
     for a in os_alphas {
-        if let Some(os_pnl) = pnl_cache.get(&a.id) {
-            if let (Some(corr), _) = pearson_correlation(candidate_pnl, os_pnl) {
-                if corr > max_corr {
-                    max_corr = corr;
-                    top_match = a.id.clone();
+        match pnl_cache.get(&a.id) {
+            Some(os_pnl) => match pearson_correlation(candidate_pnl, os_pnl) {
+                (Some(corr), days) if days >= 30 => {
+                    valid_corr_pairs += 1;
+                    if max_corr.is_none_or(|prev| corr > prev) {
+                        max_corr = Some(corr);
+                        top_match = a.id.clone();
+                    }
                 }
+                _ => {
+                    missing_or_short_pairs += 1;
+                }
+            },
+            None => {
+                missing_or_short_pairs += 1;
             }
         }
     }
 
-    let safety_buffer = (0.70 - max_corr.max(0.0)) * 100.0;
+    let has_complete_simulation = base_sim.is_some() && !os_alphas.is_empty();
+    let safety_buffer = match max_corr {
+        Some(c) if missing_or_short_pairs == 0 => (0.70 - c.max(0.0)) * 100.0,
+        _ => 0.0,
+    };
 
     // Synthetic candidate for merged simulation
     let cand_alpha = PortfolioAlpha {
@@ -515,12 +547,27 @@ pub fn evaluate_candidate_admission(
         cand_bucket == TurnoverBucket::Fast || cand_bucket == TurnoverBucket::VeryFast;
 
     let mut rationale = Vec::new();
+    let reported_max_corr = max_corr.unwrap_or(1.0);
 
-    // Decision rule logic
-    let verdict = if max_corr >= 0.70 {
+    // Decision rule logic (fail-closed on missing/insufficient overlap)
+    let verdict = if os_alphas.is_empty()
+        || valid_corr_pairs == 0
+        || missing_or_short_pairs > 0
+        || !has_complete_simulation
+        || merged_sim.is_none()
+    {
+        rationale.push(format!(
+            "FAIL-CLOSED (UNKNOWN): Insufficient or incomplete PnL overlap (valid pairs: {}, missing/short pairs: {}, baseline sim valid: {}, merged sim valid: {}).",
+            valid_corr_pairs,
+            missing_or_short_pairs,
+            base_sim.is_some(),
+            merged_sim.is_some()
+        ));
+        AdmissionVerdict::NoGo
+    } else if reported_max_corr >= 0.70 {
         rationale.push(format!(
             "FAIL local self-correlation proxy (rho = {:.2}% >= 70.0% vs {}).",
-            max_corr * 100.0,
+            reported_max_corr * 100.0,
             top_match
         ));
         AdmissionVerdict::NoGo
@@ -543,7 +590,7 @@ pub fn evaluate_candidate_admission(
         rationale.push(format!(
             "Robust safety buffer: {:.2}% (Max corr: {:.2}% vs {}).",
             safety_buffer,
-            max_corr * 100.0,
+            reported_max_corr * 100.0,
             top_match
         ));
         AdmissionVerdict::StrongGo
@@ -571,7 +618,7 @@ pub fn evaluate_candidate_admission(
         baseline_vol: base_vol,
         merged_vol,
         vol_delta,
-        max_pairwise_corr: max_corr,
+        max_pairwise_corr: reported_max_corr,
         most_correlated_id: top_match,
         safety_buffer_pct: safety_buffer,
         baseline_entropy_score: base_entropy.diversity_score,

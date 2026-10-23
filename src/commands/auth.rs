@@ -3,11 +3,12 @@
 use anyhow::Result;
 use colored::Colorize;
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 
-use crate::commands::{get_main_client, json_path_display};
-use crate::models::PortfolioAlpha;
+use crate::commands::{
+    classify_portfolio_alpha, get_main_client, json_path_display, load_portfolio_os,
+    write_private_file, AlphaClassification,
+};
 use crate::screener::MultiAccountScreener;
 
 /// Authenticates all configured BRAIN accounts and sessions concurrently.
@@ -53,10 +54,25 @@ pub async fn cmd_sync() -> Result<()> {
     println!("  Connecting to MAIN account: {}...", client.email().cyan());
     let portfolio = client.fetch_active_portfolio().await?;
 
+    let mut active_os_count = 0usize;
+    let mut pending_os_count = 0usize;
+    let mut other_count = 0usize;
+    for p in &portfolio {
+        match classify_portfolio_alpha(p) {
+            AlphaClassification::ActiveOs => active_os_count += 1,
+            AlphaClassification::PendingOrSubmittedOs => pending_os_count += 1,
+            AlphaClassification::InactiveOrNonOs | AlphaClassification::Unclassified => {
+                other_count += 1
+            }
+        }
+    }
     println!(
-        "  {} Found {} active OS alphas.",
+        "  {} Found {} OS portfolio records (Active OS: {} | Submitted/Pending OS: {} | Other: {}).",
         "✅".green(),
-        portfolio.len()
+        portfolio.len(),
+        active_os_count,
+        pending_os_count,
+        other_count
     );
 
     let mut univ_counts: HashMap<String, usize> = HashMap::new();
@@ -73,11 +89,11 @@ pub async fn cmd_sync() -> Result<()> {
 
     let json_path = "portfolio_os.json";
     let json_str = serde_json::to_string_pretty(&portfolio)?;
-    if let Err(e) = fs::write(json_path, json_str) {
+    if let Err(e) = write_private_file(json_path, json_str) {
         eprintln!("  ⚠️  Warning: Failed to write cache: {}", e);
     } else {
         println!(
-            "\n  {} Successfully updated {}",
+            "\n  {} Successfully updated {} (mode 0600)",
             "💾".green(),
             json_path.bold()
         );
@@ -257,14 +273,12 @@ pub async fn cmd_score() -> Result<()> {
     // Also display portfolio summary if portfolio_os.json exists
     let port_path = "portfolio_os.json";
     if Path::new(port_path).exists() {
-        if let Ok(port_data) = fs::read_to_string(port_path) {
-            if let Ok(os_alphas) = serde_json::from_str::<Vec<PortfolioAlpha>>(&port_data) {
-                println!(
-                    "\n  📊 Active OS Portfolio: {} Alphas tracked in {}",
-                    os_alphas.len().to_string().bold().green(),
-                    json_path_display(port_path)
-                );
-            }
+        if let Ok(os_alphas) = load_portfolio_os() {
+            println!(
+                "\n  📊 Active OS Portfolio: {} Alphas tracked in {}",
+                os_alphas.len().to_string().bold().green(),
+                json_path_display(port_path)
+            );
         }
     }
 

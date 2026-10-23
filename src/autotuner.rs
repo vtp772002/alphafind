@@ -1,4 +1,7 @@
 use crate::client::BrainClient;
+use crate::config::quant::{
+    min_fitness_for_delay, min_sharpe_for_delay, turnover_within_platform_bounds,
+};
 use crate::models::{AlphaDetails, AlphaSettings, TunedAlphaResult};
 use anyhow::Result;
 use colored::Colorize;
@@ -129,7 +132,13 @@ impl<'a> FitnessAutoTuner<'a> {
                 turn * 100.0
             );
 
-            if fit >= target_fitness && sh >= 1.25 && (0.01..=0.70).contains(&turn) {
+            let effective_target_fitness =
+                target_fitness.max(min_fitness_for_delay(test_settings.delay));
+            let min_sharpe = min_sharpe_for_delay(test_settings.delay);
+            if fit >= effective_target_fitness
+                && sh >= min_sharpe
+                && turnover_within_platform_bounds(turn)
+            {
                 println!(
                     "{}",
                     format!(
@@ -216,7 +225,13 @@ impl<'a> FitnessAutoTuner<'a> {
                 turn * 100.0
             );
 
-            if fit >= target_fitness && sh >= 1.25 && (0.01..=0.70).contains(&turn) {
+            let effective_target_fitness =
+                target_fitness.max(min_fitness_for_delay(base_settings.delay));
+            let min_sharpe = min_sharpe_for_delay(base_settings.delay);
+            if fit >= effective_target_fitness
+                && sh >= min_sharpe
+                && turnover_within_platform_bounds(turn)
+            {
                 println!(
                     "{}",
                     format!(
@@ -285,10 +300,16 @@ impl<'a> FitnessAutoTuner<'a> {
             base_turn * 100.0
         );
 
-        if base_fit >= target_fitness && base_sh >= 1.25 && (0.01..=0.70).contains(&base_turn) {
+        let effective_target_fitness =
+            target_fitness.max(min_fitness_for_delay(base_settings.delay));
+        let min_sharpe = min_sharpe_for_delay(base_settings.delay);
+        if base_fit >= effective_target_fitness
+            && base_sh >= min_sharpe
+            && turnover_within_platform_bounds(base_turn)
+        {
             println!(
                 "  Baseline already satisfies target fitness {:.2}!",
-                target_fitness
+                effective_target_fitness
             );
             return Ok(Some(TunedAlphaResult {
                 details: base_details,
@@ -380,7 +401,9 @@ impl<'a> FitnessAutoTuner<'a> {
                                 "     Neutralization {} -> [{}] Sharpe: {:.2} | Fit: {:.2}",
                                 alt_neut, aid, sh, fit
                             );
-                            if fit >= target_fitness && sh >= 1.25 && (0.01..=0.70).contains(&turn)
+                            if fit >= effective_target_fitness
+                                && sh >= min_sharpe
+                                && turnover_within_platform_bounds(turn)
                             {
                                 return Ok(Some(TunedAlphaResult {
                                     details,
@@ -420,9 +443,9 @@ impl<'a> FitnessAutoTuner<'a> {
                                     "     Combined -> [{}] Sharpe: {:.2} | Fit: {:.2}",
                                     aid, sh, fit
                                 );
-                                if fit >= target_fitness
-                                    && sh >= 1.25
-                                    && (0.01..=0.70).contains(&turn)
+                                if fit >= effective_target_fitness
+                                    && sh >= min_sharpe
+                                    && turnover_within_platform_bounds(turn)
                                 {
                                     return Ok(Some(TunedAlphaResult {
                                         details,

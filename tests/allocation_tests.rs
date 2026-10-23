@@ -195,3 +195,102 @@ fn test_evaluate_candidate_swap() {
     assert!(swap_rep.is_net_improvement);
     assert!(swap_rep.sharpe_delta > 0.0);
 }
+
+#[test]
+fn test_candidate_admission_fails_closed_on_missing_or_short_overlap() {
+    let a1 = create_mock_alpha("A1", 0.15);
+    let alphas = vec![a1];
+
+    // Case 1: Empty PnL cache -> must fail closed (NoGo, safety_buffer_pct == 0.0)
+    let empty_cache = HashMap::new();
+    let mut cand_pnl = HashMap::new();
+    for day in 0..120 {
+        cand_pnl.insert(format!("2026-01-{:03}", day), 10.0 + (day as f64 % 3.0));
+    }
+    let rep_empty =
+        evaluate_candidate_admission("CAND_EMPTY", 0.35, &cand_pnl, &alphas, &empty_cache);
+    assert_eq!(rep_empty.verdict, AdmissionVerdict::NoGo);
+    assert_eq!(rep_empty.safety_buffer_pct, 0.0);
+
+    // Case 2: Overlap < 30 days -> must fail closed (NoGo, safety_buffer_pct == 0.0)
+    let mut short_os_pnl = HashMap::new();
+    for day in 0..20 {
+        short_os_pnl.insert(format!("2026-01-{:03}", day), 15.0 + (day as f64 % 2.0));
+    }
+    let mut short_cache = HashMap::new();
+    short_cache.insert("A1".to_string(), short_os_pnl);
+    let rep_short =
+        evaluate_candidate_admission("CAND_SHORT", 0.35, &cand_pnl, &alphas, &short_cache);
+    assert_eq!(rep_short.verdict, AdmissionVerdict::NoGo);
+    assert_eq!(rep_short.safety_buffer_pct, 0.0);
+}
+
+#[test]
+fn test_hrp_weights_fails_closed_on_missing_or_zero_variance_series() {
+    let a1 = create_mock_alpha("A1", 0.15);
+    let a2 = create_mock_alpha("A2", 0.20);
+    let alphas = vec![a1, a2];
+
+    let mut pnl1 = HashMap::new();
+    let mut flat_pnl2 = HashMap::new();
+    for day in 0..60 {
+        let d = format!("2026-01-{:03}", day);
+        pnl1.insert(d.clone(), (day as f64).sin() * 100.0);
+        flat_pnl2.insert(d, 0.0); // Zero-variance series
+    }
+
+    // Missing A2 from cache -> must return UNKNOWN and health_ratio 1.0 (not 1e8 weight)
+    let mut partial_cache = HashMap::new();
+    partial_cache.insert("A1".to_string(), pnl1.clone());
+    let w_missing = compute_hrp_weights(&alphas, &partial_cache);
+    assert_eq!(w_missing.len(), 2);
+    assert!(w_missing.iter().all(|w| w.verdict.starts_with("UNKNOWN")));
+    assert!(w_missing
+        .iter()
+        .all(|w| (w.health_ratio - 1.0).abs() < 1e-9));
+    assert!(identify_retirement_candidates(&alphas, &w_missing).is_empty());
+
+    // Zero-variance A2 -> must return UNKNOWN and health_ratio 1.0
+    let mut flat_cache = HashMap::new();
+    flat_cache.insert("A1".to_string(), pnl1);
+    flat_cache.insert("A2".to_string(), flat_pnl2);
+    let w_flat = compute_hrp_weights(&alphas, &flat_cache);
+    assert_eq!(w_flat.len(), 2);
+    assert!(w_flat.iter().all(|w| w.verdict.starts_with("UNKNOWN")));
+    assert!(w_flat.iter().all(|w| (w.health_ratio - 1.0).abs() < 1e-9));
+}
+
+#[test]
+fn test_forecast_blueprint_uses_real_simulation_and_fails_closed_when_empty() {
+    use alphafind::forecast::generate_inverse_blueprint;
+
+    let a1 = create_mock_alpha("A1", 0.15);
+    let a2 = create_mock_alpha("A2", 0.20);
+    let alphas = vec![a1, a2];
+
+    // Empty PnL cache -> baseline_merged_sharpe and avg_internal_corr must be None
+    let empty_pnls = HashMap::new();
+    let empty_report = generate_inverse_blueprint(&alphas, &empty_pnls, Some("TOP1000"));
+    assert!(empty_report.baseline_merged_sharpe.is_none());
+    assert!(empty_report.baseline_avg_corr.is_none());
+    assert!(empty_report
+        .pillar_gaps
+        .iter()
+        .all(|p| p.avg_internal_corr.is_none()));
+
+    // Populated PnL cache (>= 100 days) -> baseline_merged_sharpe and baseline_avg_corr must be Some
+    let mut pnl1 = HashMap::new();
+    let mut pnl2 = HashMap::new();
+    for day in 0..120 {
+        let d = format!("2026-01-{:03}", day);
+        pnl1.insert(d.clone(), 12.0 + (day as f64 * 0.2).sin() * 5.0);
+        pnl2.insert(d, 8.0 + (day as f64 * 0.2).cos() * 4.0);
+    }
+    let mut pnls = HashMap::new();
+    pnls.insert("A1".to_string(), pnl1);
+    pnls.insert("A2".to_string(), pnl2);
+
+    let report = generate_inverse_blueprint(&alphas, &pnls, Some("TOP1000"));
+    assert!(report.baseline_merged_sharpe.is_some());
+    assert!(report.baseline_avg_corr.is_some());
+}

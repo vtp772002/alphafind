@@ -18,7 +18,7 @@ cd alphafind
 cargo build --release
 ```
 
-The repository's installer currently performs a hard reset during updates. Avoid running it against a working checkout until that behavior is changed and documented.
+The repository's installer (`install.sh`) checks that the working tree is clean and updates via `git pull --ff-only origin main`, aborting if uncommitted local changes exist.
 
 ## Configure credentials
 

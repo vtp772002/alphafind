@@ -2,7 +2,7 @@ use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::correlation::pearson_correlation;
+use crate::correlation::{pearson_correlation, simulate_portfolio};
 use crate::models::PortfolioAlpha;
 use crate::taxonomy::FactorPillar;
 
@@ -13,7 +13,7 @@ pub struct PillarGapStat {
     pub count: usize,
     pub share_pct: f64,
     pub status: String,
-    pub avg_internal_corr: f64,
+    pub avg_internal_corr: Option<f64>,
     pub recommendation: String,
 }
 
@@ -24,7 +24,7 @@ pub struct UniverseGapStat {
     pub count: usize,
     pub share_pct: f64,
     pub status: String,
-    pub avg_internal_corr: f64,
+    pub avg_internal_corr: Option<f64>,
 }
 
 /// Temporal decay and turnover frequency ("sound") spectrum
@@ -63,8 +63,8 @@ pub struct AlphaArchetype {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InverseBlueprintReport {
     pub active_alpha_count: usize,
-    pub baseline_merged_sharpe: f64,
-    pub baseline_avg_corr: f64,
+    pub baseline_merged_sharpe: Option<f64>,
+    pub baseline_avg_corr: Option<f64>,
     pub target_leaderboard_gap: String,
     pub pillar_gaps: Vec<PillarGapStat>,
     pub universe_gaps: Vec<UniverseGapStat>,
@@ -199,9 +199,9 @@ pub fn generate_inverse_blueprint(
         }
 
         let avg_corr = if n_pairs > 0 {
-            sum_corr / n_pairs as f64
+            Some(sum_corr / n_pairs as f64)
         } else {
-            0.15
+            None
         };
 
         let (status, rec) = if count <= 3 {
@@ -249,6 +249,32 @@ pub fn generate_inverse_blueprint(
             0.0
         };
 
+        let mut u_sum_corr = 0.0;
+        let mut u_pairs = 0;
+        for a in alphas {
+            if a.universe.as_deref().unwrap_or("TOP1000") == u {
+                if let Some(pnl_a) = pnls.get(&a.id) {
+                    for other in alphas {
+                        if other.id != a.id {
+                            if let Some(pnl_b) = pnls.get(&other.id) {
+                                if let (Some(r), days) = pearson_correlation(pnl_a, pnl_b) {
+                                    if days >= 30 {
+                                        u_sum_corr += r;
+                                        u_pairs += 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let u_avg_corr = if u_pairs > 0 {
+            Some(u_sum_corr / u_pairs as f64)
+        } else {
+            None
+        };
+
         let status = if count <= 7 {
             "🟢 UNDER-REPRESENTED (PRIME TARGET)"
         } else if count <= 12 {
@@ -262,7 +288,7 @@ pub fn generate_inverse_blueprint(
             count,
             share_pct,
             status: status.to_string(),
-            avg_internal_corr: 0.20,
+            avg_internal_corr: u_avg_corr,
         });
     }
 
@@ -340,12 +366,23 @@ pub fn generate_inverse_blueprint(
         },
     ];
 
+    let mut pnl_refs: Vec<&HashMap<String, f64>> = Vec::new();
+    for a in alphas {
+        if let Some(p) = pnls.get(&a.id) {
+            pnl_refs.push(p);
+        }
+    }
+    let sim_metrics = simulate_portfolio(&pnl_refs);
+    let baseline_merged_sharpe = sim_metrics.as_ref().map(|m| m.merged_sharpe);
+    let baseline_avg_corr = sim_metrics.as_ref().map(|m| m.avg_pairwise_corr);
+
     InverseBlueprintReport {
         active_alpha_count: n,
-        baseline_merged_sharpe: 3.77,
-        baseline_avg_corr: 0.2179,
+        baseline_merged_sharpe,
+        baseline_avg_corr,
         target_leaderboard_gap:
-            "Target: Drop uniquenessScore from 0.53 to <= 0.00 & Push isScore > 20,000".to_string(),
+            "Research Hypothesis: Target under-allocated factor pillars & low internal correlation (< 0.15)"
+                .to_string(),
         pillar_gaps,
         universe_gaps,
         temporal_sound,
@@ -363,11 +400,19 @@ pub fn print_blueprint_report(report: &InverseBlueprintReport) {
             .yellow()
     );
     println!("═════════════════════════════════════════════════════════════════════════");
+    let sharpe_str = report
+        .baseline_merged_sharpe
+        .map(|s| format!("{:.2}", s))
+        .unwrap_or_else(|| "N/A (insufficient PnL overlap)".to_string());
+    let corr_str = report
+        .baseline_avg_corr
+        .map(|c| format!("{:.2}%", c * 100.0))
+        .unwrap_or_else(|| "N/A".to_string());
     println!(
-        "  Active Out-of-Sample Portfolio: {} Alphas | Baseline Merged Sharpe: {:.2} | Avg Corr: {:.2}%",
+        "  Active Out-of-Sample Portfolio: {} Alphas | Baseline Merged Sharpe: {} | Avg Corr: {}",
         report.active_alpha_count.to_string().cyan().bold(),
-        report.baseline_merged_sharpe,
-        report.baseline_avg_corr * 100.0
+        sharpe_str,
+        corr_str
     );
     println!(
         "  Strategic Mission: {}",
@@ -381,13 +426,13 @@ pub fn print_blueprint_report(report: &InverseBlueprintReport) {
     println!("  │ Factor Pillar                │ Alphas│ Share % │ Status                       │ Avg Corr │");
     println!("  ├──────────────────────────────┼──────┼─────────┼──────────────────────────────┼──────────┤");
     for p in &report.pillar_gaps {
+        let p_corr_str = p
+            .avg_internal_corr
+            .map(|c| format!("{:>6.2}%", c * 100.0))
+            .unwrap_or_else(|| "   N/A ".to_string());
         println!(
-            "  │ {:<28} │ {:>4} │ {:>6.1}% │ {:<28} │ {:>7.2}% │",
-            p.pillar_name,
-            p.count,
-            p.share_pct,
-            p.status,
-            p.avg_internal_corr * 100.0
+            "  │ {:<28} │ {:>4} │ {:>6.1}% │ {:<28} │ {:>8} │",
+            p.pillar_name, p.count, p.share_pct, p.status, p_corr_str
         );
     }
     println!("  └──────────────────────────────┴──────┴─────────┴──────────────────────────────┴──────────┘");
@@ -419,7 +464,7 @@ pub fn print_blueprint_report(report: &InverseBlueprintReport) {
         report.temporal_sound.slow_band_count
     );
     println!(
-        "    Optimal Target Decay Band:   {} to {} days",
+        "    Recommended Decay Band:      {} to {} days (Research Hypothesis)",
         report
             .temporal_sound
             .recommended_decay_band
@@ -434,14 +479,14 @@ pub fn print_blueprint_report(report: &InverseBlueprintReport) {
             .cyan()
     );
     println!(
-        "    Optimal Turnover Sweet Spot: {:.1}% to {:.1}% (Maximizes Fitness Denominator)",
+        "    Target Turnover Band:        {:.1}% to {:.1}% (Research Hypothesis)",
         report.temporal_sound.recommended_turnover_band.0,
         report.temporal_sound.recommended_turnover_band.1
     );
     println!("  ─────────────────────────────────────────────────────────────────────────");
 
-    // 4. Forecasted Archetypes for Tomorrow
-    println!("\n  🎯 TIER 4: FORECASTED ALPHA ARCHETYPES FOR DAY 27 (READY-TO-TEST BLUEPRINTS):");
+    // 4. Forecasted Archetypes
+    println!("\n  🎯 TIER 4: FORECASTED ALPHA ARCHETYPES (HYPOTHESIS TEMPLATES):");
     println!("  ═════════════════════════════════════════════════════════════════════════");
 
     for (idx, arch) in report.top_archetypes.iter().enumerate() {
@@ -464,8 +509,10 @@ pub fn print_blueprint_report(report: &InverseBlueprintReport) {
         println!("  ├─ Target 'Sound':       Decay: {} | Neutralization: {} | Exponent: {:.1} | Trunc: {:.3}",
             arch.recommended_decay, arch.recommended_neutralization.green(), arch.recommended_power, arch.recommended_truncation
         );
-        println!("  ├─ Projected Impact:     Expected Internal Corr: {:+.2}% | Uniqueness Pressure: {:+.3}",
-            arch.projected_internal_corr * 100.0, arch.projected_uniqueness_delta
+        println!(
+            "  ├─ Hypothesis Targets:   Target Internal Corr: {:+.2}% | Uniqueness Target: {:+.3}",
+            arch.projected_internal_corr * 100.0,
+            arch.projected_uniqueness_delta
         );
         println!(
             "  ├─ Rationale:            {}",
@@ -477,7 +524,7 @@ pub fn print_blueprint_report(report: &InverseBlueprintReport) {
 
     println!("\n  ═════════════════════════════════════════════════════════════════════════");
     println!(
-        "  {} Run screening with targeted parameters to mine tomorrow's Day 27 Alpha!",
+        "  {} Run screening with targeted parameters to evaluate candidate hypotheses.",
         "💡 [OPERATIONAL DIRECTIVE]".green().bold()
     );
     println!("═════════════════════════════════════════════════════════════════════════\n");

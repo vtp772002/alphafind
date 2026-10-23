@@ -38,11 +38,11 @@ Do not describe an association, backtest, or simulated PnL as causal evidence. A
 
 The current BRAIN Learn page lists Fitness, Sharpe, Turnover, Weight, Sub-universe, and Self-correlation criteria. The exact Delay 0/Delay 1 thresholds and the sub-universe rule are in [BRAIN Rules and Submission](BRAIN_RULES_AND_SUBMISSION.md).
 
-The platform's visible Learn article currently presents six criterion groups. AlphaFind's API check code contains an eight-check presentation, but its parser currently treats responses with no explicit `FAIL` as passing. Therefore:
+The platform's visible Learn article currently presents six criterion groups. AlphaFind's local check evaluator (`evaluate_submission_checks` in `src/client.rs`) is fail-closed: it requires every expected core check in `CORE_SUBMISSION_CHECKS` to be present and every returned check to be an explicit `PASS`, rejecting empty responses, `PENDING`, `ERROR`, `FAIL`, and unrecognized statuses. However, the expected check list is hardcoded rather than version-aware, and the raw response is not persisted. Therefore:
 
 - a missing, partial, or changed API response must not be treated as approval;
 - a local pass is not proof that the BRAIN UI will allow submission;
-- the API response must be checked for complete coverage and freshness before this gate is trusted.
+- the API response must be checked in the signed-in BRAIN UI/API before relying on automated submission.
 
 ## 5. Internal review gates
 
