@@ -184,7 +184,7 @@ pub async fn cmd_check(alpha_id: String) -> Result<()> {
     let client = get_main_client()?;
     println!("  Querying check results for {}...", alpha_id.yellow());
 
-    let (passed, summary, stats) = client.check_submission(&alpha_id, 30).await?;
+    let (passed, summary, stats) = client.check_submission(&alpha_id, 100).await?;
 
     if stats.checks.is_empty() {
         println!(
@@ -273,7 +273,7 @@ pub async fn cmd_submit(
         );
     } else {
         println!("  Verifying submission checks on MAIN account...");
-        let (passed, msg, _) = client.check_submission(&alpha_id, 30).await?;
+        let (passed, msg, _) = client.check_submission(&alpha_id, 100).await?;
         if !passed {
             println!("  {} Cannot submit: {}", "❌".red(), msg.red());
             anyhow::bail!("Alpha failed submission checks");

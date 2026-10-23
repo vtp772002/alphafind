@@ -632,7 +632,13 @@ impl BrainClient {
 
             let text = resp.text().await?;
             if text.trim().is_empty() {
-                let wait = retry_after.unwrap_or(2.0);
+                let wait = retry_after.unwrap_or(2.5).max(2.5);
+                println!(
+                    "    [attempt {}/{}] BRAIN calculation queued (waiting {:.1}s)...",
+                    _attempt + 1,
+                    max_attempts,
+                    wait
+                );
                 sleep(Duration::from_secs_f64(wait)).await;
                 continue;
             }
@@ -663,6 +669,13 @@ impl BrainClient {
                 _attempt < 4 && eval.failed_checks.iter().any(|f| f.contains("ERROR"));
             if !eval.pending_checks.is_empty() || has_transient_error {
                 let wait = retry_after.unwrap_or(3.5);
+                println!(
+                    "    [attempt {}/{}] checks pending: {:?} (waiting {:.1}s)...",
+                    _attempt + 1,
+                    max_attempts,
+                    eval.pending_checks,
+                    wait
+                );
                 sleep(Duration::from_secs_f64(wait)).await;
                 continue;
             }
