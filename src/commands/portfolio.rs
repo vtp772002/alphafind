@@ -629,16 +629,15 @@ pub async fn cmd_allocate(
                 .ok()
                 .and_then(|s| serde_json::from_str(&s).ok())
                 .unwrap_or_default();
-        let verified_ledger_ids: Vec<String> = if let Ok(mut rdr) =
-            csv::Reader::from_path("submittable_alphas.csv")
-        {
-            rdr.records()
-                .filter_map(|r| r.ok())
-                .filter_map(|rec| rec.get(0).map(|s| s.to_string()))
-                .collect()
-        } else {
-            Vec::new()
-        };
+        let verified_ledger_ids: Vec<String> =
+            if let Ok(mut rdr) = csv::Reader::from_path("submittable_alphas.csv") {
+                rdr.records()
+                    .filter_map(|r| r.ok())
+                    .filter_map(|rec| rec.get(0).map(|s| s.to_string()))
+                    .collect()
+            } else {
+                Vec::new()
+            };
 
         for cand_id in ids {
             println!(
@@ -646,7 +645,10 @@ pub async fn cmd_allocate(
                 cand_id.yellow().bold()
             );
             println!("  ─────────────────────────────────────────────────────────────────────────");
-            println!("    Fetching PnL & evaluating local portfolio gate for {}...", cand_id);
+            println!(
+                "    Fetching PnL & evaluating local portfolio gate for {}...",
+                cand_id
+            );
 
             let details = client.get_alpha_details(cand_id).await.ok();
 
@@ -723,7 +725,10 @@ pub async fn cmd_allocate(
             } else if has_cached_final_checks {
                 if let Some((ev, stats)) = cached_eval {
                     let check_badge = if ev.passed {
-                        format!("✅ PASS ({})", ev.message).green().bold().to_string()
+                        format!("✅ PASS ({})", ev.message)
+                            .green()
+                            .bold()
+                            .to_string()
                     } else {
                         format!("❌ FAIL ({})", ev.message).red().bold().to_string()
                     };
@@ -744,9 +749,15 @@ pub async fn cmd_allocate(
                 match client.check_submission(cand_id, 90).await {
                     Ok((checks_passed, check_summary, stats)) => {
                         let check_badge = if checks_passed {
-                            format!("✅ PASS ({})", check_summary).green().bold().to_string()
+                            format!("✅ PASS ({})", check_summary)
+                                .green()
+                                .bold()
+                                .to_string()
                         } else {
-                            format!("❌ FAIL ({})", check_summary).red().bold().to_string()
+                            format!("❌ FAIL ({})", check_summary)
+                                .red()
+                                .bold()
+                                .to_string()
                         };
                         println!("    Platform Checks:   {}", check_badge);
                         if let (Some(sh), Some(fit), Some(ret), Some(turn)) =

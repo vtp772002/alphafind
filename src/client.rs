@@ -702,7 +702,10 @@ impl BrainClient {
             match resp {
                 Ok(r) => {
                     if r.status().as_u16() == 404 {
-                        return Err(anyhow!("Alpha {} not found on account (HTTP 404)", alpha_id));
+                        return Err(anyhow!(
+                            "Alpha {} not found on account (HTTP 404)",
+                            alpha_id
+                        ));
                     }
                     if r.status().as_u16() == 429 {
                         sleep(Duration::from_secs(3 * (attempt + 1))).await;
