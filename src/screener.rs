@@ -120,15 +120,38 @@ impl MultiAccountScreener {
 
     /// Screens a batch of candidate alphas across configured sessions using a bounded worker queue.
     /// In-flight simulations per account are strictly bounded by `workers_per_account`.
+    /// Acquires an advisory cross-process lock to prevent multiple concurrent screening runs per AGENTS.md.
     pub async fn screen_batch(
         &self,
         candidates: Vec<CandidateAlpha>,
         min_fitness: f64,
         enable_tuning: bool,
     ) -> Result<Vec<SubmittableAlphaRecord>> {
+        self.screen_batch_at_lock::<&std::path::Path>(candidates, min_fitness, enable_tuning, None)
+            .await
+    }
+
+    /// Screens a batch of candidates, optionally using a custom lock file path.
+    pub async fn screen_batch_at_lock<P: AsRef<std::path::Path>>(
+        &self,
+        candidates: Vec<CandidateAlpha>,
+        min_fitness: f64,
+        enable_tuning: bool,
+        lock_path: Option<P>,
+    ) -> Result<Vec<SubmittableAlphaRecord>> {
         if candidates.is_empty() {
             return Ok(Vec::new());
         }
+
+        let _proc_lock = match lock_path {
+            Some(ref p) => crate::concurrency_lock::ProcessLock::try_acquire_at(p.as_ref())
+                .context(
+                    "Cannot start screening: unable to acquire cross-process simulation lock",
+                )?,
+            None => crate::concurrency_lock::ProcessLock::try_acquire().context(
+                "Cannot start screening: unable to acquire cross-process simulation lock",
+            )?,
+        };
 
         let total_workers = self.accounts.len() * self.workers_per_account;
         println!("\n{}", "=".repeat(85));

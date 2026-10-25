@@ -27,6 +27,7 @@ dependencies = [
  "colored",
  "csv",
  "dotenvy",
+ "libc",
  "reqwest",
  "serde",
  "serde_json",

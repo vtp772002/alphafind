@@ -16,6 +16,7 @@ use crate::screener::MultiAccountScreener;
 use crate::taxonomy::{get_curated_candidates, FactorPillar};
 
 /// Screens candidates using configured BRAIN sessions with a bounded work queue.
+#[allow(clippy::too_many_arguments)]
 pub async fn cmd_screen(
     pillar: Option<String>,
     universe: String,
@@ -23,6 +24,9 @@ pub async fn cmd_screen(
     workers: usize,
     no_tune: bool,
     single_account: bool,
+    alternative: bool,
+    dataset: Option<String>,
+    count: usize,
 ) -> Result<()> {
     println!(
         "{}",
@@ -40,9 +44,51 @@ pub async fn cmd_screen(
     );
 
     let screener = MultiAccountScreener::from_env(workers, single_account)?;
-    let factor_pillar = pillar.as_deref().and_then(FactorPillar::from_str);
 
-    let candidates = get_curated_candidates(factor_pillar, Some(&universe));
+    let candidates = if alternative {
+        println!("  Generating alternative data candidate expressions via ExpressionBuilder...");
+        let builder = crate::expression_builder::ExpressionBuilder::new()
+            .with_universe(&universe)
+            .with_delay(1)
+            .with_neutralization(crate::expression_builder::NeutralizationGroup::Subindustry);
+
+        let pillar_filter = pillar
+            .as_deref()
+            .and_then(crate::expression_builder::AlternativePillar::from_str);
+
+        let generated = builder.generate_batch(dataset.as_deref(), pillar_filter, count);
+
+        // Pre-dispatch syntax and schema validation
+        let failed_count = generated.iter().filter(|g| !g.is_valid).count();
+        if failed_count > 0 {
+            anyhow::bail!(
+                "Alternative candidate generation failed schema validation: {} invalid expressions",
+                failed_count
+            );
+        }
+
+        println!(
+            "  Generated and verified {} alternative candidates across target datasets.",
+            generated.len()
+        );
+
+        generated
+            .into_iter()
+            .map(|g| crate::models::CandidateAlpha {
+                name: g.name,
+                expression: g.expression,
+                universe: g.universe,
+                decay: g.decay,
+                neutralization: g.neutralization,
+                truncation: g.truncation,
+                pillar: g.pillar,
+            })
+            .collect()
+    } else {
+        let factor_pillar = pillar.as_deref().and_then(FactorPillar::from_str);
+        get_curated_candidates(factor_pillar, Some(&universe))
+    };
+
     println!(
         "  Loaded {} candidate hypotheses for screening.",
         candidates.len()

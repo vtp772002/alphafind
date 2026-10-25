@@ -18,6 +18,9 @@ use crate::crowd_allocation::{
 use crate::crowd_model::{
     build_usage_weighted_profile_pnl, equal_weight_pnl_merge, project_proxy_correlation,
 };
+use crate::expression_builder::{
+    AlternativeDataset, AlternativePillar, ExpressionBuilder, NeutralizationGroup,
+};
 use crate::forecast::{generate_inverse_blueprint, print_blueprint_report};
 use crate::matrix::{analyze_formula_hyper_synergy, build_dynamic_matrix, print_dynamic_matrix};
 use crate::models::{
@@ -1074,6 +1077,420 @@ pub async fn cmd_blueprint(universe: Option<String>, export: Option<String>) -> 
         println!(
             "  💾 Successfully exported blueprint skeletons to {}\n",
             export_path.green().bold()
+        );
+    }
+
+    Ok(())
+}
+
+/// Query, inspect, and validate field metadata from WorldQuant BRAIN /data-fields.
+#[allow(clippy::too_many_arguments)]
+pub async fn cmd_fields(
+    dataset: Option<String>,
+    refresh: bool,
+    validate: Option<String>,
+    universe: String,
+    delay: i32,
+    region: String,
+    _summary: bool,
+    check_coverage: bool,
+    export: Option<String>,
+) -> Result<()> {
+    // 1. Validation mode (--validate "<expr>")
+    if let Some(ref expr) = validate {
+        println!(
+            "\n  {} Validating FastExpr Formula Schema (delay={}):",
+            "🔍".bold(),
+            delay
+        );
+        println!("  --------------------------------------------------");
+        println!("  Expression: {}\n", expr.cyan());
+
+        let validator = crate::models::schema_validator::SchemaValidator::new().with_delay(delay);
+        let report = validator.validate(expr);
+        report.print_diagnostics();
+
+        if !report.is_valid {
+            anyhow::bail!(
+                "FastExpr schema validation failed with {} error(s)",
+                report.errors.len()
+            );
+        }
+        return Ok(());
+    }
+
+    // 2. Refresh mode (--refresh)
+    if refresh {
+        println!(
+            "\n  {} Live Refreshing BRAIN /data-fields Metadata:",
+            "🔄".bold()
+        );
+        let client = get_main_client()?;
+        let target_datasets = match dataset.as_deref() {
+            Some("all") | None => vec!["model51", "model16", "news18", "option9"],
+            Some(ds) => vec![ds],
+        };
+
+        let mut all_alt_fields = Vec::new();
+        let data_dir = Path::new("data");
+        let _ = fs::create_dir_all(data_dir);
+
+        for ds_id in target_datasets {
+            println!(
+                "    Fetching fields for dataset '{}' ({}/{}/D{})...",
+                ds_id.cyan(),
+                region,
+                universe,
+                delay
+            );
+            let fields = client
+                .fetch_dataset_fields(ds_id, "EQUITY", &region, delay, &universe)
+                .await?;
+            println!(
+                "      ✓ Retrieved {} fields",
+                fields.len().to_string().green()
+            );
+
+            // Write to data/fields_{dataset}.json
+            let ds_path = data_dir.join(format!("fields_{}.json", ds_id));
+            let json_str = serde_json::to_string_pretty(&fields)?;
+            fs::write(&ds_path, json_str)?;
+            println!(
+                "      💾 Cached to {}",
+                ds_path.display().to_string().cyan()
+            );
+
+            all_alt_fields.extend(fields);
+        }
+
+        if dataset.is_none() || dataset.as_deref() == Some("all") {
+            let alt_path = data_dir.join("fields_alternative.json");
+            let json_str = serde_json::to_string_pretty(&all_alt_fields)?;
+            fs::write(&alt_path, json_str)?;
+            println!(
+                "    💾 Consolidated {} alternative fields to {}",
+                all_alt_fields.len().to_string().green(),
+                alt_path.display().to_string().cyan()
+            );
+        }
+    }
+
+    let validator = crate::models::schema_validator::SchemaValidator::new().with_delay(delay);
+    let catalog = validator.catalog();
+
+    // 3. Export mode (--export <path>)
+    if let Some(ref export_path) = export {
+        let fields_to_export: Vec<_> = if let Some(ref ds) = dataset {
+            catalog.get_dataset_fields(ds)
+        } else {
+            let mut list = Vec::new();
+            for ds in ["model51", "model16", "news18", "option9"] {
+                list.extend(catalog.get_dataset_fields(ds));
+            }
+            list
+        };
+        let json_str = serde_json::to_string_pretty(&fields_to_export)?;
+        fs::write(export_path, json_str)?;
+        println!(
+            "\n  💾 Exported {} fields to {}",
+            fields_to_export.len().to_string().green(),
+            export_path.green().bold()
+        );
+        return Ok(());
+    }
+
+    // 4. Coverage check mode (--check-coverage)
+    if check_coverage {
+        println!("\n  {} Alternative Data Field Coverage Audit:", "🔬".bold());
+        println!("  ====================================================================================================");
+        println!(
+            "  {:<35} {:<10} {:<10} {:<12} {:<15} STATUS",
+            "FIELD ID", "DATASET", "TYPE", "CROSS COV", "DATE COV"
+        );
+        println!("  ====================================================================================================");
+
+        let target_datasets = match dataset.as_deref() {
+            Some(ds) if !ds.eq_ignore_ascii_case("all") => vec![ds],
+            _ => vec!["model51", "model16", "news18", "option9"],
+        };
+
+        let mut low_count = 0;
+        for ds in target_datasets {
+            for f in catalog.get_dataset_fields(ds) {
+                let cov = f.coverage.unwrap_or(1.0);
+                let dcov = f.date_coverage.unwrap_or(1.0);
+                if cov < 0.50 || dcov < 0.90 {
+                    low_count += 1;
+                    let type_str = if f.is_vector() { "VECTOR" } else { "MATRIX" };
+                    let status_badge = if cov < 0.35 {
+                        "⚠️ CRITICALLY SPARSE (ts_backfill mandatory)".red().bold()
+                    } else if cov < 0.50 {
+                        "⚠️ SPARSE (ts_backfill mandatory)".yellow().bold()
+                    } else {
+                        "⚠️ TRUNCATED DATE COV".yellow()
+                    };
+                    println!(
+                        "  {:<35} {:<10} {:<10} {:<12} {:<15} {}",
+                        f.id.cyan(),
+                        ds,
+                        type_str,
+                        format!("{:.1}%", cov * 100.0),
+                        format!("{:.1}%", dcov * 100.0),
+                        status_badge
+                    );
+                }
+            }
+        }
+        println!("  ====================================================================================================");
+        println!(
+            "  Total sparse / truncated fields flagged: {}\n",
+            low_count.to_string().yellow().bold()
+        );
+        return Ok(());
+    }
+
+    // 5. Single Dataset Inspection mode (--dataset <id>)
+    if let Some(ref ds) = dataset {
+        if !ds.eq_ignore_ascii_case("all") {
+            let fields = catalog.get_dataset_fields(ds);
+            println!(
+                "\n  {} Dataset Metadata Inspection: {} ({} fields)",
+                "📋".bold(),
+                ds.yellow().bold(),
+                fields.len()
+            );
+            println!("  ====================================================================================================");
+            println!(
+                "  {:<35} {:<10} {:<10} {:<10} {:<8} DESCRIPTION",
+                "FIELD ID", "TYPE", "CROSS COV", "DATE COV", "USERS"
+            );
+            println!("  ====================================================================================================");
+
+            for f in fields {
+                let type_str = if f.is_vector() {
+                    "VECTOR ⚡".magenta().bold()
+                } else {
+                    "MATRIX".green()
+                };
+                let cov_str = f
+                    .coverage
+                    .map(|c| format!("{:.1}%", c * 100.0))
+                    .unwrap_or_else(|| "100.0%".to_string());
+                let dcov_str = f
+                    .date_coverage
+                    .map(|c| format!("{:.1}%", c * 100.0))
+                    .unwrap_or_else(|| "100.0%".to_string());
+                let user_str = f
+                    .user_count
+                    .map(|u| u.to_string())
+                    .unwrap_or_else(|| "-".to_string());
+                let desc = f
+                    .description
+                    .as_deref()
+                    .unwrap_or("")
+                    .chars()
+                    .take(30)
+                    .collect::<String>();
+
+                println!(
+                    "  {:<35} {:<19} {:<10} {:<10} {:<8} {}",
+                    f.id.cyan(),
+                    type_str,
+                    cov_str,
+                    dcov_str,
+                    user_str,
+                    desc
+                );
+            }
+            println!("  ====================================================================================================\n");
+            return Ok(());
+        }
+    }
+
+    // 6. Summary mode (default or --summary)
+    println!(
+        "\n  {} Alternative Data Field Catalog Summary:",
+        "📊".bold()
+    );
+    println!("  ====================================================================================================");
+    println!(
+        "  {:<12} {:<28} {:<12} {:<8} {:<8} {:<8} {:<10} STATUS",
+        "DATASET ID", "FAMILY NAME", "CATEGORY", "MATRIX", "VECTOR", "TOTAL", "AVG COV"
+    );
+    println!("  ====================================================================================================");
+
+    let datasets_meta = [
+        ("model51", "Systematic Risk Metrics", "Risk"),
+        ("model16", "Fundamental Scores & Accel", "Valuation"),
+        ("news18", "RavenPack News Data", "News"),
+        ("option9", "Options Analytics Surface", "Options"),
+    ];
+
+    let mut grand_matrix = 0;
+    let mut grand_vector = 0;
+    let mut grand_total = 0;
+
+    for (ds_id, name, cat) in datasets_meta {
+        let fields = catalog.get_dataset_fields(ds_id);
+        let matrix_cnt = fields.iter().filter(|f| f.is_matrix()).count();
+        let vector_cnt = fields.iter().filter(|f| f.is_vector()).count();
+        let total_cnt = fields.len();
+        let avg_cov = if total_cnt > 0 {
+            fields
+                .iter()
+                .map(|f| f.coverage.unwrap_or(1.0))
+                .sum::<f64>()
+                / (total_cnt as f64)
+        } else {
+            0.0
+        };
+
+        grand_matrix += matrix_cnt;
+        grand_vector += vector_cnt;
+        grand_total += total_cnt;
+
+        let status = if total_cnt > 0 {
+            "🟢 CERTIFIED".green()
+        } else {
+            "⚪ EMPTY".dimmed()
+        };
+
+        println!(
+            "  {:<12} {:<28} {:<12} {:<8} {:<8} {:<8} {:<10} {}",
+            ds_id.cyan().bold(),
+            name,
+            cat,
+            matrix_cnt,
+            vector_cnt,
+            total_cnt,
+            format!("{:.1}%", avg_cov * 100.0),
+            status
+        );
+    }
+    println!("  ====================================================================================================");
+    println!(
+        "  {} Total Alternative Data Surface: {} fields ({} Matrix, {} Vector) across 4 orthogonal pillars\n",
+        "🎯".bold(),
+        grand_total.to_string().green().bold(),
+        grand_matrix,
+        grand_vector
+    );
+
+    Ok(())
+}
+
+/// Generates and validates alternative data candidate expressions
+#[allow(clippy::too_many_arguments)]
+pub async fn cmd_generate(
+    dataset: Option<String>,
+    pillar: Option<String>,
+    count: usize,
+    universe: String,
+    delay: i32,
+    neutralization: String,
+    validate: bool,
+    export: Option<String>,
+    format: String,
+    json: bool,
+) -> Result<()> {
+    let neut_group = NeutralizationGroup::from_str(&neutralization);
+    let builder = ExpressionBuilder::new()
+        .with_universe(&universe)
+        .with_delay(delay)
+        .with_neutralization(neut_group);
+
+    if let Some(ref ds_name) = dataset {
+        if !ds_name.eq_ignore_ascii_case("all") && AlternativeDataset::from_str(ds_name).is_none() {
+            anyhow::bail!(
+                "Unknown dataset '{}'. Available datasets: model51, model16, news18, option9, cross_sanctuary, all",
+                ds_name
+            );
+        }
+    }
+
+    let pillar_filter = if let Some(ref p_str) = pillar {
+        match AlternativePillar::from_str(p_str) {
+            Some(p) => Some(p),
+            None => {
+                anyhow::bail!(
+                    "Unknown pillar '{}'. Available pillars: SYSTEMATIC_RISK, FUNDAMENTAL_SCORES, NEWS_SENTIMENT, OPTIONS_ANALYTICS, CROSS_SANCTUARY",
+                    p_str
+                );
+            }
+        }
+    } else {
+        None
+    };
+
+    let generated = builder.generate_batch(dataset.as_deref(), pillar_filter, count);
+
+    if validate {
+        println!(
+            "\n  {} Verifying generated FastExpr formulas with SchemaValidator...",
+            "🛡️".bold()
+        );
+        let failed_count = generated.iter().filter(|g| !g.is_valid).count();
+        if failed_count > 0 {
+            anyhow::bail!(
+                "Verification failed: {} expression(s) had schema errors",
+                failed_count
+            );
+        }
+        println!(
+            "  {} All {} expressions PASSED verification (0 errors)!\n",
+            "✅".green().bold(),
+            generated.len()
+        );
+    }
+
+    let is_json = json || format == "json";
+
+    if is_json {
+        let json_str = serde_json::to_string_pretty(&generated)?;
+        println!("{}", json_str);
+    } else if format == "expr-only" {
+        for g in &generated {
+            println!("{}", g.expression);
+        }
+    } else {
+        println!(
+            "\n  {} Automated Alternative Expression Builder & Factor Combinator",
+            "⚡".bold()
+        );
+        println!("  ===============================================================");
+        println!(
+            "  Dataset Filter: {}",
+            dataset.as_deref().unwrap_or("all").cyan()
+        );
+        println!(
+            "  Pillar Filter:  {}",
+            pillar.as_deref().unwrap_or("all").cyan()
+        );
+        println!("  Universe:       {} (delay={})", universe.cyan(), delay);
+        println!("  Neutralization: {}", neutralization.cyan());
+        println!("  Count:          {}\n", generated.len().to_string().cyan());
+
+        for (idx, g) in generated.iter().enumerate() {
+            println!(
+                "  [{:02}] {} [{}] (decay: {}, neut: {}, trunc: {:.3})",
+                idx + 1,
+                g.name.bold(),
+                g.dataset_id.cyan(),
+                g.decay,
+                g.neutralization.green(),
+                g.truncation
+            );
+            println!("       Formula: {}\n", g.expression);
+        }
+    }
+
+    if let Some(ref path) = export {
+        let json_str = serde_json::to_string_pretty(&generated)?;
+        std::fs::write(path, json_str)?;
+        println!(
+            "  💾 Exported {} candidate expressions to {}",
+            generated.len(),
+            path.cyan()
         );
     }
 

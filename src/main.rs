@@ -5,7 +5,9 @@ use alphafind::commands::auth::{cmd_auth, cmd_score, cmd_sync};
 use alphafind::commands::portfolio::{
     cmd_allocate, cmd_audit, cmd_health, cmd_impact, cmd_portfolio,
 };
-use alphafind::commands::research::{cmd_blueprint, cmd_matrix, cmd_shadow};
+use alphafind::commands::research::{
+    cmd_blueprint, cmd_fields, cmd_generate, cmd_matrix, cmd_shadow,
+};
 use alphafind::commands::simulation::{cmd_radar, cmd_screen, cmd_sim, cmd_tune};
 use alphafind::commands::submission::{cmd_check, cmd_submit};
 
@@ -107,6 +109,18 @@ enum Commands {
         /// Run strictly on MAIN account only (single-account mode)
         #[arg(long, short = 's')]
         single_account: bool,
+
+        /// Screen alternative data candidate expressions (M4 feature)
+        #[arg(long)]
+        alternative: bool,
+
+        /// Specific alternative dataset for generation (model51, model16, news18, option9, cross_sanctuary)
+        #[arg(long)]
+        dataset: Option<String>,
+
+        /// Candidate count for alternative generation (default: 10)
+        #[arg(long, default_value_t = 10)]
+        count: usize,
     },
 
     /// Simulate a single Alpha expression directly on MAIN account
@@ -286,6 +300,89 @@ enum Commands {
         #[arg(long)]
         refresh: bool,
     },
+
+    /// Query, inspect, and validate field metadata from WorldQuant BRAIN
+    #[command(alias = "metadata")]
+    Fields {
+        /// Target Dataset ID (e.g., model51, model16, news18, option9, or all)
+        #[arg(short, long)]
+        dataset: Option<String>,
+
+        /// Force live re-fetch from BRAIN /data-fields and update disk cache
+        #[arg(long)]
+        refresh: bool,
+
+        /// Validate a FastExpr expression against field schemas (type check & coverage)
+        #[arg(short, long)]
+        validate: Option<String>,
+
+        /// Target Universe for metadata query and coverage check (default: TOP1000)
+        #[arg(short, long, default_value = "TOP1000")]
+        universe: String,
+
+        /// Signal Delay (default: 1)
+        #[arg(long, default_value_t = 1)]
+        delay: i32,
+
+        /// Target Region (default: USA)
+        #[arg(short, long, default_value = "USA")]
+        region: String,
+
+        /// Show high-level summary of datasets and field type breakdown
+        #[arg(short, long)]
+        summary: bool,
+
+        /// Flag low coverage fields (<50% cross-sectional, <90% date coverage)
+        #[arg(long)]
+        check_coverage: bool,
+
+        /// Export metadata to JSON file
+        #[arg(long)]
+        export: Option<String>,
+    },
+
+    /// Generate verified FastExpr candidate expressions across alternative data pillars
+    Generate {
+        /// Target Dataset ID (model51, model16, news18, option9, cross_sanctuary, or all)
+        #[arg(short, long)]
+        dataset: Option<String>,
+
+        /// Target Factor Pillar (SYSTEMATIC_RISK, FUNDAMENTAL_SCORES, NEWS_SENTIMENT, OPTIONS_ANALYTICS, CROSS_SANCTUARY, all)
+        #[arg(short, long)]
+        pillar: Option<String>,
+
+        /// Maximum number of expressions to generate
+        #[arg(short = 'n', long = "count", default_value_t = 10)]
+        count: usize,
+
+        /// Target Universe (default: TOP1000)
+        #[arg(short, long, default_value = "TOP1000")]
+        universe: String,
+
+        /// Signal Delay (default: 1)
+        #[arg(long, default_value_t = 1)]
+        delay: i32,
+
+        /// Neutralization group (SUBINDUSTRY, INDUSTRY, SECTOR)
+        #[arg(long, default_value = "SUBINDUSTRY")]
+        neutralization: String,
+
+        /// Validate all generated expressions against SchemaValidator
+        #[arg(long, default_value_t = true)]
+        validate: bool,
+
+        /// Export generated candidates to JSON file
+        #[arg(long)]
+        export: Option<String>,
+
+        /// Output format (table, json, expr-only)
+        #[arg(long, default_value = "table")]
+        format: String,
+
+        /// Shorthand flag for JSON output
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[tokio::main]
@@ -318,6 +415,9 @@ async fn main() -> Result<()> {
             workers,
             no_tune,
             single_account,
+            alternative,
+            dataset,
+            count,
         } => {
             cmd_screen(
                 pillar,
@@ -326,6 +426,9 @@ async fn main() -> Result<()> {
                 workers,
                 no_tune,
                 single_account,
+                alternative,
+                dataset,
+                count,
             )
             .await
         }
@@ -379,5 +482,55 @@ async fn main() -> Result<()> {
             export,
             refresh,
         } => cmd_allocate(candidate, turnover, trim, export, refresh).await,
+        Commands::Fields {
+            dataset,
+            refresh,
+            validate,
+            universe,
+            delay,
+            region,
+            summary,
+            check_coverage,
+            export,
+        } => {
+            cmd_fields(
+                dataset,
+                refresh,
+                validate,
+                universe,
+                delay,
+                region,
+                summary,
+                check_coverage,
+                export,
+            )
+            .await
+        }
+        Commands::Generate {
+            dataset,
+            pillar,
+            count,
+            universe,
+            delay,
+            neutralization,
+            validate,
+            export,
+            format,
+            json,
+        } => {
+            cmd_generate(
+                dataset,
+                pillar,
+                count,
+                universe,
+                delay,
+                neutralization,
+                validate,
+                export,
+                format,
+                json,
+            )
+            .await
+        }
     }
 }

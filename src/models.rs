@@ -350,7 +350,7 @@ pub struct LeaderboardResponse {
 }
 
 /// Category / subcategory info in DatasetEntry
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct DatasetCategoryInfo {
     #[serde(default)]
     pub id: Option<String>,
@@ -410,8 +410,40 @@ pub struct DatasetListResponse {
     pub results: Vec<DatasetEntry>,
 }
 
+/// Tensor dimensionality of a BRAIN data field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum DataFieldType {
+    /// 2D Matrix tensor: Time x Assets. Directly usable in FastExpr matrix operators.
+    #[default]
+    Matrix,
+    /// 3D Vector tensor: Time x Assets x Events. Requires vector folding (`vec_avg`, etc.).
+    Vector,
+    /// Fallback for potential other platform types.
+    #[serde(other)]
+    Other,
+}
+
+impl DataFieldType {
+    pub fn is_matrix(&self) -> bool {
+        matches!(self, DataFieldType::Matrix)
+    }
+
+    pub fn is_vector(&self) -> bool {
+        matches!(self, DataFieldType::Vector)
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DataFieldType::Matrix => "MATRIX",
+            DataFieldType::Vector => "VECTOR",
+            DataFieldType::Other => "OTHER",
+        }
+    }
+}
+
 /// Field-level usage statistics returned by GET /data-fields.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct DataFieldEntry {
     pub id: String,
@@ -420,11 +452,17 @@ pub struct DataFieldEntry {
     #[serde(default)]
     pub dataset: Option<DatasetCategoryInfo>,
     #[serde(default)]
+    pub category: Option<DatasetCategoryInfo>,
+    #[serde(default)]
+    pub subcategory: Option<DatasetCategoryInfo>,
+    #[serde(default)]
     pub region: Option<String>,
     #[serde(default)]
     pub delay: Option<i32>,
     #[serde(default)]
     pub universe: Option<String>,
+    #[serde(default, rename = "type")]
+    pub field_type: Option<DataFieldType>,
     #[serde(default)]
     pub coverage: Option<f64>,
     #[serde(default)]
@@ -433,6 +471,37 @@ pub struct DataFieldEntry {
     pub user_count: Option<i64>,
     #[serde(default)]
     pub alpha_count: Option<i64>,
+    #[serde(default)]
+    pub themes: Option<Vec<String>>,
+    #[serde(default)]
+    pub date_created: Option<String>,
+}
+
+impl DataFieldEntry {
+    /// Returns the dataset ID string if present.
+    pub fn dataset_id(&self) -> Option<&str> {
+        self.dataset.as_ref().and_then(|d| d.id.as_deref())
+    }
+
+    /// Returns true if the field is a VECTOR requiring folding.
+    pub fn is_vector(&self) -> bool {
+        matches!(self.field_type, Some(DataFieldType::Vector))
+    }
+
+    /// Returns true if the field is a standard MATRIX.
+    pub fn is_matrix(&self) -> bool {
+        matches!(self.field_type, Some(DataFieldType::Matrix))
+    }
+
+    /// Indicates whether the expression builder must fold this field into a matrix.
+    pub fn requires_vector_folding(&self) -> bool {
+        self.is_vector()
+    }
+
+    /// Indicates whether missing value backfill is mandatory given a coverage threshold.
+    pub fn requires_backfill(&self, threshold: f64) -> bool {
+        self.coverage.map(|c| c < threshold).unwrap_or(false)
+    }
 }
 
 /// Paginated result returned by GET /data-fields.
@@ -478,3 +547,7 @@ pub struct PortfolioImpactResult {
     pub avg_pairwise_corr_vs_os: f64,
     pub safety_buffer_pct: f64,
 }
+
+#[path = "schema_validator.rs"]
+pub mod schema_validator;
+pub use schema_validator::*;

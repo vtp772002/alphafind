@@ -26,11 +26,13 @@ pub mod allocation;
 pub mod autotuner;
 pub mod client;
 pub mod commands;
+pub mod concurrency_lock;
 pub mod config;
 pub mod correlation;
 pub mod crowd;
 pub mod crowd_allocation;
 pub mod crowd_model;
+pub mod expression_builder;
 pub mod forecast;
 pub mod health;
 pub mod matrix;
@@ -38,3 +40,10 @@ pub mod models;
 pub mod screener;
 pub mod shadow;
 pub mod taxonomy;
+
+pub use concurrency_lock::{get_default_lock_path, ProcessLock, DEFAULT_LOCK_FILE_NAME};
+pub use expression_builder::{
+    AlternativeDataset, AlternativePillar, BuilderConfig, CombinatorGrid, CombinatorPreset,
+    DampenerSpec, ExpressionBuilder, FactorSpecification, GeneratedExpression, NeutralizationGroup,
+    NonLinearTransform, TransformConfig,
+};

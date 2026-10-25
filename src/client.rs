@@ -1171,4 +1171,127 @@ impl BrainClient {
             }
         }
     }
+
+    /// Maximum pagination limit allowed by the BRAIN /data-fields endpoint.
+    pub const DATA_FIELDS_PAGE_LIMIT: usize = 50;
+
+    /// Fetches all data fields for a dataset with automatic pagination (50 fields/page),
+    /// required BRAIN query parameters, and exponential backoff on HTTP 429.
+    pub async fn fetch_dataset_fields(
+        &self,
+        dataset_id: &str,
+        instrument_type: &str,
+        region: &str,
+        delay: i32,
+        universe: &str,
+    ) -> Result<Vec<DataFieldEntry>> {
+        self.authenticate().await?;
+
+        let mut all_fields = Vec::new();
+        let mut offset = 0;
+        let limit = Self::DATA_FIELDS_PAGE_LIMIT;
+        let delay_str = delay.to_string();
+        let limit_str = limit.to_string();
+
+        loop {
+            let url = format!("{}/data-fields", self.base_url);
+            let offset_str = offset.to_string();
+            let mut fetched_page = false;
+
+            for attempt in 0..5 {
+                let headers = self.auth_headers()?;
+                let resp = self
+                    .client
+                    .get(&url)
+                    .query(&[
+                        ("instrumentType", instrument_type),
+                        ("region", region),
+                        ("delay", delay_str.as_str()),
+                        ("universe", universe),
+                        ("dataset.id", dataset_id),
+                        ("limit", limit_str.as_str()),
+                        ("offset", offset_str.as_str()),
+                    ])
+                    .headers(headers)
+                    .send()
+                    .await;
+
+                match resp {
+                    Ok(r) => {
+                        let status = r.status();
+                        if status.as_u16() == 429 {
+                            if attempt == 4 {
+                                anyhow::bail!(
+                                    "BRAIN API rate limit (HTTP 429) exceeded fetching fields for dataset '{}' at offset {}",
+                                    dataset_id,
+                                    offset
+                                );
+                            }
+                            let wait = r
+                                .headers()
+                                .get(RETRY_AFTER)
+                                .and_then(|v| v.to_str().ok())
+                                .and_then(|v| v.parse::<f64>().ok())
+                                .unwrap_or(2.0f64.powi(attempt) + 1.0);
+                            sleep(Duration::from_secs_f64(wait)).await;
+                            continue;
+                        }
+
+                        if !status.is_success() {
+                            let err_text = r.text().await.unwrap_or_default();
+                            anyhow::bail!(
+                                "Failed to fetch data-fields for dataset '{}' (HTTP {}): {}",
+                                dataset_id,
+                                status,
+                                err_text
+                            );
+                        }
+
+                        let list: DataFieldListResponse = r
+                            .json()
+                            .await
+                            .context("Failed to deserialize DataFieldListResponse JSON")?;
+                        let total = list.count;
+                        let n_fetched = list.results.len();
+
+                        all_fields.extend(list.results);
+                        offset += n_fetched;
+
+                        if offset >= total || n_fetched == 0 {
+                            return Ok(all_fields);
+                        }
+                        fetched_page = true;
+                        break;
+                    }
+                    Err(e) => {
+                        if attempt == 4 {
+                            return Err(e).context(format!(
+                                "Network error fetching dataset '{}' fields at offset {}",
+                                dataset_id, offset
+                            ));
+                        }
+                        sleep(Duration::from_secs(2)).await;
+                    }
+                }
+            }
+
+            if !fetched_page {
+                anyhow::bail!(
+                    "Failed to fetch fields for dataset '{}' at offset {} after 5 retries",
+                    dataset_id,
+                    offset
+                );
+            }
+        }
+    }
+
+    /// Convenience wrapper for fetching dataset fields with standard parameters
+    /// (instrument_type="EQUITY", region="USA", delay=1, universe="TOP1000").
+    pub async fn fetch_dataset_fields_default(
+        &self,
+        dataset_id: &str,
+    ) -> Result<Vec<DataFieldEntry>> {
+        self.fetch_dataset_fields(dataset_id, "EQUITY", "USA", 1, "TOP1000")
+            .await
+    }
 }

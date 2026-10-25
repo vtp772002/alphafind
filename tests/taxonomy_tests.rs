@@ -1,4 +1,5 @@
-use alphafind::taxonomy::{get_curated_candidates, FactorPillar};
+use alphafind::taxonomy::{get_curated_candidates, FactorPillar, PlaceholderRegistry};
+use std::collections::HashMap;
 
 #[test]
 fn test_factor_pillar_from_str_analyst() {
@@ -12,6 +13,10 @@ fn test_factor_pillar_from_str_analyst() {
     );
     assert_eq!(
         FactorPillar::from_str("Analyst_Consensus"),
+        Some(FactorPillar::AnalystConsensus)
+    );
+    assert_eq!(
+        FactorPillar::from_str("CAPITAL_ALLOCATION_ANALYST"),
         Some(FactorPillar::AnalystConsensus)
     );
 }
@@ -92,6 +97,81 @@ fn test_factor_pillar_from_str_unknown() {
 }
 
 #[test]
+fn test_factor_pillar_from_str_alternative_data() {
+    // SystematicRisk (model51)
+    assert_eq!(
+        FactorPillar::from_str("SYSTEMATIC"),
+        Some(FactorPillar::SystematicRisk)
+    );
+    assert_eq!(
+        FactorPillar::from_str("systematic_risk"),
+        Some(FactorPillar::SystematicRisk)
+    );
+    assert_eq!(
+        FactorPillar::from_str("sys_risk"),
+        Some(FactorPillar::SystematicRisk)
+    );
+    assert_eq!(
+        FactorPillar::from_str("model51"),
+        Some(FactorPillar::SystematicRisk)
+    );
+
+    // FundamentalScores (model16)
+    assert_eq!(
+        FactorPillar::from_str("FUNDAMENTAL_SCORES"),
+        Some(FactorPillar::FundamentalScores)
+    );
+    assert_eq!(
+        FactorPillar::from_str("derivative_accel"),
+        Some(FactorPillar::FundamentalScores)
+    );
+    assert_eq!(
+        FactorPillar::from_str("model16"),
+        Some(FactorPillar::FundamentalScores)
+    );
+    assert_eq!(
+        FactorPillar::from_str("fscore"),
+        Some(FactorPillar::FundamentalScores)
+    );
+
+    // NewsSentiment (news18)
+    assert_eq!(
+        FactorPillar::from_str("NEWS_SENTIMENT"),
+        Some(FactorPillar::NewsSentiment)
+    );
+    assert_eq!(
+        FactorPillar::from_str("news_sentiment"),
+        Some(FactorPillar::NewsSentiment)
+    );
+    assert_eq!(
+        FactorPillar::from_str("ravenpack"),
+        Some(FactorPillar::NewsSentiment)
+    );
+    assert_eq!(
+        FactorPillar::from_str("news18"),
+        Some(FactorPillar::NewsSentiment)
+    );
+
+    // OptionsAnalytics (option9)
+    assert_eq!(
+        FactorPillar::from_str("OPTIONS_ANALYTICS"),
+        Some(FactorPillar::OptionsAnalytics)
+    );
+    assert_eq!(
+        FactorPillar::from_str("options_analytic"),
+        Some(FactorPillar::OptionsAnalytics)
+    );
+    assert_eq!(
+        FactorPillar::from_str("option9"),
+        Some(FactorPillar::OptionsAnalytics)
+    );
+    assert_eq!(
+        FactorPillar::from_str("breakeven"),
+        Some(FactorPillar::OptionsAnalytics)
+    );
+}
+
+#[test]
 fn test_factor_pillar_as_str() {
     assert_eq!(FactorPillar::AnalystConsensus.as_str(), "ANALYST_CONSENSUS");
     assert_eq!(FactorPillar::OptionsVrp.as_str(), "OPTIONS_VRP");
@@ -108,6 +188,60 @@ fn test_factor_pillar_as_str() {
         "IDIOSYNCRATIC_RISK"
     );
     assert_eq!(FactorPillar::ShortInterest.as_str(), "SHORT_INTEREST");
+    assert_eq!(FactorPillar::NewsEvent.as_str(), "NEWS_EVENT");
+    assert_eq!(FactorPillar::CrossSanctuary.as_str(), "CROSS_SANCTUARY");
+    // Alternative Data Pillars
+    assert_eq!(FactorPillar::SystematicRisk.as_str(), "SYSTEMATIC_RISK");
+    assert_eq!(
+        FactorPillar::FundamentalScores.as_str(),
+        "FUNDAMENTAL_SCORES"
+    );
+    assert_eq!(FactorPillar::NewsSentiment.as_str(), "NEWS_SENTIMENT");
+    assert_eq!(FactorPillar::OptionsAnalytics.as_str(), "OPTIONS_ANALYTICS");
+}
+
+#[test]
+fn test_factor_pillar_all_and_primary_datasets() {
+    let all = FactorPillar::all();
+    assert_eq!(all.len(), 12, "Should contain exactly 12 pillars");
+
+    assert_eq!(FactorPillar::SystematicRisk.primary_dataset_id(), "model51");
+    assert_eq!(
+        FactorPillar::FundamentalScores.primary_dataset_id(),
+        "model16"
+    );
+    assert_eq!(FactorPillar::NewsSentiment.primary_dataset_id(), "news18");
+    assert_eq!(
+        FactorPillar::OptionsAnalytics.primary_dataset_id(),
+        "option9"
+    );
+
+    assert_eq!(
+        FactorPillar::SystematicRisk.canonical_legacy_pillar(),
+        FactorPillar::IdiosyncraticRisk
+    );
+    assert_eq!(
+        FactorPillar::FundamentalScores.canonical_legacy_pillar(),
+        FactorPillar::FinancialHealthQuality
+    );
+    assert_eq!(
+        FactorPillar::NewsSentiment.canonical_legacy_pillar(),
+        FactorPillar::NewsEvent
+    );
+    assert_eq!(
+        FactorPillar::OptionsAnalytics.canonical_legacy_pillar(),
+        FactorPillar::OptionsVrp
+    );
+
+    assert!(FactorPillar::SystematicRisk.is_alternative_data());
+    assert!(FactorPillar::FundamentalScores.is_alternative_data());
+    assert!(FactorPillar::NewsSentiment.is_alternative_data());
+    assert!(FactorPillar::OptionsAnalytics.is_alternative_data());
+    assert!(!FactorPillar::MicrostructureVwap.is_alternative_data());
+
+    for p in all {
+        assert!(!p.description().is_empty());
+    }
 }
 
 #[test]
@@ -116,7 +250,12 @@ fn test_curated_candidates_analyst_pillar() {
     assert!(!candidates.is_empty());
     for c in &candidates {
         assert_eq!(c.pillar, "ANALYST_CONSENSUS");
-        assert_eq!(c.universe, "TOP500"); // Analyst consensus uses TOP500
+        // Analyst consensus in private store or presets targets liquid universes (TOP500 or TOP200)
+        assert!(
+            c.universe == "TOP500" || c.universe == "TOP200",
+            "Analyst consensus universe should be TOP500 or TOP200, got: {}",
+            c.universe
+        );
     }
 }
 
@@ -126,6 +265,36 @@ fn test_curated_candidates_options_pillar() {
     assert!(!candidates.is_empty());
     for c in &candidates {
         assert_eq!(c.pillar, "OPTIONS_VRP");
+    }
+}
+
+#[test]
+fn test_curated_candidates_alternative_pillars() {
+    let alt_pillars = [
+        FactorPillar::SystematicRisk,
+        FactorPillar::FundamentalScores,
+        FactorPillar::NewsSentiment,
+        FactorPillar::OptionsAnalytics,
+    ];
+
+    for &pillar in &alt_pillars {
+        let candidates = get_curated_candidates(Some(pillar), None);
+        assert!(
+            !candidates.is_empty(),
+            "Curated candidates for {:?} must not be empty",
+            pillar
+        );
+        for c in &candidates {
+            assert_eq!(c.pillar, pillar.as_str());
+            assert!(c.decay > 0);
+            assert!(c.truncation > 0.0);
+            assert!(!c.expression.is_empty());
+            assert!(
+                PlaceholderRegistry::has_unresolved_placeholders(&c.expression),
+                "Preset candidate expression should use abstract placeholders: {}",
+                c.expression
+            );
+        }
     }
 }
 
@@ -190,4 +359,71 @@ fn test_curated_candidates_cross_sanctuary() {
         assert_eq!(c.universe, "TOP1000");
         assert_eq!(c.neutralization, "SUBINDUSTRY");
     }
+}
+
+#[test]
+fn test_placeholder_registry_extraction_and_rendering() {
+    let expr =
+        "sig = rank(<BETA_FIELD>) - rank(<CORR_FIELD>); group_neutralize(sig, densify(<GROUP>))";
+    let extracted = PlaceholderRegistry::extract_placeholders(expr);
+    assert_eq!(extracted.len(), 3);
+    assert!(extracted.contains(&"<BETA_FIELD>".to_string()));
+    assert!(extracted.contains(&"<CORR_FIELD>".to_string()));
+    assert!(extracted.contains(&"<GROUP>".to_string()));
+    assert!(PlaceholderRegistry::has_unresolved_placeholders(expr));
+
+    // Full binding rendering
+    let mut bindings = HashMap::new();
+    bindings.insert("<BETA_FIELD>", "beta_last_60_days_spy");
+    bindings.insert("<CORR_FIELD>", "correlation_last_60_days_spy");
+    bindings.insert("<GROUP>", "subindustry");
+
+    let rendered = PlaceholderRegistry::render_template(expr, &bindings);
+    assert!(rendered.is_ok());
+    let concrete_expr = rendered.unwrap();
+    assert_eq!(
+        concrete_expr,
+        "sig = rank(beta_last_60_days_spy) - rank(correlation_last_60_days_spy); group_neutralize(sig, densify(subindustry))"
+    );
+    assert!(!PlaceholderRegistry::has_unresolved_placeholders(
+        &concrete_expr
+    ));
+
+    // Partial binding fails with remaining placeholders
+    let mut partial_bindings = HashMap::new();
+    partial_bindings.insert("<BETA_FIELD>", "beta_last_60_days_spy");
+    let partial_res = PlaceholderRegistry::render_template(expr, &partial_bindings);
+    assert!(partial_res.is_err());
+    let missing = partial_res.unwrap_err();
+    assert_eq!(missing.len(), 2);
+    assert!(missing.contains(&"<CORR_FIELD>".to_string()));
+    assert!(missing.contains(&"<GROUP>".to_string()));
+}
+
+#[test]
+fn test_placeholder_registry_syntax_validation() {
+    // Valid expression
+    let valid = "sig = rank(close); group_neutralize(sig, densify(subindustry))";
+    assert!(PlaceholderRegistry::validate_fastexpr_syntax(valid).is_ok());
+
+    // Unresolved placeholder error
+    let with_placeholder = "sig = rank(<FIELD>); group_neutralize(sig, densify(subindustry))";
+    let err1 = PlaceholderRegistry::validate_fastexpr_syntax(with_placeholder);
+    assert!(err1.is_err());
+    let errors = err1.unwrap_err();
+    assert!(errors[0].contains("unresolved abstract placeholders"));
+
+    // Unmatched parentheses error
+    let bad_parens = "sig = rank(close; group_neutralize(sig, densify(subindustry))";
+    let err2 = PlaceholderRegistry::validate_fastexpr_syntax(bad_parens);
+    assert!(err2.is_err());
+    let errors = err2.unwrap_err();
+    assert!(errors.iter().any(|e| e.contains("parenthes")));
+
+    // Missing densify wrapper on group_neutralize error
+    let no_densify = "sig = rank(close); group_neutralize(sig, subindustry)";
+    let err3 = PlaceholderRegistry::validate_fastexpr_syntax(no_densify);
+    assert!(err3.is_err());
+    let errors = err3.unwrap_err();
+    assert!(errors.iter().any(|e| e.contains("densify")));
 }
