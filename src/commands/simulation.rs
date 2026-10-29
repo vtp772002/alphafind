@@ -510,3 +510,117 @@ pub async fn cmd_tune(
     }
     Ok(())
 }
+
+/// Runs a sensitivity sweep over tuned constants to detect parameter overfitting (Plateau vs Spike).
+pub async fn cmd_sweep(
+    expr: String,
+    universe: String,
+    param: String,
+    decay: i32,
+    neutralization: String,
+    step: Option<f64>,
+    radius: usize,
+) -> Result<()> {
+    println!(
+        "{}",
+        "═════════════════════════════════════════════════════════════════════════".cyan()
+    );
+    println!(
+        "{}",
+        "  AlphaFind Quant Engine — Sensitivity Sweep & Parameter Robustness"
+            .bold()
+            .cyan()
+    );
+    println!(
+        "{}",
+        "═════════════════════════════════════════════════════════════════════════".cyan()
+    );
+
+    let client = get_main_client()?;
+    let settings = AlphaSettings {
+        universe: universe.clone(),
+        decay,
+        neutralization: neutralization.clone(),
+        truncation: 0.05,
+        ..Default::default()
+    };
+
+    println!("  Expression: {}\n", expr.cyan());
+    println!(
+        "  Settings: Universe: {} | Base Decay: {} | Neutralization: {}",
+        universe.yellow(),
+        decay,
+        neutralization.yellow()
+    );
+    println!(
+        "  Target Parameter: {} | Radius: +/-{} steps\n",
+        param.cyan().bold(),
+        radius
+    );
+
+    let tuner = FitnessAutoTuner::new(&client);
+    let report = tuner
+        .sweep_sensitivity(&expr, &settings, &param, step, radius)
+        .await?;
+
+    println!("\n  PARAMETER SENSITIVITY PROFILE ({}):", param.to_uppercase());
+    println!("  ┌──────────────┬──────────────┬──────────────┬──────────────┬──────────────┬───────────────────┐");
+    println!("  │ Parameter    │ Sharpe       │ Fitness      │ Annual Ret   │ Turnover     │ Profile Shape     │");
+    println!("  ├──────────────┼──────────────┼──────────────┼──────────────┼──────────────┼───────────────────┤");
+
+    for p in &report.points {
+        let is_peak = (p.param_value - report.optimal_value).abs() < 1e-4;
+        let shape = if is_peak {
+            "◄ PEAK (OPTIMUM)".yellow().bold()
+        } else {
+            "".normal()
+        };
+
+        println!(
+            "  │ {:>12.2} │ {:>12.2} │ {:>12.2} │ {:>11.1}% │ {:>11.1}% │ {:<17} │",
+            p.param_value,
+            p.sharpe,
+            p.fitness,
+            p.returns * 100.0,
+            p.turnover * 100.0,
+            shape
+        );
+    }
+    println!("  └──────────────┴──────────────┴──────────────┴──────────────┴──────────────┴───────────────────┘");
+
+    println!("\n  ROBUSTNESS DIAGNOSTIC AUDIT:");
+    println!("    Optimal Value:         {:.2}", report.optimal_value);
+    println!("    Peak Sharpe:           {:.2}", report.optimal_sharpe);
+    println!("    Max Neighbor Drop:     {:.1}%", report.max_neighbor_drop_pct);
+    println!("    Sharpe Std Dev / CV:   {:.3}", report.sharpe_cv);
+    println!("    Min Neighbor Sharpe:   {:.2}", report.min_neighbor_sharpe);
+
+    match report.verdict {
+        crate::models::RobustnessVerdict::RobustPlateau => {
+            println!(
+                "\n  {} {}",
+                "✅ VERDICT: [ROBUST_PLATEAU]".green().bold(),
+                report.summary.green()
+            );
+            println!("  Edge is structurally sound: Sharpe remains resilient across parameter neighbors.");
+        }
+        crate::models::RobustnessVerdict::OverfitNeedlePeak => {
+            println!(
+                "\n  {} {}",
+                "⚠️ VERDICT: [OVERFIT_NEEDLE_PEAK]".red().bold(),
+                report.summary.red()
+            );
+            println!("  CRITICAL WARNING: Performance collapses at neighboring parameter values!");
+            println!("  Refine the economic hypothesis instead of curve-fitting tuned constants.");
+        }
+        crate::models::RobustnessVerdict::Inconclusive => {
+            println!(
+                "\n  {} {}",
+                "⚪ VERDICT: [INCONCLUSIVE]".yellow().bold(),
+                report.summary.yellow()
+            );
+        }
+    }
+
+    Ok(())
+}

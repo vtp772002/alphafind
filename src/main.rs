@@ -8,7 +8,7 @@ use alphafind::commands::portfolio::{
 use alphafind::commands::research::{
     cmd_blueprint, cmd_fields, cmd_generate, cmd_matrix, cmd_shadow,
 };
-use alphafind::commands::simulation::{cmd_radar, cmd_screen, cmd_sim, cmd_tune};
+use alphafind::commands::simulation::{cmd_radar, cmd_screen, cmd_sim, cmd_sweep, cmd_tune};
 use alphafind::commands::submission::{cmd_check, cmd_submit};
 
 #[derive(Parser)]
@@ -190,6 +190,37 @@ enum Commands {
         /// Base neutralization group (default: SUBINDUSTRY)
         #[arg(short, long, default_value = "SUBINDUSTRY")]
         neutralization: String,
+    },
+
+    /// Run sensitivity sweep over tuned constants to detect parameter overfitting (Plateau vs Spike)
+    Sweep {
+        /// FastExpr alpha formula
+        #[arg(short, long)]
+        expr: String,
+
+        /// Target Universe (default: TOP1000)
+        #[arg(short, long, default_value = "TOP1000")]
+        universe: String,
+
+        /// Parameter to sweep: decay, exponent, or truncation (default: decay)
+        #[arg(long, default_value = "decay")]
+        param: String,
+
+        /// Base decay parameter (default: 10)
+        #[arg(short, long, default_value_t = 10)]
+        decay: i32,
+
+        /// Base neutralization group (default: SUBINDUSTRY)
+        #[arg(short, long, default_value = "SUBINDUSTRY")]
+        neutralization: String,
+
+        /// Step size for sweep (optional, default depends on parameter)
+        #[arg(long)]
+        step: Option<f64>,
+
+        /// Number of points on each side of center (default: 2)
+        #[arg(long, default_value_t = 2)]
+        radius: usize,
     },
 
     /// Simulate exact portfolio merge impact for a candidate Alpha
@@ -453,6 +484,15 @@ async fn main() -> Result<()> {
             decay,
             neutralization,
         } => cmd_tune(expr, universe, target_fitness, decay, neutralization).await,
+        Commands::Sweep {
+            expr,
+            universe,
+            param,
+            decay,
+            neutralization,
+            step,
+            radius,
+        } => cmd_sweep(expr, universe, param, decay, neutralization, step, radius).await,
         Commands::Impact { alpha_id, refresh } => cmd_impact(alpha_id, refresh).await,
         Commands::Matrix {
             universe,

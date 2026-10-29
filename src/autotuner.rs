@@ -2,9 +2,135 @@ use crate::client::BrainClient;
 use crate::config::quant::{
     min_fitness_for_delay, min_sharpe_for_delay, turnover_within_platform_bounds,
 };
-use crate::models::{AlphaDetails, AlphaSettings, TunedAlphaResult};
+use crate::models::{
+    AlphaDetails, AlphaSettings, RobustnessReport, RobustnessVerdict, SensitivityPoint,
+    TunedAlphaResult,
+};
 use anyhow::Result;
 use colored::Colorize;
+
+/// Evaluates parameter sensitivity points to determine if the peak is a robust plateau or an overfitted needle peak.
+pub fn evaluate_robustness(
+    mut points: Vec<SensitivityPoint>,
+    param_name: &str,
+    min_acceptable_sharpe: f64,
+    max_drop_threshold_pct: f64,
+) -> RobustnessReport {
+    points.sort_by(|a, b| {
+        a.param_value
+            .partial_cmp(&b.param_value)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    if points.len() < 3 {
+        let opt_val = points.first().map(|p| p.param_value).unwrap_or(0.0);
+        let opt_sh = points.first().map(|p| p.sharpe).unwrap_or(0.0);
+        let opt_fit = points.first().map(|p| p.fitness).unwrap_or(0.0);
+        return RobustnessReport {
+            param_name: param_name.to_string(),
+            optimal_value: opt_val,
+            optimal_sharpe: opt_sh,
+            optimal_fitness: opt_fit,
+            points,
+            max_neighbor_drop_pct: 0.0,
+            sharpe_cv: 0.0,
+            min_neighbor_sharpe: 0.0,
+            verdict: RobustnessVerdict::Inconclusive,
+            summary: "Insufficient sweep points (minimum 3 required for neighbor sensitivity)".to_string(),
+        };
+    }
+
+    // Find the point with the highest Sharpe ratio
+    let mut opt_idx = 0;
+    let mut max_sharpe = points[0].sharpe;
+    for (i, p) in points.iter().enumerate() {
+        if p.sharpe > max_sharpe {
+            max_sharpe = p.sharpe;
+            opt_idx = i;
+        }
+    }
+
+    let opt_point = &points[opt_idx];
+    let opt_val = opt_point.param_value;
+    let opt_sh = opt_point.sharpe;
+    let opt_fit = opt_point.fitness;
+
+    // Check adjacent neighbors
+    let mut drop_left = 0.0;
+    let mut drop_right = 0.0;
+    let mut neighbor_sharpes = Vec::new();
+
+    if opt_idx > 0 {
+        let left_sh = points[opt_idx - 1].sharpe;
+        neighbor_sharpes.push(left_sh);
+        if opt_sh > 0.0 {
+            drop_left = ((opt_sh - left_sh) / opt_sh).max(0.0) * 100.0;
+        }
+    }
+    if opt_idx + 1 < points.len() {
+        let right_sh = points[opt_idx + 1].sharpe;
+        neighbor_sharpes.push(right_sh);
+        if opt_sh > 0.0 {
+            drop_right = ((opt_sh - right_sh) / opt_sh).max(0.0) * 100.0;
+        }
+    }
+
+    let max_drop = drop_left.max(drop_right);
+    let min_neighbor_sh = neighbor_sharpes
+        .iter()
+        .cloned()
+        .fold(f64::INFINITY, f64::min);
+
+    // Compute coefficient of variation (CV) of Sharpe across points
+    let n = points.len() as f64;
+    let mean_sh = points.iter().map(|p| p.sharpe).sum::<f64>() / n;
+    let variance = points.iter().map(|p| (p.sharpe - mean_sh).powi(2)).sum::<f64>() / n;
+    let std_dev = variance.sqrt();
+    let cv = if mean_sh > 0.0 { std_dev / mean_sh } else { 0.0 };
+
+    // Verdict logic
+    let is_overfit = max_drop > max_drop_threshold_pct
+        || (opt_sh >= min_acceptable_sharpe && min_neighbor_sh < min_acceptable_sharpe * 0.75);
+
+    let (verdict, summary) = if opt_sh < min_acceptable_sharpe {
+        (
+            RobustnessVerdict::Inconclusive,
+            format!(
+                "Peak Sharpe ({:.2}) fails minimum delay requirement ({:.2}).",
+                opt_sh, min_acceptable_sharpe
+            ),
+        )
+    } else if is_overfit {
+        (
+            RobustnessVerdict::OverfitNeedlePeak,
+            format!(
+                "OVERFIT: Sharpe spikes to {:.2} at {} = {:.2} but collapses by {:.1}% at adjacent neighbors (threshold: {:.1}%).",
+                opt_sh, param_name, opt_val, max_drop, max_drop_threshold_pct
+            ),
+        )
+    } else {
+        (
+            RobustnessVerdict::RobustPlateau,
+            format!(
+                "ROBUST: Smooth plateau around {} = {:.2} (Peak Sharpe: {:.2}, Max neighbor drop: {:.1}% <= {:.1}%). Hypothesis is structurally sound.",
+                param_name, opt_val, opt_sh, max_drop, max_drop_threshold_pct
+            ),
+        )
+    };
+
+    RobustnessReport {
+        param_name: param_name.to_string(),
+        optimal_value: opt_val,
+        optimal_sharpe: opt_sh,
+        optimal_fitness: opt_fit,
+        points,
+        max_neighbor_drop_pct: max_drop,
+        sharpe_cv: cv,
+        min_neighbor_sharpe: if min_neighbor_sh.is_finite() { min_neighbor_sh } else { 0.0 },
+        verdict,
+        summary,
+    }
+}
 
 /// Modifies the outermost/last signed_power exponent in a FASTEXPR formula
 pub fn replace_last_signed_power_exponent(expr: &str, new_p: f64) -> Option<String> {
@@ -139,16 +265,64 @@ impl<'a> FitnessAutoTuner<'a> {
                 && sh >= min_sharpe
                 && turnover_within_platform_bounds(turn)
             {
+                // Neighbor plateau check: ensure this is not an overfitted needle-peak spike
+                let neighbor_decay = if dec > 4 { dec - 2 } else { dec + 2 };
+                let mut neighbor_settings = test_settings.clone();
+                neighbor_settings.decay = neighbor_decay;
                 println!(
-                    "{}",
-                    format!(
-                        "     🌟 [AutoTuner Success] Alpha {} reached Fitness {:.2}!",
-                        alpha_id, fit
-                    )
-                    .green()
-                    .bold()
+                    "     🔎 [Plateau Verification] Checking neighbor decay {}...",
+                    neighbor_decay
                 );
-                return Ok(Some(details));
+
+                let mut is_overfit = false;
+                if let Ok(n_sim_id) = self
+                    .client
+                    .submit_simulation(expression, &neighbor_settings)
+                    .await
+                {
+                    if let Ok(n_poll) = self.client.poll_simulation(&n_sim_id, 300, 5).await {
+                        if let Some(n_aid) = n_poll.alpha {
+                            if let Ok(n_details) = self.client.get_alpha_details(&n_aid).await {
+                                if let Some(n_st) = n_details.is {
+                                    let n_sh = n_st.sharpe.unwrap_or(0.0);
+                                    let drop = if sh > 0.0 {
+                                        ((sh - n_sh) / sh).max(0.0) * 100.0
+                                    } else {
+                                        0.0
+                                    };
+                                    println!(
+                                        "        Neighbor Decay {} -> [{}] Sharpe: {:.2} (Drop: {:.1}%)",
+                                        neighbor_decay, n_aid, n_sh, drop
+                                    );
+                                    if drop > 30.0 || n_sh < min_sharpe * 0.75 {
+                                        println!(
+                                            "{}",
+                                            format!(
+                                                "     ⚠️ [Sensitivity Warning] Decay {} is a needle-peak spike! Neighbor dropped by {:.1}%. Rejecting overfit.",
+                                                dec, drop
+                                            )
+                                            .yellow()
+                                        );
+                                        is_overfit = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if !is_overfit {
+                    println!(
+                        "{}",
+                        format!(
+                            "     🌟 [AutoTuner Success] Alpha {} reached Fitness {:.2} on robust decay {} (Plateau confirmed)!",
+                            alpha_id, fit, dec
+                        )
+                        .green()
+                        .bold()
+                    );
+                    return Ok(Some(details));
+                }
             }
         }
 
@@ -232,16 +406,63 @@ impl<'a> FitnessAutoTuner<'a> {
                 && sh >= min_sharpe
                 && turnover_within_platform_bounds(turn)
             {
-                println!(
-                    "{}",
-                    format!(
-                        "     🌟 [AutoTuner Success] Exponent {:.1} reached Fitness {:.2} on {}!",
-                        p, fit, alpha_id
-                    )
-                    .green()
-                    .bold()
-                );
-                return Ok(Some((details, mod_expr)));
+                // Neighbor plateau check: ensure exponent is not a needle-peak spike
+                let neighbor_p = if p > 4.0 { p - 0.4 } else { p + 0.4 };
+                let mut is_overfit = false;
+                if let Some(n_expr) = replace_last_signed_power_exponent(expression, neighbor_p) {
+                    println!(
+                        "     🔎 [Plateau Verification] Checking neighbor exponent {:.1}...",
+                        neighbor_p
+                    );
+                    if let Ok(n_sim_id) = self
+                        .client
+                        .submit_simulation(&n_expr, base_settings)
+                        .await
+                    {
+                        if let Ok(n_poll) = self.client.poll_simulation(&n_sim_id, 300, 5).await {
+                            if let Some(n_aid) = n_poll.alpha {
+                                if let Ok(n_details) = self.client.get_alpha_details(&n_aid).await {
+                                    if let Some(n_st) = n_details.is {
+                                        let n_sh = n_st.sharpe.unwrap_or(0.0);
+                                        let drop = if sh > 0.0 {
+                                            ((sh - n_sh) / sh).max(0.0) * 100.0
+                                        } else {
+                                            0.0
+                                        };
+                                        println!(
+                                            "        Neighbor Exponent {:.1} -> [{}] Sharpe: {:.2} (Drop: {:.1}%)",
+                                            neighbor_p, n_aid, n_sh, drop
+                                        );
+                                        if drop > 30.0 || n_sh < min_sharpe * 0.75 {
+                                            println!(
+                                                "{}",
+                                                format!(
+                                                    "     ⚠️ [Sensitivity Warning] Exponent {:.1} is a needle-peak spike! Neighbor dropped by {:.1}%. Rejecting overfit.",
+                                                    p, drop
+                                                )
+                                                .yellow()
+                                            );
+                                            is_overfit = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if !is_overfit {
+                    println!(
+                        "{}",
+                        format!(
+                            "     🌟 [AutoTuner Success] Exponent {:.1} reached Fitness {:.2} on {} (Plateau confirmed)!",
+                            p, fit, alpha_id
+                        )
+                        .green()
+                        .bold()
+                    );
+                    return Ok(Some((details, mod_expr)));
+                }
             }
         }
 
@@ -468,5 +689,216 @@ impl<'a> FitnessAutoTuner<'a> {
             target_fitness
         );
         Ok(None)
+    }
+
+    /// Performs a sensitivity sweep over a parameter (decay, exponent, truncation)
+    /// to detect parameter overfitting (Plateau vs Needle-Peak Spike).
+    pub async fn sweep_sensitivity(
+        &self,
+        expression: &str,
+        base_settings: &AlphaSettings,
+        param_type: &str,
+        step_opt: Option<f64>,
+        radius: usize,
+    ) -> Result<RobustnessReport> {
+        let param_type_lower = param_type.to_lowercase();
+        let mut points = Vec::new();
+
+        match param_type_lower.as_str() {
+            "decay" => {
+                let step = step_opt.unwrap_or(2.0).round() as i32;
+                let step = step.max(1);
+                let center = base_settings.decay;
+                let r = radius as i32;
+
+                println!(
+                    "{}",
+                    format!(
+                        "[*] [Sensitivity Sweep: Decay] Sweeping decay in [{}..{}] (step {}) on {}...",
+                        (center - r * step).max(1),
+                        (center + r * step).min(50),
+                        step,
+                        base_settings.universe
+                    )
+                    .cyan()
+                );
+
+                for offset in -r..=r {
+                    let d = center + offset * step;
+                    if d < 1 || d > 50 {
+                        continue;
+                    }
+                    let mut s = base_settings.clone();
+                    s.decay = d;
+
+                    let sim_id = match self.client.submit_simulation(expression, &s).await {
+                        Ok(id) => id,
+                        Err(e) => {
+                            eprintln!("    Simulation dispatch error at decay {}: {}", d, e);
+                            continue;
+                        }
+                    };
+                    if let Ok(poll) = self.client.poll_simulation(&sim_id, 300, 5).await {
+                        if let Some(aid) = poll.alpha {
+                            if let Ok(details) = self.client.get_alpha_details(&aid).await {
+                                if let Some(st) = details.is {
+                                    let sh = st.sharpe.unwrap_or(0.0);
+                                    let fit = st.fitness.unwrap_or(0.0);
+                                    let ret = st.returns.unwrap_or(0.0);
+                                    let turn = st.turnover.unwrap_or(0.0);
+                                    let margin = st.margin.unwrap_or(0.0);
+
+                                    println!(
+                                        "  Decay {:>2} -> [{}] Sharpe: {:.2} | Fit: {:.2} | Ret: {:>5.1}% | Turn: {:>5.1}%",
+                                        d, aid, sh, fit, ret * 100.0, turn * 100.0
+                                    );
+
+                                    points.push(SensitivityPoint {
+                                        param_name: "decay".to_string(),
+                                        param_value: d as f64,
+                                        alpha_id: Some(aid),
+                                        sharpe: sh,
+                                        fitness: fit,
+                                        returns: ret,
+                                        turnover: turn,
+                                        margin,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            "exponent" | "power" => {
+                let step = step_opt.unwrap_or(0.4);
+                let center = 2.0;
+                let r = radius as i32;
+
+                println!(
+                    "{}",
+                    format!(
+                        "[*] [Sensitivity Sweep: Exponent] Sweeping signed_power exponent around {:.1} on {}...",
+                        center,
+                        base_settings.universe
+                    )
+                    .cyan()
+                );
+
+                for offset in -r..=r {
+                    let p = center + offset as f64 * step;
+                    if p <= 0.2 || p > 6.0 {
+                        continue;
+                    }
+                    let mod_expr = match replace_last_signed_power_exponent(expression, p) {
+                        Some(e) => e,
+                        None => {
+                            anyhow::bail!("Expression does not contain signed_power operator for exponent sweep");
+                        }
+                    };
+
+                    let sim_id = match self.client.submit_simulation(&mod_expr, base_settings).await {
+                        Ok(id) => id,
+                        Err(e) => {
+                            eprintln!("    Simulation dispatch error at exponent {:.2}: {}", p, e);
+                            continue;
+                        }
+                    };
+                    if let Ok(poll) = self.client.poll_simulation(&sim_id, 300, 5).await {
+                        if let Some(aid) = poll.alpha {
+                            if let Ok(details) = self.client.get_alpha_details(&aid).await {
+                                if let Some(st) = details.is {
+                                    let sh = st.sharpe.unwrap_or(0.0);
+                                    let fit = st.fitness.unwrap_or(0.0);
+                                    let ret = st.returns.unwrap_or(0.0);
+                                    let turn = st.turnover.unwrap_or(0.0);
+                                    let margin = st.margin.unwrap_or(0.0);
+
+                                    println!(
+                                        "  Exp {:>4.1} -> [{}] Sharpe: {:.2} | Fit: {:.2} | Ret: {:>5.1}% | Turn: {:>5.1}%",
+                                        p, aid, sh, fit, ret * 100.0, turn * 100.0
+                                    );
+
+                                    points.push(SensitivityPoint {
+                                        param_name: "exponent".to_string(),
+                                        param_value: p,
+                                        alpha_id: Some(aid),
+                                        sharpe: sh,
+                                        fitness: fit,
+                                        returns: ret,
+                                        turnover: turn,
+                                        margin,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            "truncation" | "trunc" => {
+                let step = step_opt.unwrap_or(0.02);
+                let center = base_settings.truncation;
+                let r = radius as i32;
+
+                println!(
+                    "{}",
+                    format!(
+                        "[*] [Sensitivity Sweep: Truncation] Sweeping weight truncation around {:.3} on {}...",
+                        center, base_settings.universe
+                    )
+                    .cyan()
+                );
+
+                for offset in -r..=r {
+                    let tr = center + offset as f64 * step;
+                    if tr <= 0.005 || tr > 0.15 {
+                        continue;
+                    }
+                    let mut s = base_settings.clone();
+                    s.truncation = tr;
+
+                    let sim_id = match self.client.submit_simulation(expression, &s).await {
+                        Ok(id) => id,
+                        Err(e) => {
+                            eprintln!("    Simulation dispatch error at truncation {:.3}: {}", tr, e);
+                            continue;
+                        }
+                    };
+                    if let Ok(poll) = self.client.poll_simulation(&sim_id, 300, 5).await {
+                        if let Some(aid) = poll.alpha {
+                            if let Ok(details) = self.client.get_alpha_details(&aid).await {
+                                if let Some(st) = details.is {
+                                    let sh = st.sharpe.unwrap_or(0.0);
+                                    let fit = st.fitness.unwrap_or(0.0);
+                                    let ret = st.returns.unwrap_or(0.0);
+                                    let turn = st.turnover.unwrap_or(0.0);
+                                    let margin = st.margin.unwrap_or(0.0);
+
+                                    println!(
+                                        "  Trunc {:>5.3} -> [{}] Sharpe: {:.2} | Fit: {:.2} | Ret: {:>5.1}% | Turn: {:>5.1}%",
+                                        tr, aid, sh, fit, ret * 100.0, turn * 100.0
+                                    );
+
+                                    points.push(SensitivityPoint {
+                                        param_name: "truncation".to_string(),
+                                        param_value: tr,
+                                        alpha_id: Some(aid),
+                                        sharpe: sh,
+                                        fitness: fit,
+                                        returns: ret,
+                                        turnover: turn,
+                                        margin,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _ => anyhow::bail!("Unsupported parameter for sensitivity sweep: '{}'. Use 'decay', 'exponent', or 'truncation'.", param_type),
+        }
+
+        let min_sharpe = min_sharpe_for_delay(base_settings.delay);
+        let report = evaluate_robustness(points, param_type, min_sharpe, 25.0);
+        Ok(report)
     }
 }

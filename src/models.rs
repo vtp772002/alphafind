@@ -548,6 +548,55 @@ pub struct PortfolioImpactResult {
     pub safety_buffer_pct: f64,
 }
 
+/// Individual observation point in a parameter sensitivity sweep
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SensitivityPoint {
+    pub param_name: String,
+    pub param_value: f64,
+    pub alpha_id: Option<String>,
+    pub sharpe: f64,
+    pub fitness: f64,
+    pub returns: f64,
+    pub turnover: f64,
+    pub margin: f64,
+}
+
+/// Robustness verdict classification (Plateau vs Spike)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RobustnessVerdict {
+    /// Performance remains stable across adjacent parameter values (true economic edge)
+    RobustPlateau,
+    /// Sharpe spikes at optimal value but collapses at adjacent neighbors (overfitted noise)
+    OverfitNeedlePeak,
+    /// Insufficient points or inconclusive results
+    Inconclusive,
+}
+
+impl RobustnessVerdict {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::RobustPlateau => "ROBUST_PLATEAU",
+            Self::OverfitNeedlePeak => "OVERFIT_NEEDLE_PEAK",
+            Self::Inconclusive => "INCONCLUSIVE",
+        }
+    }
+}
+
+/// Comprehensive report of parameter sensitivity sweep
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RobustnessReport {
+    pub param_name: String,
+    pub optimal_value: f64,
+    pub optimal_sharpe: f64,
+    pub optimal_fitness: f64,
+    pub points: Vec<SensitivityPoint>,
+    pub max_neighbor_drop_pct: f64,
+    pub sharpe_cv: f64,
+    pub min_neighbor_sharpe: f64,
+    pub verdict: RobustnessVerdict,
+    pub summary: String,
+}
+
 #[path = "schema_validator.rs"]
 pub mod schema_validator;
 pub use schema_validator::*;
