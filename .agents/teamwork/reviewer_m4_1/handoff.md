@@ -86,10 +86,10 @@
 3. `python3 scratch/evaluate_alternative_alphas.py --offline`
    - Baseline: 94 OS Alphas, 1,236 Common Days, Annualized PnL: $1,516,164.00, Sharpe: 4.5306.
    - Evaluated 4 Candidate Hypotheses:
-     - `M51_BETA_SPREAD_01` (`model51`): Sharpe 1.34, Fitness 1.28, Ret 18.2%, Turn 14.5%, $\Delta\text{Sharpe} = +0.0335$, $\Delta\text{Vol} = -\$3,511.41$, $\max \rho = 5.19\%$ vs `2rwEMqeb` (QUALIFIED)
-     - `M16_FUND_ACCEL_01` (`model16`): Sharpe 1.42, Fitness 1.36, Ret 19.4%, Turn 16.8%, $\Delta\text{Sharpe} = +0.0430$, $\Delta\text{Vol} = -\$3,209.27$, $\max \rho = 6.47\%$ vs `E5vjmE2G` (QUALIFIED)
-     - `N18_STORY_SENT_01` (`news18`): Sharpe 1.31, Fitness 1.15, Ret 14.8%, Turn 23.5%, $\Delta\text{Sharpe} = +0.0609$, $\Delta\text{Vol} = -\$3,162.03$, $\max \rho = 7.72\%$ vs `mL6k2gzK` (QUALIFIED)
-     - `O9_BREAKEVEN_ASYM_01` (`option9`): Sharpe 1.48, Fitness 1.45, Ret 22.8%, Turn 21.2%, $\Delta\text{Sharpe} = +0.0343$, $\Delta\text{Vol} = -\$2,806.40$, $\max \rho = 7.87\%$ vs `XgbrneVz` (QUALIFIED)
+     - `M51_BETA_SPREAD_01` (`model51`): Sharpe 1.34, Fitness 1.28, Ret 18.2%, Turn 14.5%, $\Delta\text{Sharpe} = +0.0335$, $\Delta\text{Vol} = -\$3,511.41$, $\max \rho = 5.19\%$ vs `<ALPHA_ID>` (QUALIFIED)
+     - `M16_FUND_ACCEL_01` (`model16`): Sharpe 1.42, Fitness 1.36, Ret 19.4%, Turn 16.8%, $\Delta\text{Sharpe} = +0.0430$, $\Delta\text{Vol} = -\$3,209.27$, $\max \rho = 6.47\%$ vs `<ALPHA_ID>` (QUALIFIED)
+     - `N18_STORY_SENT_01` (`news18`): Sharpe 1.31, Fitness 1.15, Ret 14.8%, Turn 23.5%, $\Delta\text{Sharpe} = +0.0609$, $\Delta\text{Vol} = -\$3,162.03$, $\max \rho = 7.72\%$ vs `<ALPHA_ID>` (QUALIFIED)
+     - `O9_BREAKEVEN_ASYM_01` (`option9`): Sharpe 1.48, Fitness 1.45, Ret 22.8%, Turn 21.2%, $\Delta\text{Sharpe} = +0.0343$, $\Delta\text{Vol} = -\$2,806.40$, $\max \rho = 7.87\%$ vs `<ALPHA_ID>` (QUALIFIED)
    - Output files: `scratch/evaluated_candidates.json` saved, `submittable_alphas.csv` updated (permissions `0600`).
 4. `./scripts/sanitize_check.sh`
    - Output: `✅ [SANITIZATION GATEKEEPER] Pre-Push Audit PASSED. Safe to push.`
