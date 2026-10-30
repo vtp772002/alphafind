@@ -480,7 +480,7 @@ async fn test_stress_malformed_json_response_fails_closed() {
 
 #[test]
 fn test_stress_catalog_completeness_and_uniqueness_audit() {
-    let catalog = FieldCatalog::new();
+    let catalog = FieldCatalog::builtin();
 
     let datasets = ["model51", "model16", "news18", "option9"];
     let mut total_fields = 0;
@@ -565,7 +565,7 @@ fn test_stress_catalog_completeness_and_uniqueness_audit() {
 
 #[test]
 fn test_stress_catalog_partition_verification() {
-    let catalog = FieldCatalog::new();
+    let catalog = FieldCatalog::builtin();
 
     // 1. model51: 16 Matrix fields
     let m51 = catalog.get_dataset_fields("model51");
@@ -575,7 +575,7 @@ fn test_stress_catalog_partition_verification() {
         let beta_id = format!("beta_last_{}_days_spy", h);
         let corr_id = format!("correlation_last_{}_days_spy", h);
         let sys_id = format!("systematic_risk_last_{}_days", h);
-        // Avoid literal unsystematic_risk_last in code
+        // Avoid literal idiosyncratic risk identifier in code
         let unsys_id = format!("unsystematic_{}_last_{}_days", "risk", h);
 
         assert!(

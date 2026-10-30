@@ -333,7 +333,7 @@ fn test_validator_multi_statement_complex_expression() {
 
 #[test]
 fn test_catalog_invariants_across_all_four_alternative_datasets() {
-    let catalog = FieldCatalog::new();
+    let catalog = FieldCatalog::builtin();
 
     let m51 = catalog.get_dataset_fields("model51");
     assert_eq!(m51.len(), 16, "model51 must contain exactly 16 fields");

@@ -36,7 +36,8 @@ pub fn evaluate_robustness(
             sharpe_cv: 0.0,
             min_neighbor_sharpe: 0.0,
             verdict: RobustnessVerdict::Inconclusive,
-            summary: "Insufficient sweep points (minimum 3 required for neighbor sensitivity)".to_string(),
+            summary: "Insufficient sweep points (minimum 3 required for neighbor sensitivity)"
+                .to_string(),
         };
     }
 
@@ -84,9 +85,17 @@ pub fn evaluate_robustness(
     // Compute coefficient of variation (CV) of Sharpe across points
     let n = points.len() as f64;
     let mean_sh = points.iter().map(|p| p.sharpe).sum::<f64>() / n;
-    let variance = points.iter().map(|p| (p.sharpe - mean_sh).powi(2)).sum::<f64>() / n;
+    let variance = points
+        .iter()
+        .map(|p| (p.sharpe - mean_sh).powi(2))
+        .sum::<f64>()
+        / n;
     let std_dev = variance.sqrt();
-    let cv = if mean_sh > 0.0 { std_dev / mean_sh } else { 0.0 };
+    let cv = if mean_sh > 0.0 {
+        std_dev / mean_sh
+    } else {
+        0.0
+    };
 
     // Verdict logic
     let is_overfit = max_drop > max_drop_threshold_pct
@@ -126,7 +135,11 @@ pub fn evaluate_robustness(
         points,
         max_neighbor_drop_pct: max_drop,
         sharpe_cv: cv,
-        min_neighbor_sharpe: if min_neighbor_sh.is_finite() { min_neighbor_sh } else { 0.0 },
+        min_neighbor_sharpe: if min_neighbor_sh.is_finite() {
+            min_neighbor_sh
+        } else {
+            0.0
+        },
         verdict,
         summary,
     }
@@ -414,10 +427,8 @@ impl<'a> FitnessAutoTuner<'a> {
                         "     🔎 [Plateau Verification] Checking neighbor exponent {:.1}...",
                         neighbor_p
                     );
-                    if let Ok(n_sim_id) = self
-                        .client
-                        .submit_simulation(&n_expr, base_settings)
-                        .await
+                    if let Ok(n_sim_id) =
+                        self.client.submit_simulation(&n_expr, base_settings).await
                     {
                         if let Ok(n_poll) = self.client.poll_simulation(&n_sim_id, 300, 5).await {
                             if let Some(n_aid) = n_poll.alpha {

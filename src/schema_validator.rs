@@ -232,11 +232,18 @@ impl Default for FieldCatalog {
 
 impl FieldCatalog {
     /// Instantiates the catalog with built-in invariants and scans local disk caches.
-    pub fn new() -> Self {
+    /// Creates a FieldCatalog initialized with built-in verified invariants only.
+    pub fn builtin() -> Self {
         let mut catalog = Self {
             fields: HashMap::new(),
         };
         catalog.load_builtin_invariants();
+        catalog
+    }
+
+    /// Creates a FieldCatalog with built-in invariants and overlays any disk cache in `data/`.
+    pub fn new() -> Self {
+        let mut catalog = Self::builtin();
         catalog.load_disk_cache(Path::new("data"));
         catalog
     }

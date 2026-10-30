@@ -563,7 +563,10 @@ pub async fn cmd_sweep(
         .sweep_sensitivity(&expr, &settings, &param, step, radius)
         .await?;
 
-    println!("\n  PARAMETER SENSITIVITY PROFILE ({}):", param.to_uppercase());
+    println!(
+        "\n  PARAMETER SENSITIVITY PROFILE ({}):",
+        param.to_uppercase()
+    );
     println!("  ┌──────────────┬──────────────┬──────────────┬──────────────┬──────────────┬───────────────────┐");
     println!("  │ Parameter    │ Sharpe       │ Fitness      │ Annual Ret   │ Turnover     │ Profile Shape     │");
     println!("  ├──────────────┼──────────────┼──────────────┼──────────────┼──────────────┼───────────────────┤");
@@ -591,9 +594,15 @@ pub async fn cmd_sweep(
     println!("\n  ROBUSTNESS DIAGNOSTIC AUDIT:");
     println!("    Optimal Value:         {:.2}", report.optimal_value);
     println!("    Peak Sharpe:           {:.2}", report.optimal_sharpe);
-    println!("    Max Neighbor Drop:     {:.1}%", report.max_neighbor_drop_pct);
+    println!(
+        "    Max Neighbor Drop:     {:.1}%",
+        report.max_neighbor_drop_pct
+    );
     println!("    Sharpe Std Dev / CV:   {:.3}", report.sharpe_cv);
-    println!("    Min Neighbor Sharpe:   {:.2}", report.min_neighbor_sharpe);
+    println!(
+        "    Min Neighbor Sharpe:   {:.2}",
+        report.min_neighbor_sharpe
+    );
 
     match report.verdict {
         crate::models::RobustnessVerdict::RobustPlateau => {

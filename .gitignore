@@ -59,6 +59,7 @@ scratch/
 tmp/
 *.tmp
 .opencode/
+.agents/
 check_*.py
 vault_backup_*.csv
 *backup*
