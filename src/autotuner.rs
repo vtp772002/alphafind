@@ -736,7 +736,7 @@ impl<'a> FitnessAutoTuner<'a> {
 
                 for offset in -r..=r {
                     let d = center + offset * step;
-                    if d < 1 || d > 50 {
+                    if !(1..=50).contains(&d) {
                         continue;
                     }
                     let mut s = base_settings.clone();
