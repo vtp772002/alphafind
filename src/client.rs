@@ -664,6 +664,17 @@ impl BrainClient {
 
             let eval = evaluate_submission_checks(&stats);
 
+            // If a hard check has already failed (e.g. CONCENTRATED_WEIGHT, LOW_SHARPE, LOW_FITNESS, HIGH_TURNOVER),
+            // BRAIN will never calculate SELF_CORRELATION, leaving it PENDING forever.
+            // Immediately fail-closed without spinning through all retry attempts.
+            let has_hard_failure = eval
+                .failed_checks
+                .iter()
+                .any(|f| !f.contains("ERROR"));
+            if has_hard_failure {
+                return Ok((false, eval.message, stats));
+            }
+
             // If checks are still pending calculation (or a transient server ERROR on early attempts), continue polling
             let has_transient_error =
                 _attempt < 4 && eval.failed_checks.iter().any(|f| f.contains("ERROR"));
