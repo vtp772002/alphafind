@@ -2,7 +2,11 @@ use alphafind::taxonomy::{get_curated_candidates, FactorPillar, PlaceholderRegis
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
+use std::sync::Mutex;
 use std::thread;
+
+/// Synchronizes process-global `ALPHAFIND_CANDIDATES_PATH` mutations across parallel test threads.
+static CANDIDATES_ENV_LOCK: Mutex<()> = Mutex::new(());
 
 // ============================================================================
 // Group 1: Adversarial Template & Placeholder Extraction Edge Cases
@@ -305,6 +309,9 @@ fn test_validate_fastexpr_multiple_simultaneous_errors() {
 
 #[test]
 fn test_candidate_loading_from_corrupted_and_nonstandard_json() {
+    let _env_guard = CANDIDATES_ENV_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let tmp_dir = std::env::temp_dir();
 
     // 1. Completely empty file
@@ -458,11 +465,17 @@ fn test_all_factor_pillar_variants_exhaustive() {
         );
 
         // 6. Curated candidates behavior for each pillar under clean state (no private store)
+        let _env_guard = CANDIDATES_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp_empty = std::env::temp_dir().join("clean_empty.json");
         let _ = File::create(&tmp_empty);
         std::env::set_var("ALPHAFIND_CANDIDATES_PATH", &tmp_empty);
 
         let candidates = get_curated_candidates(Some(pillar), Some("TOP1000"));
+        std::env::remove_var("ALPHAFIND_CANDIDATES_PATH");
+        drop(_env_guard);
+
         assert!(
             !candidates.is_empty(),
             "Curated candidates must return at least one hypothesis for pillar {:?}",
@@ -479,8 +492,6 @@ fn test_all_factor_pillar_variants_exhaustive() {
             assert_eq!(settings.universe, c.universe);
             assert_eq!(settings.decay, c.decay);
         }
-
-        std::env::remove_var("ALPHAFIND_CANDIDATES_PATH");
     }
 }
 
@@ -488,12 +499,17 @@ fn test_all_factor_pillar_variants_exhaustive() {
 fn test_financial_health_quality_pillar_fallback_behavior() {
     // Specifically stress-testing FactorPillar::FinancialHealthQuality
     // under isolated candidate store conditions
+    let _env_guard = CANDIDATES_ENV_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let tmp_empty = std::env::temp_dir().join("fhq_empty.json");
     let _ = File::create(&tmp_empty);
     std::env::set_var("ALPHAFIND_CANDIDATES_PATH", &tmp_empty);
 
     let candidates =
         get_curated_candidates(Some(FactorPillar::FinancialHealthQuality), Some("TOP1000"));
+    std::env::remove_var("ALPHAFIND_CANDIDATES_PATH");
+    drop(_env_guard);
     assert!(
         !candidates.is_empty(),
         "FinancialHealthQuality must return candidates via default curated batch"
@@ -511,8 +527,6 @@ fn test_financial_health_quality_pillar_fallback_behavior() {
         candidates.len(),
         matching_count
     );
-
-    std::env::remove_var("ALPHAFIND_CANDIDATES_PATH");
 }
 
 // ============================================================================
