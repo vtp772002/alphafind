@@ -562,9 +562,15 @@ pub async fn cmd_eval(alpha_ids: Vec<String>, refresh: bool) -> Result<()> {
             );
 
             let d_sharpe_styled = if impact.delta_sharpe >= 0.0 {
-                format!("+{:.4}", impact.delta_sharpe).green().bold().to_string()
+                format!("+{:.4}", impact.delta_sharpe)
+                    .green()
+                    .bold()
+                    .to_string()
             } else {
-                format!("{:.4}", impact.delta_sharpe).red().bold().to_string()
+                format!("{:.4}", impact.delta_sharpe)
+                    .red()
+                    .bold()
+                    .to_string()
             };
             println!(
                 "    Merged Portfolio Sharpe:   {:.4} -> {:.4} (Delta: {})",
@@ -594,9 +600,13 @@ pub async fn cmd_eval(alpha_ids: Vec<String>, refresh: bool) -> Result<()> {
             );
 
             let d_corr_styled = if impact.delta_avg_corr <= 0.0 {
-                format!("{:.2}%", impact.delta_avg_corr * 100.0).green().to_string()
+                format!("{:.2}%", impact.delta_avg_corr * 100.0)
+                    .green()
+                    .to_string()
             } else {
-                format!("+{:.2}%", impact.delta_avg_corr * 100.0).yellow().to_string()
+                format!("+{:.2}%", impact.delta_avg_corr * 100.0)
+                    .yellow()
+                    .to_string()
             };
             println!(
                 "    Average Pairwise Corr:     {:.2}% -> {:.2}% (Delta: {})",
@@ -695,12 +705,7 @@ pub async fn cmd_eval(alpha_ids: Vec<String>, refresh: bool) -> Result<()> {
             "\n{}",
             "═════════════════════════════════════════════════════════════════════════════════════════════════════════════".cyan()
         );
-        println!(
-            "{}",
-            "  MULTI-CANDIDATE EVALUATION SUMMARY"
-                .bold()
-                .cyan()
-        );
+        println!("{}", "  MULTI-CANDIDATE EVALUATION SUMMARY".bold().cyan());
         println!(
             "{}",
             "═════════════════════════════════════════════════════════════════════════════════════════════════════════════".cyan()
@@ -710,18 +715,39 @@ pub async fn cmd_eval(alpha_ids: Vec<String>, refresh: bool) -> Result<()> {
         );
         println!(
             "  │ {:<10} │ {:>10} │ {:>15} │ {:>13} │ {:>12} │ {:>14} │ {:<23} │",
-            "Alpha ID", "Max Corr", "Direct Avg Corr", "Merged Sharpe", "Delta Sharpe", "Delta Vol", "Verdict"
+            "Alpha ID",
+            "Max Corr",
+            "Direct Avg Corr",
+            "Merged Sharpe",
+            "Delta Sharpe",
+            "Delta Vol",
+            "Verdict"
         );
         println!(
             "  ├────────────┼────────────┼─────────────────┼───────────────┼──────────────┼────────────────┼─────────────────────────┤"
         );
 
         for s in &summaries {
-            let max_c_str = s.max_corr.map(|c| format!("{:+.2}%", c * 100.0)).unwrap_or_else(|| "N/A".to_string());
-            let avg_c_str = s.avg_corr.map(|c| format!("{:+.2}%", c * 100.0)).unwrap_or_else(|| "N/A".to_string());
-            let m_sharpe_str = s.merged_sharpe.map(|sh| format!("{:.4}", sh)).unwrap_or_else(|| "N/A".to_string());
-            let d_sharpe_str = s.delta_sharpe.map(|d| format!("{:+7.4}", d)).unwrap_or_else(|| "N/A".to_string());
-            let d_vol_str = s.delta_vol.map(|v| format!("{:+11.2}", v)).unwrap_or_else(|| "N/A".to_string());
+            let max_c_str = s
+                .max_corr
+                .map(|c| format!("{:+.2}%", c * 100.0))
+                .unwrap_or_else(|| "N/A".to_string());
+            let avg_c_str = s
+                .avg_corr
+                .map(|c| format!("{:+.2}%", c * 100.0))
+                .unwrap_or_else(|| "N/A".to_string());
+            let m_sharpe_str = s
+                .merged_sharpe
+                .map(|sh| format!("{:.4}", sh))
+                .unwrap_or_else(|| "N/A".to_string());
+            let d_sharpe_str = s
+                .delta_sharpe
+                .map(|d| format!("{:+7.4}", d))
+                .unwrap_or_else(|| "N/A".to_string());
+            let d_vol_str = s
+                .delta_vol
+                .map(|v| format!("{:+11.2}", v))
+                .unwrap_or_else(|| "N/A".to_string());
 
             let verdict_styled = match s.verdict.as_str() {
                 "HIGH CONVICTION" => s.verdict.green().bold().to_string(),

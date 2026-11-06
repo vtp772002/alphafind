@@ -427,7 +427,10 @@ mod tests {
     fn test_check_display_warning() {
         assert_eq!(CheckDisplay::from_result("WARNING"), CheckDisplay::Warning);
         assert_eq!(CheckDisplay::from_result("warning"), CheckDisplay::Warning);
-        assert_eq!(CheckDisplay::from_result(" Warning "), CheckDisplay::Warning);
+        assert_eq!(
+            CheckDisplay::from_result(" Warning "),
+            CheckDisplay::Warning
+        );
         assert_eq!(CheckDisplay::Warning.label(), "WARNING");
         assert!(!CheckDisplay::Warning.is_pass());
 

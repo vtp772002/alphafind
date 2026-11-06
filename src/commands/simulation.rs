@@ -181,14 +181,12 @@ pub fn lookup_sim_ledger(fingerprint: &str) -> Option<SimLedgerEntry> {
     let reader = std::io::BufReader::new(file);
     use std::io::BufRead;
     let mut last_match = None;
-    for line_res in reader.lines() {
-        if let Ok(line) = line_res {
-            let trimmed = line.trim();
-            if !trimmed.is_empty() {
-                if let Ok(entry) = serde_json::from_str::<SimLedgerEntry>(trimmed) {
-                    if entry.fingerprint == fingerprint {
-                        last_match = Some(entry);
-                    }
+    for line in reader.lines().map_while(Result::ok) {
+        let trimmed = line.trim();
+        if !trimmed.is_empty() {
+            if let Ok(entry) = serde_json::from_str::<SimLedgerEntry>(trimmed) {
+                if entry.fingerprint == fingerprint {
+                    last_match = Some(entry);
                 }
             }
         }
@@ -232,10 +230,14 @@ fn get_known_event_fields() -> &'static std::collections::HashSet<String> {
                     let path = entry.path();
                     if path.is_file()
                         && path.extension().is_some_and(|ext| ext == "json")
-                        && path.file_name().is_some_and(|n| n.to_string_lossy().starts_with("fields_"))
+                        && path
+                            .file_name()
+                            .is_some_and(|n| n.to_string_lossy().starts_with("fields_"))
                     {
                         if let Ok(content) = std::fs::read_to_string(&path) {
-                            if let Ok(fields) = serde_json::from_str::<Vec<serde_json::Value>>(&content) {
+                            if let Ok(fields) =
+                                serde_json::from_str::<Vec<serde_json::Value>>(&content)
+                            {
                                 for f in fields {
                                     if let (Some(id), Some(ty)) = (
                                         f.get("id").and_then(|v| v.as_str()),
@@ -298,7 +300,8 @@ pub fn preflight_validate_expr(expr: &str) -> Result<()> {
         // If the error was a vector/event type mismatch in an operator, return the specific message
         if fatal_errors.iter().any(|e| {
             e.code == crate::models::schema_validator::DiagnosticCode::ErrVecTypeMismatch
-                || e.code == crate::models::schema_validator::DiagnosticCode::ErrEventInputNotSupported
+                || e.code
+                    == crate::models::schema_validator::DiagnosticCode::ErrEventInputNotSupported
                 || e.message.to_uppercase().contains("EVENT")
         }) {
             anyhow::bail!("Pre-flight validation failed: Operator does not support EVENT inputs");
@@ -403,11 +406,9 @@ pub fn preflight_validate_expr(expr: &str) -> Result<()> {
                             }
                             depth -= 1;
                         }
-                        ',' => {
-                            if depth == 0 {
-                                arg1_end = args_start + char_idx;
-                                break;
-                            }
+                        ',' if depth == 0 => {
+                            arg1_end = args_start + char_idx;
+                            break;
                         }
                         _ => {}
                     }
@@ -418,7 +419,9 @@ pub fn preflight_validate_expr(expr: &str) -> Result<()> {
                 if !is_folded {
                     let arg1_tokens = extract_identifier_tokens(arg1);
                     if arg1_tokens.iter().any(|t| event_vars.contains(t)) {
-                        anyhow::bail!("Pre-flight validation failed: Operator does not support EVENT inputs");
+                        anyhow::bail!(
+                            "Pre-flight validation failed: Operator does not support EVENT inputs"
+                        );
                     }
                 }
             }
@@ -516,13 +519,22 @@ pub async fn cmd_sim(
             "{}",
             "═════════════════════════════════════════════════════════════════════════".cyan()
         );
-        println!("  Batch File:   {}", batch_path.display().to_string().cyan());
+        println!(
+            "  Batch File:   {}",
+            batch_path.display().to_string().cyan()
+        );
         println!(
             "  Settings:     Universe: {} | Decay: {} | Neutralization: {} | Truncation: {}",
-            universe.yellow(), decay, neutralization.yellow(), truncation
+            universe.yellow(),
+            decay,
+            neutralization.yellow(),
+            truncation
         );
         let max_workers = workers.clamp(1, 3);
-        println!("  Concurrency:  {} worker(s) in-process (capped at 3)\n", max_workers);
+        println!(
+            "  Concurrency:  {} worker(s) in-process (capped at 3)\n",
+            max_workers
+        );
 
         let content = std::fs::read_to_string(&batch_path)
             .with_context(|| format!("Failed to read batch file at '{}'", batch_path.display()))?;
@@ -535,15 +547,28 @@ pub async fn cmd_sim(
             .collect();
 
         if expressions.is_empty() {
-            anyhow::bail!("No valid expressions found in batch file '{}'", batch_path.display());
+            anyhow::bail!(
+                "No valid expressions found in batch file '{}'",
+                batch_path.display()
+            );
         }
 
-        println!("  Pre-flight validating {} expressions...", expressions.len());
+        println!(
+            "  Pre-flight validating {} expressions...",
+            expressions.len()
+        );
         for (idx, e) in expressions.iter().enumerate() {
-            preflight_validate_expr(e)
-                .with_context(|| format!("Pre-flight validation failed for expression #{} in batch file", idx + 1))?;
+            preflight_validate_expr(e).with_context(|| {
+                format!(
+                    "Pre-flight validation failed for expression #{} in batch file",
+                    idx + 1
+                )
+            })?;
         }
-        println!("  {} All expressions passed pre-flight validation.\n", "✅".green());
+        println!(
+            "  {} All expressions passed pre-flight validation.\n",
+            "✅".green()
+        );
 
         let sem = std::sync::Arc::new(tokio::sync::Semaphore::new(max_workers));
         let mut tasks = Vec::new();
@@ -630,12 +655,7 @@ pub async fn cmd_sim(
             "\n{}",
             "═════════════════════════════════════════════════════════════════════════".cyan()
         );
-        println!(
-            "{}",
-            "  BATCH SIMULATION SUMMARY"
-                .bold()
-                .cyan()
-        );
+        println!("{}", "  BATCH SIMULATION SUMMARY".bold().cyan());
         println!(
             "{}",
             "═════════════════════════════════════════════════════════════════════════".cyan()
@@ -669,13 +689,27 @@ pub async fn cmd_sim(
                 Ok(None) => {
                     println!(
                         "  │ {:<3} │ {:<10} │ {:>8} │ {:>8} │ {:>10} │ {:>10} │ {:>10} │ {:>10} │",
-                        idx + 1, "NO ALPHA".yellow(), "—", "—", "—", "—", "—", "—"
+                        idx + 1,
+                        "NO ALPHA".yellow(),
+                        "—",
+                        "—",
+                        "—",
+                        "—",
+                        "—",
+                        "—"
                     );
                 }
                 Err(e) => {
                     println!(
                         "  │ {:<3} │ {:<10} │ {:>8} │ {:>8} │ {:>10} │ {:>10} │ {:>10} │ {:>10} │",
-                        idx + 1, "FAILED".red(), "—", "—", "—", "—", "—", format!("{:.8}", e)
+                        idx + 1,
+                        "FAILED".red(),
+                        "—",
+                        "—",
+                        "—",
+                        "—",
+                        "—",
+                        format!("{:.8}", e)
                     );
                 }
             }
@@ -688,7 +722,8 @@ pub async fn cmd_sim(
     }
 
     // Single expression simulation
-    let expr = expr.ok_or_else(|| anyhow::anyhow!("Either --expr (-e) or --batch (-b) must be provided"))?;
+    let expr =
+        expr.ok_or_else(|| anyhow::anyhow!("Either --expr (-e) or --batch (-b) must be provided"))?;
 
     println!(
         "{}",
@@ -774,18 +809,9 @@ pub async fn cmd_sim(
             println!("    Sharpe:      {:.2}", entry.sharpe);
             println!("    Fitness:     {:.2}", entry.fitness);
             println!("    Annual Ret:  {:.2}%", entry.returns * 100.0);
-            println!(
-                "    Turnover:    {:.2}%",
-                entry.turnover * 100.0
-            );
-            println!(
-                "    Margin:      {:.2} bps",
-                entry.margin_bps
-            );
-            println!(
-                "    Drawdown:    {:.2}%",
-                entry.drawdown * 100.0
-            );
+            println!("    Turnover:    {:.2}%", entry.turnover * 100.0);
+            println!("    Margin:      {:.2} bps", entry.margin_bps);
+            println!("    Drawdown:    {:.2}%", entry.drawdown * 100.0);
         }
         println!(
             "\n  Platform Link: https://platform.worldquantbrain.com/alpha/{}",
@@ -1102,6 +1128,7 @@ pub async fn cmd_tune(
 }
 
 /// Runs a neighbor sensitivity sweep over a template expression to verify Plateau vs. Spike stability.
+#[allow(clippy::too_many_arguments)]
 pub async fn cmd_sweep(
     template: String,
     values: Vec<String>,
@@ -1129,8 +1156,12 @@ pub async fn cmd_sweep(
     let mut expanded_exprs = Vec::with_capacity(values.len());
     for val in &values {
         let expanded = template.replace(&target_placeholder, val.trim());
-        preflight_validate_expr(&expanded)
-            .with_context(|| format!("Pre-flight validation failed for expanded value \"{}\"", val.trim()))?;
+        preflight_validate_expr(&expanded).with_context(|| {
+            format!(
+                "Pre-flight validation failed for expanded value \"{}\"",
+                val.trim()
+            )
+        })?;
         expanded_exprs.push((val.clone(), expanded));
     }
 
@@ -1156,10 +1187,16 @@ pub async fn cmd_sweep(
     println!("  Values ({}):   {:?}", values.len(), values);
     println!(
         "  Settings:     Universe: {} | Decay: {} | Neutralization: {} | Truncation: {}",
-        universe.yellow(), decay, neutralization.yellow(), truncation
+        universe.yellow(),
+        decay,
+        neutralization.yellow(),
+        truncation
     );
     let max_workers = workers.clamp(1, 3);
-    println!("  Workers:      {} (in-process concurrency, max 3)\n", max_workers);
+    println!(
+        "  Workers:      {} (in-process concurrency, max 3)\n",
+        max_workers
+    );
 
     let client = get_main_client()?;
     let sem = std::sync::Arc::new(tokio::sync::Semaphore::new(max_workers));
@@ -1281,13 +1318,27 @@ pub async fn cmd_sweep(
             Ok(None) => {
                 println!(
                     "  │ {:<12} │ {:<10} │ {:>8} │ {:>8} │ {:>10} │ {:>10} │ {:>10} │ {:>10} │",
-                    val.yellow(), "NO ALPHA", "—", "—", "—", "—", "—", "—"
+                    val.yellow(),
+                    "NO ALPHA",
+                    "—",
+                    "—",
+                    "—",
+                    "—",
+                    "—",
+                    "—"
                 );
             }
             Err(e) => {
                 println!(
                     "  │ {:<12} │ {:<10} │ {:>8} │ {:>8} │ {:>10} │ {:>10} │ {:>10} │ {:>10} │",
-                    val.yellow(), "FAILED".red(), "—", "—", "—", "—", "—", format!("{:.8}", e)
+                    val.yellow(),
+                    "FAILED".red(),
+                    "—",
+                    "—",
+                    "—",
+                    "—",
+                    "—",
+                    format!("{:.8}", e)
                 );
             }
         }
@@ -1345,43 +1396,61 @@ mod tests {
 
     #[test]
     fn test_preflight_validate_expr_unused_variable() {
-        let err = preflight_validate_expr("x = ts_rank(close, 10); ts_decay_linear(close, 5)").unwrap_err();
+        let err = preflight_validate_expr("x = ts_rank(close, 10); ts_decay_linear(close, 5)")
+            .unwrap_err();
         assert!(err.to_string().contains("Found unused variable \"x\""));
     }
 
     #[test]
     fn test_preflight_validate_expr_event_in_ts_rank() {
-        let err = preflight_validate_expr("ts_rank(anl4_fs_detail_rec_v4_nd_estimate, 10)").unwrap_err();
-        assert!(err.to_string().contains("Operator does not support EVENT inputs"));
+        let err =
+            preflight_validate_expr("ts_rank(anl4_fs_detail_rec_v4_nd_estimate, 10)").unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("Operator does not support EVENT inputs"));
     }
 
     #[test]
     fn test_preflight_validate_expr_event_in_ts_backfill() {
-        let err = preflight_validate_expr("ts_backfill(anl4_fs_detail_rec_v4_nd_estimate, 5)").unwrap_err();
-        assert!(err.to_string().contains("Operator does not support EVENT inputs"));
+        let err = preflight_validate_expr("ts_backfill(anl4_fs_detail_rec_v4_nd_estimate, 5)")
+            .unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("Operator does not support EVENT inputs"));
     }
 
     #[test]
     fn test_preflight_validate_expr_event_in_ts_delta() {
-        let err = preflight_validate_expr("ts_delta(anl4_fs_detail_rec_v4_nd_estimate, 5)").unwrap_err();
-        assert!(err.to_string().contains("Operator does not support EVENT inputs"));
+        let err =
+            preflight_validate_expr("ts_delta(anl4_fs_detail_rec_v4_nd_estimate, 5)").unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("Operator does not support EVENT inputs"));
     }
 
     #[test]
     fn test_preflight_validate_expr_event_in_ts_decay_linear() {
-        let err = preflight_validate_expr("ts_decay_linear(anl4_fs_detail_rec_v4_nd_estimate, 5)").unwrap_err();
-        assert!(err.to_string().contains("Operator does not support EVENT inputs"));
+        let err = preflight_validate_expr("ts_decay_linear(anl4_fs_detail_rec_v4_nd_estimate, 5)")
+            .unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("Operator does not support EVENT inputs"));
     }
 
     #[test]
     fn test_preflight_validate_expr_event_alias() {
-        let err = preflight_validate_expr("x = anl4_fs_detail_rec_v4_nd_estimate; ts_decay_linear(x, 5)").unwrap_err();
-        assert!(err.to_string().contains("Operator does not support EVENT inputs"));
+        let err =
+            preflight_validate_expr("x = anl4_fs_detail_rec_v4_nd_estimate; ts_decay_linear(x, 5)")
+                .unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("Operator does not support EVENT inputs"));
     }
 
     #[test]
     fn test_compute_sim_fingerprint_determinism_and_normalization() {
-        let fp1 = compute_sim_fingerprint("  ts_rank(close,  10)  ", "TOP1000", 5, "SUBINDUSTRY", 0.05);
+        let fp1 =
+            compute_sim_fingerprint("  ts_rank(close,  10)  ", "TOP1000", 5, "SUBINDUSTRY", 0.05);
         let fp2 = compute_sim_fingerprint("ts_rank(close, 10)", "TOP1000", 5, "SUBINDUSTRY", 0.05);
         assert_eq!(fp1, fp2);
         assert_eq!(fp1.len(), 16);

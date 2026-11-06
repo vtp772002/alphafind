@@ -685,10 +685,7 @@ impl BrainClient {
             // If a hard check has already failed (e.g. CONCENTRATED_WEIGHT, LOW_SHARPE, LOW_FITNESS, HIGH_TURNOVER),
             // BRAIN will never calculate SELF_CORRELATION, leaving it PENDING forever.
             // Immediately fail-closed without spinning through all retry attempts.
-            let has_hard_failure = eval
-                .failed_checks
-                .iter()
-                .any(|f| !f.contains("ERROR"));
+            let has_hard_failure = eval.failed_checks.iter().any(|f| !f.contains("ERROR"));
             if has_hard_failure {
                 return Ok((false, eval.message, stats));
             }
@@ -1351,8 +1348,10 @@ mod tests {
             limit: None,
         });
 
-        let mut stats = InSampleStats::default();
-        stats.checks = checks_with_warning;
+        let stats = InSampleStats {
+            checks: checks_with_warning,
+            ..Default::default()
+        };
 
         let res = evaluate_submission_checks(&stats);
         assert!(
@@ -1383,8 +1382,10 @@ mod tests {
             })
             .collect();
 
-        let mut stats_core_warn = InSampleStats::default();
-        stats_core_warn.checks = checks_core_warn;
+        let stats_core_warn = InSampleStats {
+            checks: checks_core_warn,
+            ..Default::default()
+        };
 
         let res_core_warn = evaluate_submission_checks(&stats_core_warn);
         assert!(

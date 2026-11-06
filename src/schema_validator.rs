@@ -281,30 +281,33 @@ impl FieldCatalog {
     /// Registers a field identifier as FastExprType::Event.
     pub fn register_event_field(&mut self, fid: &str) {
         let fid_lower = fid.to_ascii_lowercase();
-        self.field_types.insert(fid_lower.clone(), FastExprType::Event);
-        self.fields.entry(fid_lower.clone()).or_insert_with(|| DataFieldEntry {
-            id: fid.to_string(),
-            description: Some("Event stream field".to_string()),
-            dataset: Some(DatasetCategoryInfo {
-                id: Some("analyst4".to_string()),
-                name: Some("Analyst Estimate Data".to_string()),
-            }),
-            category: Some(DatasetCategoryInfo {
-                id: Some("analyst".to_string()),
-                name: Some("Analyst".to_string()),
-            }),
-            subcategory: None,
-            region: Some("USA".to_string()),
-            delay: Some(1),
-            universe: Some("TOP1000".to_string()),
-            field_type: Some(DataFieldType::Other),
-            coverage: Some(1.0),
-            date_coverage: Some(1.0),
-            user_count: None,
-            alpha_count: None,
-            themes: None,
-            date_created: None,
-        });
+        self.field_types
+            .insert(fid_lower.clone(), FastExprType::Event);
+        self.fields
+            .entry(fid_lower.clone())
+            .or_insert_with(|| DataFieldEntry {
+                id: fid.to_string(),
+                description: Some("Event stream field".to_string()),
+                dataset: Some(DatasetCategoryInfo {
+                    id: Some("analyst4".to_string()),
+                    name: Some("Analyst Estimate Data".to_string()),
+                }),
+                category: Some(DatasetCategoryInfo {
+                    id: Some("analyst".to_string()),
+                    name: Some("Analyst".to_string()),
+                }),
+                subcategory: None,
+                region: Some("USA".to_string()),
+                delay: Some(1),
+                universe: Some("TOP1000".to_string()),
+                field_type: Some(DataFieldType::Other),
+                coverage: Some(1.0),
+                date_coverage: Some(1.0),
+                user_count: None,
+                alpha_count: None,
+                themes: None,
+                date_created: None,
+            });
     }
 
     /// Registers platform-verified event stream fields.
@@ -846,12 +849,18 @@ impl FieldCatalog {
                 if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
                     if file_name.starts_with("fields_") && file_name.ends_with(".json") {
                         if let Ok(content) = fs::read_to_string(&path) {
-                            if let Ok(raw_json) = serde_json::from_str::<serde_json::Value>(&content) {
+                            if let Ok(raw_json) =
+                                serde_json::from_str::<serde_json::Value>(&content)
+                            {
                                 if let Some(items) = raw_json.as_array() {
                                     for item in items {
                                         if let Some(id) = item.get("id").and_then(|v| v.as_str()) {
-                                            let type_str = item.get("type").and_then(|v| v.as_str()).unwrap_or("MATRIX");
-                                            let coverage = item.get("coverage").and_then(|v| v.as_f64());
+                                            let type_str = item
+                                                .get("type")
+                                                .and_then(|v| v.as_str())
+                                                .unwrap_or("MATRIX");
+                                            let coverage =
+                                                item.get("coverage").and_then(|v| v.as_f64());
                                             let fid_lower = id.to_ascii_lowercase();
 
                                             let fast_type = if Self::is_known_event_field(id) {
@@ -865,31 +874,56 @@ impl FieldCatalog {
                                             };
                                             self.field_types.insert(fid_lower.clone(), fast_type);
 
-                                            if let Ok(field_entry) = serde_json::from_value::<DataFieldEntry>(item.clone()) {
+                                            if let Ok(field_entry) =
+                                                serde_json::from_value::<DataFieldEntry>(
+                                                    item.clone(),
+                                                )
+                                            {
                                                 self.fields.insert(fid_lower, field_entry);
                                             } else {
                                                 let df_type = match fast_type {
-                                                    FastExprType::Vector => Some(DataFieldType::Vector),
-                                                    FastExprType::Event => Some(DataFieldType::Other),
+                                                    FastExprType::Vector => {
+                                                        Some(DataFieldType::Vector)
+                                                    }
+                                                    FastExprType::Event => {
+                                                        Some(DataFieldType::Other)
+                                                    }
                                                     _ => Some(DataFieldType::Matrix),
                                                 };
-                                                self.fields.insert(fid_lower, DataFieldEntry {
-                                                    id: id.to_string(),
-                                                    description: item.get("description").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                                                    dataset: None,
-                                                    category: None,
-                                                    subcategory: None,
-                                                    region: item.get("region").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                                                    delay: item.get("delay").and_then(|v| v.as_i64()).map(|d| d as i32),
-                                                    universe: item.get("universe").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                                                    field_type: df_type,
-                                                    coverage,
-                                                    date_coverage: item.get("dateCoverage").and_then(|v| v.as_f64()),
-                                                    user_count: None,
-                                                    alpha_count: None,
-                                                    themes: None,
-                                                    date_created: None,
-                                                });
+                                                self.fields.insert(
+                                                    fid_lower,
+                                                    DataFieldEntry {
+                                                        id: id.to_string(),
+                                                        description: item
+                                                            .get("description")
+                                                            .and_then(|v| v.as_str())
+                                                            .map(|s| s.to_string()),
+                                                        dataset: None,
+                                                        category: None,
+                                                        subcategory: None,
+                                                        region: item
+                                                            .get("region")
+                                                            .and_then(|v| v.as_str())
+                                                            .map(|s| s.to_string()),
+                                                        delay: item
+                                                            .get("delay")
+                                                            .and_then(|v| v.as_i64())
+                                                            .map(|d| d as i32),
+                                                        universe: item
+                                                            .get("universe")
+                                                            .and_then(|v| v.as_str())
+                                                            .map(|s| s.to_string()),
+                                                        field_type: df_type,
+                                                        coverage,
+                                                        date_coverage: item
+                                                            .get("dateCoverage")
+                                                            .and_then(|v| v.as_f64()),
+                                                        user_count: None,
+                                                        alpha_count: None,
+                                                        themes: None,
+                                                        date_created: None,
+                                                    },
+                                                );
                                             }
                                         }
                                     }
@@ -1600,7 +1634,10 @@ impl SchemaValidator {
                     let mut is_used = false;
                     for next_stmt in &statements[idx + 1..] {
                         match next_stmt {
-                            AstStatement::Assignment { target: next_target, expr: next_expr } => {
+                            AstStatement::Assignment {
+                                target: next_target,
+                                expr: next_expr,
+                            } => {
                                 let mut refs = Vec::new();
                                 collect_var_references(next_expr, &mut refs);
                                 if refs.iter().any(|r| r == target) {
@@ -2355,7 +2392,10 @@ impl SchemaValidator {
                             code: DiagnosticCode::ErrEventInputNotSupported,
                             field_id,
                             message: format!("Operator {} does not support EVENT inputs", func),
-                            suggestion: Some(format!("Operator {} requires numerical MATRIX inputs, not EVENT", func)),
+                            suggestion: Some(format!(
+                                "Operator {} requires numerical MATRIX inputs, not EVENT",
+                                func
+                            )),
                         });
                     }
                     if sig_meta.expr_type == FastExprType::Vector {
@@ -2477,7 +2517,10 @@ impl SchemaValidator {
                                 code: DiagnosticCode::ErrEventInputNotSupported,
                                 field_id,
                                 message: format!("Operator {} does not support EVENT inputs", func),
-                                suggestion: Some(format!("Operator {} requires numerical MATRIX inputs, not EVENT", func)),
+                                suggestion: Some(format!(
+                                    "Operator {} requires numerical MATRIX inputs, not EVENT",
+                                    func
+                                )),
                             });
                         }
                         if sig_meta.expr_type == FastExprType::Vector {
@@ -2665,7 +2708,10 @@ mod tests {
         let report = validator.validate("ast = abs(assets) + 1; rank(close)");
         assert!(!report.is_valid);
         assert!(
-            report.errors.iter().any(|e| e.code == DiagnosticCode::ErrUnusedVariable),
+            report
+                .errors
+                .iter()
+                .any(|e| e.code == DiagnosticCode::ErrUnusedVariable),
             "Expected ErrUnusedVariable diagnostic, found errors: {:?}",
             report.errors
         );
@@ -2696,7 +2742,10 @@ mod tests {
         let report = validator.validate("ts_backfill(anl4_fs_detail_rec_v4_nd_estimate, 20)");
         assert!(!report.is_valid);
         assert!(
-            report.errors.iter().any(|e| e.code == DiagnosticCode::ErrEventInputNotSupported),
+            report
+                .errors
+                .iter()
+                .any(|e| e.code == DiagnosticCode::ErrEventInputNotSupported),
             "Expected ErrEventInputNotSupported, found errors: {:?}",
             report.errors
         );
@@ -2705,6 +2754,9 @@ mod tests {
             .iter()
             .find(|e| e.code == DiagnosticCode::ErrEventInputNotSupported)
             .unwrap();
-        assert_eq!(err.message, "Operator ts_backfill does not support EVENT inputs");
+        assert_eq!(
+            err.message,
+            "Operator ts_backfill does not support EVENT inputs"
+        );
     }
 }

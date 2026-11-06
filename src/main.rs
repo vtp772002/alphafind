@@ -495,7 +495,18 @@ async fn main() -> Result<()> {
             neutralization,
             truncation,
             workers,
-        } => cmd_sim(expr, batch, universe, decay, neutralization, truncation, workers).await,
+        } => {
+            cmd_sim(
+                expr,
+                batch,
+                universe,
+                decay,
+                neutralization,
+                truncation,
+                workers,
+            )
+            .await
+        }
         Commands::Radar {
             region,
             universe,
