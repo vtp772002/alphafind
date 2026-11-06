@@ -413,6 +413,343 @@ pub async fn cmd_impact(alpha_id: String, refresh: bool) -> Result<()> {
     Ok(())
 }
 
+/// Summary record for side-by-side comparison in multi-candidate evaluation.
+#[derive(Debug, Clone)]
+struct CandidateEvalSummary {
+    alpha_id: String,
+    max_corr: Option<f64>,
+    avg_corr: Option<f64>,
+    merged_sharpe: Option<f64>,
+    delta_sharpe: Option<f64>,
+    delta_vol: Option<f64>,
+    verdict: String,
+}
+
+/// Evaluates one or more candidate Alphas in a single unified pass (Correlation Audit + Portfolio Delta Impact).
+pub async fn cmd_eval(alpha_ids: Vec<String>, refresh: bool) -> Result<()> {
+    if alpha_ids.is_empty() {
+        anyhow::bail!("No Alpha IDs provided for evaluation.");
+    }
+
+    println!(
+        "{}",
+        "═════════════════════════════════════════════════════════════════════════".cyan()
+    );
+    println!(
+        "{}",
+        format!(
+            "  AlphaFind Quant Engine — Unified 1-Pass Evaluation [{} Candidate(s)]",
+            alpha_ids.len()
+        )
+        .bold()
+        .cyan()
+    );
+    println!(
+        "{}",
+        "═════════════════════════════════════════════════════════════════════════".cyan()
+    );
+
+    // 1. Load active Out-of-Sample portfolio and PnL cache once upfront
+    let os_alphas = load_portfolio_os()?;
+    let pnl_cache = load_or_refresh_os_pnl_cache(&os_alphas, refresh).await?;
+    if pnl_cache.is_empty() {
+        anyhow::bail!("portfolio_pnl.json not found or empty! Run 'alphafind sync' or 'alphafind portfolio' first.");
+    }
+
+    let client = get_main_client()?;
+    let mut summaries = Vec::new();
+
+    for (cand_idx, alpha_id) in alpha_ids.iter().enumerate() {
+        println!(
+            "\n{}",
+            format!(
+                "─── Candidate [{}/{}] : {} ──────────────────────────────────────",
+                cand_idx + 1,
+                alpha_ids.len(),
+                alpha_id.yellow().bold()
+            )
+            .cyan()
+        );
+
+        println!(
+            "  Fetching candidate daily PnL for {}...",
+            alpha_id.yellow()
+        );
+        let cand_pnl = client.fetch_daily_pnl(alpha_id).await?;
+        println!("  Candidate PnL records: {} trading days.", cand_pnl.len());
+
+        // 2. Tier 1: Internal Portfolio Correlation Audit
+        let audit_report = audit_candidate(alpha_id, &cand_pnl, &pnl_cache);
+
+        println!(
+            "\n  📊 TIER 1: INTERNAL PORTFOLIO CORRELATION AUDIT (vs {} OS Alphas):",
+            pnl_cache.len()
+        );
+        println!("  ─────────────────────────────────────────────────────────────────────────");
+        for (idx, (os_id, corr, days)) in audit_report.pairwise_results.iter().take(8).enumerate() {
+            let status_icon = if *corr <= 0.15 {
+                "🟢 ORTHOGONAL (local ≤0.15)".green()
+            } else if *corr <= 0.70 {
+                "🟡 WITHIN 0.70 PROXY".yellow()
+            } else {
+                "🔴 OVER 0.70 PROXY".red()
+            };
+
+            println!(
+                "    #{:<2} vs {:<10} : rho = {:+7.4} ({:+6.2}%) | {:4} days -> {}",
+                idx + 1,
+                os_id.yellow(),
+                corr,
+                corr * 100.0,
+                days,
+                status_icon
+            );
+        }
+
+        println!("  ─────────────────────────────────────────────────────────────────────────");
+        let max_str = match audit_report.max_correlation {
+            Some(m) => format!("{:+.4} ({:+.2}%)", m, m * 100.0),
+            None => "N/A (insufficient overlap)".to_string(),
+        };
+        let avg_str = match audit_report.avg_correlation {
+            Some(a) => format!("{:+.4} ({:+.2}%)", a, a * 100.0),
+            None => "N/A".to_string(),
+        };
+        let partner = audit_report.most_correlated_id.as_deref().unwrap_or("none");
+        println!(
+            "  MAX INTERNAL CORRELATION: {} vs {}",
+            max_str,
+            partner.yellow()
+        );
+        println!("  AVERAGE INTERNAL CORR:   {}", avg_str);
+        if audit_report.insufficient_overlap_count > 0 {
+            println!(
+                "  INSUFFICIENT OVERLAP:    {} alphas skipped (<30 common days)",
+                audit_report.insufficient_overlap_count.to_string().yellow()
+            );
+        }
+
+        if audit_report.valid_comparisons == 0 {
+            println!(
+                "\n  {} No active OS alphas had >= 30 common trading days. Compliance cannot be confirmed (fail-closed).",
+                "⚠️  [INSUFFICIENT DATA]".yellow().bold()
+            );
+        } else if audit_report.is_locally_orthogonal {
+            println!(
+                "\n  {} Candidate is locally orthogonal (rho <= 0.15, internal research preference) against current OS portfolio.",
+                "🌟 [EXCELLENT]".green().bold()
+            );
+        } else if audit_report.is_within_correlation_proxy {
+            println!(
+                "\n  {} Local rho is within the platform's published 0.70 self-correlation threshold proxy.",
+                "✅ [WITHIN PROXY]".green()
+            );
+        } else {
+            println!(
+                "\n  {} Local rho exceeds the 0.70 proxy threshold. Platform check is the authority.",
+                "❌ [OVER PROXY]".red().bold()
+            );
+        }
+
+        // 3. Portfolio Merge Simulation Impact
+        let impact_opt = calculate_portfolio_impact(alpha_id, &cand_pnl, &pnl_cache);
+        let summary_entry = if let Some(impact) = impact_opt {
+            println!("\n  📊 PORTFOLIO MERGE SIMULATION IMPACT (overlapping PnL dates):");
+            println!("  ─────────────────────────────────────────────────────────────────────────");
+            println!(
+                "    Active Alphas Count:       {} -> {} (+1 Alpha)",
+                impact.baseline_alphas, impact.new_alphas
+            );
+
+            let d_sharpe_styled = if impact.delta_sharpe >= 0.0 {
+                format!("+{:.4}", impact.delta_sharpe).green().bold().to_string()
+            } else {
+                format!("{:.4}", impact.delta_sharpe).red().bold().to_string()
+            };
+            println!(
+                "    Merged Portfolio Sharpe:   {:.4} -> {:.4} (Delta: {})",
+                impact.baseline_sharpe, impact.new_sharpe, d_sharpe_styled
+            );
+
+            let d_pnl_styled = if impact.delta_pnl >= 0.0 {
+                format!("+${:.2}", impact.delta_pnl).green().to_string()
+            } else {
+                format!("-${:.2}", impact.delta_pnl.abs()).red().to_string()
+            };
+            println!(
+                "    Annualized Merged PnL:     ${:.2} -> ${:.2} (Delta: {})",
+                impact.baseline_pnl, impact.new_pnl, d_pnl_styled
+            );
+
+            let d_vol_styled = if impact.delta_vol <= 0.0 {
+                format!("-${:.2} (Variance Collapsed)", impact.delta_vol.abs())
+                    .green()
+                    .to_string()
+            } else {
+                format!("+${:.2}", impact.delta_vol).yellow().to_string()
+            };
+            println!(
+                "    Annualized Volatility:     ${:.2} -> ${:.2} (Delta: {})",
+                impact.baseline_vol, impact.new_vol, d_vol_styled
+            );
+
+            let d_corr_styled = if impact.delta_avg_corr <= 0.0 {
+                format!("{:.2}%", impact.delta_avg_corr * 100.0).green().to_string()
+            } else {
+                format!("+{:.2}%", impact.delta_avg_corr * 100.0).yellow().to_string()
+            };
+            println!(
+                "    Average Pairwise Corr:     {:.2}% -> {:.2}% (Delta: {})",
+                impact.baseline_avg_corr * 100.0,
+                impact.new_avg_corr * 100.0,
+                d_corr_styled
+            );
+
+            println!("  ─────────────────────────────────────────────────────────────────────────");
+            println!(
+                "    Max Pairwise Correlation:  {:+.2}% vs {}",
+                impact.max_pairwise_corr * 100.0,
+                impact.most_correlated_id.yellow()
+            );
+            println!(
+                "    Direct Avg Corr vs OS:     {:+.2}%",
+                impact.avg_pairwise_corr_vs_os * 100.0
+            );
+
+            let buffer_styled = if impact.safety_buffer_pct >= 10.0 {
+                format!("{:.2}% (HIGH SAFETY)", impact.safety_buffer_pct)
+                    .green()
+                    .bold()
+                    .to_string()
+            } else if impact.safety_buffer_pct > 0.0 {
+                format!("{:.2}% (TIGHT SAFETY)", impact.safety_buffer_pct)
+                    .yellow()
+                    .bold()
+                    .to_string()
+            } else {
+                format!("{:.2}% (VIOLATION)", impact.safety_buffer_pct)
+                    .red()
+                    .bold()
+                    .to_string()
+            };
+            println!("    Safety Buffer to 70% Proxy: {}", buffer_styled);
+            println!("  ─────────────────────────────────────────────────────────────────────────");
+
+            let verdict_str = if impact.max_pairwise_corr > 0.70 {
+                println!(
+                    "\n  {} Local rho exceeds the 0.70 proxy threshold; confirm with the platform check before submitting.",
+                    "❌ [HIGH CORRELATION RISK]".red().bold()
+                );
+                "HIGH CORRELATION RISK".to_string()
+            } else if impact.delta_sharpe > 0.0 && impact.safety_buffer_pct >= 8.0 {
+                println!(
+                    "\n  {} HIGH CONVICTION: Boosts portfolio Sharpe and preserves safety buffer!",
+                    "🌟 [HIGH CONVICTION]".green().bold()
+                );
+                "HIGH CONVICTION".to_string()
+            } else if impact.delta_sharpe > 0.0 {
+                println!(
+                    "\n  {} MARGINAL: Boosts portfolio Sharpe but safety buffer is narrow.",
+                    "🟡 [MARGINAL]".yellow().bold()
+                );
+                "MARGINAL".to_string()
+            } else {
+                println!(
+                    "\n  {} DILUTIVE: Candidate reduces portfolio Sharpe.",
+                    "⚠️ [DILUTIVE]".yellow()
+                );
+                "DILUTIVE".to_string()
+            };
+
+            CandidateEvalSummary {
+                alpha_id: alpha_id.clone(),
+                max_corr: Some(impact.max_pairwise_corr),
+                avg_corr: Some(impact.avg_pairwise_corr_vs_os),
+                merged_sharpe: Some(impact.new_sharpe),
+                delta_sharpe: Some(impact.delta_sharpe),
+                delta_vol: Some(impact.delta_vol),
+                verdict: verdict_str,
+            }
+        } else {
+            println!(
+                "  {} Could not compute portfolio merge impact (insufficient overlapping trading days).",
+                "⚠️".yellow()
+            );
+            CandidateEvalSummary {
+                alpha_id: alpha_id.clone(),
+                max_corr: audit_report.max_correlation,
+                avg_corr: audit_report.avg_correlation,
+                merged_sharpe: None,
+                delta_sharpe: None,
+                delta_vol: None,
+                verdict: "INSUFFICIENT DATA".to_string(),
+            }
+        };
+
+        summaries.push(summary_entry);
+    }
+
+    // 4. Multi-Candidate Evaluation Summary Table (if alpha_ids.len() > 1)
+    if summaries.len() > 1 {
+        println!(
+            "\n{}",
+            "═════════════════════════════════════════════════════════════════════════════════════════════════════════════".cyan()
+        );
+        println!(
+            "{}",
+            "  MULTI-CANDIDATE EVALUATION SUMMARY"
+                .bold()
+                .cyan()
+        );
+        println!(
+            "{}",
+            "═════════════════════════════════════════════════════════════════════════════════════════════════════════════".cyan()
+        );
+        println!(
+            "  ┌────────────┬────────────┬─────────────────┬───────────────┬──────────────┬────────────────┬─────────────────────────┐"
+        );
+        println!(
+            "  │ {:<10} │ {:>10} │ {:>15} │ {:>13} │ {:>12} │ {:>14} │ {:<23} │",
+            "Alpha ID", "Max Corr", "Direct Avg Corr", "Merged Sharpe", "Delta Sharpe", "Delta Vol", "Verdict"
+        );
+        println!(
+            "  ├────────────┼────────────┼─────────────────┼───────────────┼──────────────┼────────────────┼─────────────────────────┤"
+        );
+
+        for s in &summaries {
+            let max_c_str = s.max_corr.map(|c| format!("{:+.2}%", c * 100.0)).unwrap_or_else(|| "N/A".to_string());
+            let avg_c_str = s.avg_corr.map(|c| format!("{:+.2}%", c * 100.0)).unwrap_or_else(|| "N/A".to_string());
+            let m_sharpe_str = s.merged_sharpe.map(|sh| format!("{:.4}", sh)).unwrap_or_else(|| "N/A".to_string());
+            let d_sharpe_str = s.delta_sharpe.map(|d| format!("{:+7.4}", d)).unwrap_or_else(|| "N/A".to_string());
+            let d_vol_str = s.delta_vol.map(|v| format!("{:+11.2}", v)).unwrap_or_else(|| "N/A".to_string());
+
+            let verdict_styled = match s.verdict.as_str() {
+                "HIGH CONVICTION" => s.verdict.green().bold().to_string(),
+                "MARGINAL" => s.verdict.yellow().bold().to_string(),
+                "DILUTIVE" => s.verdict.yellow().to_string(),
+                "HIGH CORRELATION RISK" => s.verdict.red().bold().to_string(),
+                _ => s.verdict.dimmed().to_string(),
+            };
+
+            println!(
+                "  │ {:<10} │ {:>10} │ {:>15} │ {:>13} │ {:>12} │ {:>14} │ {:<23} │",
+                s.alpha_id.yellow(),
+                max_c_str,
+                avg_c_str,
+                m_sharpe_str,
+                d_sharpe_str,
+                d_vol_str,
+                verdict_styled
+            );
+        }
+        println!(
+            "  └────────────┴────────────┴─────────────────┴───────────────┴──────────────┴────────────────┴─────────────────────────┘"
+        );
+    }
+
+    Ok(())
+}
+
 /// Diagnoses active OS portfolio health, alpha decay ratios, half-life, and marginal Sharpe impact.
 pub async fn cmd_health(
     alpha_id: Option<String>,

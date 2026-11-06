@@ -29,6 +29,8 @@ pub enum FastExprType {
     Matrix,
     /// 3D ragged event-stream tensor [Date x Asset x Events]. Requires folding.
     Vector,
+    /// Event stream record tensor (e.g. analyst revisions). Cannot be fed directly to time-series operators.
+    Event,
     /// Categorical grouping identifier (e.g., subindustry, industry, sector).
     Group,
     /// Densified grouping matrix guaranteed contiguous indices.
@@ -47,6 +49,7 @@ impl FastExprType {
             FastExprType::Scalar => "SCALAR",
             FastExprType::Matrix => "MATRIX",
             FastExprType::Vector => "VECTOR",
+            FastExprType::Event => "EVENT",
             FastExprType::Group => "GROUP",
             FastExprType::DensifiedGroup => "DENSIFIED_GROUP",
             FastExprType::BooleanMatrix => "BOOLEAN_MATRIX",
@@ -75,6 +78,10 @@ pub enum DiagnosticCode {
     ErrSyntaxMalformed,
     /// Field requires delay=1 but simulation settings specify delay=0.
     ErrLookaheadDelay,
+    /// Unused variable assignment in alpha expression script.
+    ErrUnusedVariable,
+    /// Event stream field passed directly to operator that does not support EVENT inputs.
+    ErrEventInputNotSupported,
     /// Field cross-sectional coverage is low, posing risk of failing subuniverse consistency test.
     WarnSubuniverseRisk,
     /// Option breakeven or forward price level used in rank without close normalization.
@@ -94,6 +101,8 @@ impl DiagnosticCode {
             DiagnosticCode::ErrUnknownField => "ERR_UNKNOWN_FIELD",
             DiagnosticCode::ErrSyntaxMalformed => "ERR_SYNTAX_MALFORMED",
             DiagnosticCode::ErrLookaheadDelay => "ERR_LOOKAHEAD_DELAY",
+            DiagnosticCode::ErrUnusedVariable => "ERR_UNUSED_VARIABLE",
+            DiagnosticCode::ErrEventInputNotSupported => "ERR_EVENT_INPUT_NOT_SUPPORTED",
             DiagnosticCode::WarnSubuniverseRisk => "WARN_SUBUNIVERSE_RISK",
             DiagnosticCode::WarnUnnormalizedPrice => "WARN_UNNORMALIZED_PRICE",
             DiagnosticCode::WarnHorizonSyntax => "WARN_HORIZON_SYNTAX",
@@ -222,6 +231,7 @@ impl ValidationReport {
 #[derive(Debug, Clone)]
 pub struct FieldCatalog {
     fields: HashMap<String, DataFieldEntry>,
+    field_types: HashMap<String, FastExprType>,
 }
 
 impl Default for FieldCatalog {
@@ -236,16 +246,93 @@ impl FieldCatalog {
     pub fn builtin() -> Self {
         let mut catalog = Self {
             fields: HashMap::new(),
+            field_types: HashMap::new(),
         };
         catalog.load_builtin_invariants();
         catalog
     }
 
+    /// Creates a FieldCatalog with built-in invariants including known event fields.
+    pub fn with_builtin_defaults() -> Self {
+        let mut catalog = Self::builtin();
+        catalog.register_known_event_fields();
+        catalog
+    }
+
     /// Creates a FieldCatalog with built-in invariants and overlays any disk cache in `data/`.
     pub fn new() -> Self {
-        let mut catalog = Self::builtin();
+        let mut catalog = Self::with_builtin_defaults();
         catalog.load_disk_cache(Path::new("data"));
+        catalog.register_known_event_fields();
         catalog
+    }
+
+    /// Whether the field identifier is a known platform event stream field.
+    pub fn is_known_event_field(id: &str) -> bool {
+        matches!(
+            id.to_ascii_lowercase().as_str(),
+            "anl4_fs_detail_rec_v4_nd_estimate"
+                | "anl4_detailrecv4_est"
+                | "anl4_detailrecv4v104_est"
+                | "anl4_bac1detailrec_item"
+        )
+    }
+
+    /// Registers a field identifier as FastExprType::Event.
+    pub fn register_event_field(&mut self, fid: &str) {
+        let fid_lower = fid.to_ascii_lowercase();
+        self.field_types.insert(fid_lower.clone(), FastExprType::Event);
+        self.fields.entry(fid_lower.clone()).or_insert_with(|| DataFieldEntry {
+            id: fid.to_string(),
+            description: Some("Event stream field".to_string()),
+            dataset: Some(DatasetCategoryInfo {
+                id: Some("analyst4".to_string()),
+                name: Some("Analyst Estimate Data".to_string()),
+            }),
+            category: Some(DatasetCategoryInfo {
+                id: Some("analyst".to_string()),
+                name: Some("Analyst".to_string()),
+            }),
+            subcategory: None,
+            region: Some("USA".to_string()),
+            delay: Some(1),
+            universe: Some("TOP1000".to_string()),
+            field_type: Some(DataFieldType::Other),
+            coverage: Some(1.0),
+            date_coverage: Some(1.0),
+            user_count: None,
+            alpha_count: None,
+            themes: None,
+            date_created: None,
+        });
+    }
+
+    /// Registers platform-verified event stream fields.
+    pub fn register_known_event_fields(&mut self) {
+        let known_event_fields = [
+            "anl4_fs_detail_rec_v4_nd_estimate",
+            "anl4_detailrecv4_est",
+            "anl4_detailrecv4v104_est",
+            "anl4_bac1detailrec_item",
+        ];
+        for fid in known_event_fields {
+            self.register_event_field(fid);
+        }
+    }
+
+    /// Resolves the FastExprType for a field identifier.
+    pub fn get_field_type(&self, id: &str) -> Option<FastExprType> {
+        let id_lower = id.to_ascii_lowercase();
+        if let Some(&ft) = self.field_types.get(&id_lower) {
+            return Some(ft);
+        }
+        self.get_field(id).map(|entry| {
+            if entry.is_vector() {
+                FastExprType::Vector
+            } else {
+                FastExprType::Matrix
+            }
+        })
     }
 
     /// Number of registered fields in catalog.
@@ -293,6 +380,7 @@ impl FieldCatalog {
             "returns",
             "cap",
             "sharesout",
+            "assets",
         ];
         for f in standard_matrix_fields {
             self.fields.insert(
@@ -739,10 +827,15 @@ impl FieldCatalog {
                 },
             );
         }
+
+        // Register platform-known event stream fields
+        self.register_known_event_fields();
     }
 
-    /// Ingests all `fields_*.json` from the target data directory.
-    pub fn load_disk_cache(&mut self, data_dir: &Path) {
+    /// Scans `fields_*.json` in the specified directory and loads field definitions with semantic types.
+    ///
+    /// Degrades gracefully if the directory does not exist or cannot be read per AGENTS.md.
+    pub fn load_local_field_catalog(&mut self, data_dir: &Path) {
         if !data_dir.exists() || !data_dir.is_dir() {
             return;
         }
@@ -753,10 +846,53 @@ impl FieldCatalog {
                 if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
                     if file_name.starts_with("fields_") && file_name.ends_with(".json") {
                         if let Ok(content) = fs::read_to_string(&path) {
-                            if let Ok(items) = serde_json::from_str::<Vec<DataFieldEntry>>(&content)
-                            {
-                                for item in items {
-                                    self.fields.insert(item.id.to_ascii_lowercase(), item);
+                            if let Ok(raw_json) = serde_json::from_str::<serde_json::Value>(&content) {
+                                if let Some(items) = raw_json.as_array() {
+                                    for item in items {
+                                        if let Some(id) = item.get("id").and_then(|v| v.as_str()) {
+                                            let type_str = item.get("type").and_then(|v| v.as_str()).unwrap_or("MATRIX");
+                                            let coverage = item.get("coverage").and_then(|v| v.as_f64());
+                                            let fid_lower = id.to_ascii_lowercase();
+
+                                            let fast_type = if Self::is_known_event_field(id) {
+                                                FastExprType::Event
+                                            } else {
+                                                match type_str.to_ascii_uppercase().as_str() {
+                                                    "EVENT" => FastExprType::Event,
+                                                    "VECTOR" => FastExprType::Vector,
+                                                    _ => FastExprType::Matrix,
+                                                }
+                                            };
+                                            self.field_types.insert(fid_lower.clone(), fast_type);
+
+                                            if let Ok(field_entry) = serde_json::from_value::<DataFieldEntry>(item.clone()) {
+                                                self.fields.insert(fid_lower, field_entry);
+                                            } else {
+                                                let df_type = match fast_type {
+                                                    FastExprType::Vector => Some(DataFieldType::Vector),
+                                                    FastExprType::Event => Some(DataFieldType::Other),
+                                                    _ => Some(DataFieldType::Matrix),
+                                                };
+                                                self.fields.insert(fid_lower, DataFieldEntry {
+                                                    id: id.to_string(),
+                                                    description: item.get("description").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                                                    dataset: None,
+                                                    category: None,
+                                                    subcategory: None,
+                                                    region: item.get("region").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                                                    delay: item.get("delay").and_then(|v| v.as_i64()).map(|d| d as i32),
+                                                    universe: item.get("universe").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                                                    field_type: df_type,
+                                                    coverage,
+                                                    date_coverage: item.get("dateCoverage").and_then(|v| v.as_f64()),
+                                                    user_count: None,
+                                                    alpha_count: None,
+                                                    themes: None,
+                                                    date_created: None,
+                                                });
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -764,6 +900,11 @@ impl FieldCatalog {
                 }
             }
         }
+    }
+
+    /// Ingests all `fields_*.json` from the target data directory.
+    pub fn load_disk_cache(&mut self, data_dir: &Path) {
+        self.load_local_field_catalog(data_dir);
     }
 }
 
@@ -1223,6 +1364,24 @@ impl Default for ValueMeta {
     }
 }
 
+/// Helper to recursively collect all variable references from an AST expression.
+fn collect_var_references(expr: &AstExpr, vars: &mut Vec<String>) {
+    match expr {
+        AstExpr::Variable(v) => vars.push(v.clone()),
+        AstExpr::Unary { expr, .. } => collect_var_references(expr, vars),
+        AstExpr::Binary { left, right, .. } => {
+            collect_var_references(left, vars);
+            collect_var_references(right, vars);
+        }
+        AstExpr::Call { args, .. } => {
+            for arg in args {
+                collect_var_references(arg, vars);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Helper to recursively evaluate constant numbers across literals, unary, binary arithmetic, and symbol table.
 fn extract_constant_number(
     expr: &AstExpr,
@@ -1292,6 +1451,12 @@ impl SchemaValidator {
     /// Sets target simulation delay (0 or 1).
     pub fn with_delay(mut self, delay: i32) -> Self {
         self.target_delay = delay;
+        self
+    }
+
+    /// Ingests local field schemas from the specified data directory.
+    pub fn with_local_data(mut self, data_dir: &Path) -> Self {
+        self.catalog.load_local_field_catalog(data_dir);
         self
     }
 
@@ -1431,6 +1596,47 @@ impl SchemaValidator {
         for (idx, stmt) in statements.iter().enumerate() {
             match stmt {
                 AstStatement::Assignment { target, expr } => {
+                    // Check unused variable: target must be referenced in a subsequent statement or terminal expression
+                    let mut is_used = false;
+                    for next_stmt in &statements[idx + 1..] {
+                        match next_stmt {
+                            AstStatement::Assignment { target: next_target, expr: next_expr } => {
+                                let mut refs = Vec::new();
+                                collect_var_references(next_expr, &mut refs);
+                                if refs.iter().any(|r| r == target) {
+                                    is_used = true;
+                                    break;
+                                }
+                                if next_target == target {
+                                    // Reassigned before being read
+                                    break;
+                                }
+                            }
+                            AstStatement::Expression(next_expr) => {
+                                let mut refs = Vec::new();
+                                collect_var_references(next_expr, &mut refs);
+                                if refs.iter().any(|r| r == target) {
+                                    is_used = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if !is_used {
+                        errors.push(ValidationError {
+                            code: DiagnosticCode::ErrUnusedVariable,
+                            field_id: Some(target.clone()),
+                            message: format!(
+                                "Found unused variable \"{}\"; WorldQuant BRAIN rejects expressions with unused variable assignments",
+                                target
+                            ),
+                            suggestion: Some(format!(
+                                "Remove unused assignment '{} = ...' or reference '{}' in the final expression",
+                                target, target
+                            )),
+                        });
+                    }
+
                     let meta = self.eval_expr(
                         expr,
                         &symbol_table,
@@ -1473,6 +1679,17 @@ impl SchemaValidator {
                                     field_id: None,
                                     message: "Terminal alpha expression evaluates to a SCALAR; WorldQuant BRAIN alphas must evaluate to a 2D cross-sectional matrix".to_string(),
                                     suggestion: Some("Provide a cross-sectional matrix expression, e.g. group_neutralize(rank(close), densify(subindustry))".to_string()),
+                                });
+                            }
+                            FastExprType::Event => {
+                                errors.push(ValidationError {
+                                    code: DiagnosticCode::ErrEventInputNotSupported,
+                                    field_id: match expr {
+                                        AstExpr::Variable(v) => Some(v.clone()),
+                                        _ => None,
+                                    },
+                                    message: "Terminal alpha expression evaluates to an EVENT field; WorldQuant BRAIN alphas must evaluate to a 2D cross-sectional matrix".to_string(),
+                                    suggestion: Some("Aggregate or transform event stream into a matrix before returning".to_string()),
                                 });
                             }
                             FastExprType::Group | FastExprType::DensifiedGroup => {
@@ -1669,25 +1886,29 @@ impl SchemaValidator {
                         }
                     }
 
-                    extracted_fields.push(ExtractedFieldMeta {
-                        id: name.clone(),
-                        dataset_id: entry.dataset_id().map(|s| s.to_string()),
-                        field_type: if is_vec {
-                            DataFieldType::Vector
-                        } else {
-                            DataFieldType::Matrix
-                        },
-                        coverage: entry.coverage,
-                        is_vector: is_vec,
-                        backfilled: false,
-                        folded: false,
-                    });
-
-                    let expr_type = if is_vec {
+                    let expr_type = self.catalog.get_field_type(name).unwrap_or(if is_vec {
                         FastExprType::Vector
                     } else {
                         FastExprType::Matrix
+                    });
+
+                    let field_dt = if expr_type == FastExprType::Vector {
+                        DataFieldType::Vector
+                    } else if expr_type == FastExprType::Event {
+                        DataFieldType::Other
+                    } else {
+                        DataFieldType::Matrix
                     };
+
+                    extracted_fields.push(ExtractedFieldMeta {
+                        id: name.clone(),
+                        dataset_id: entry.dataset_id().map(|s| s.to_string()),
+                        field_type: field_dt,
+                        coverage: entry.coverage,
+                        is_vector: expr_type == FastExprType::Vector,
+                        backfilled: false,
+                        folded: false,
+                    });
 
                     let is_price_level = name_lower.starts_with("call_breakeven_")
                         || name_lower.starts_with("put_breakeven_")
@@ -2125,6 +2346,18 @@ impl SchemaValidator {
                         warnings,
                         extracted_fields,
                     );
+                    if sig_meta.expr_type == FastExprType::Event {
+                        let field_id = match &args[0] {
+                            AstExpr::Variable(var) => Some(var.clone()),
+                            _ => None,
+                        };
+                        errors.push(ValidationError {
+                            code: DiagnosticCode::ErrEventInputNotSupported,
+                            field_id,
+                            message: format!("Operator {} does not support EVENT inputs", func),
+                            suggestion: Some(format!("Operator {} requires numerical MATRIX inputs, not EVENT", func)),
+                        });
+                    }
                     if sig_meta.expr_type == FastExprType::Vector {
                         errors.push(ValidationError {
                             code: DiagnosticCode::ErrVecTypeMismatch,
@@ -2182,8 +2415,16 @@ impl SchemaValidator {
                         });
                     }
 
+                    let res_type = if sig_meta.expr_type == FastExprType::Event
+                        || sig_meta.expr_type == FastExprType::Vector
+                    {
+                        FastExprType::TypeError
+                    } else {
+                        sig_meta.expr_type
+                    };
+
                     return ValueMeta {
-                        expr_type: sig_meta.expr_type,
+                        expr_type: res_type,
                         is_backfilled: window_val >= 5,
                         backfill_window: Some(window_val),
                         low_coverage_origins: if window_val >= 5 {
@@ -2214,6 +2455,7 @@ impl SchemaValidator {
                     let lag_idx = args.len() - 1;
                     let mut combined_origins = Vec::new();
                     let mut has_vector_arg = false;
+                    let mut has_event_arg = false;
                     let mut first_sig_meta: Option<ValueMeta> = None;
 
                     for i in 0..lag_idx {
@@ -2225,6 +2467,19 @@ impl SchemaValidator {
                             warnings,
                             extracted_fields,
                         );
+                        if sig_meta.expr_type == FastExprType::Event {
+                            has_event_arg = true;
+                            let field_id = match &args[i] {
+                                AstExpr::Variable(var) => Some(var.clone()),
+                                _ => None,
+                            };
+                            errors.push(ValidationError {
+                                code: DiagnosticCode::ErrEventInputNotSupported,
+                                field_id,
+                                message: format!("Operator {} does not support EVENT inputs", func),
+                                suggestion: Some(format!("Operator {} requires numerical MATRIX inputs, not EVENT", func)),
+                            });
+                        }
                         if sig_meta.expr_type == FastExprType::Vector {
                             has_vector_arg = true;
                             let field_id = match &args[i] {
@@ -2281,7 +2536,7 @@ impl SchemaValidator {
                     }
 
                     return ValueMeta {
-                        expr_type: if has_vector_arg {
+                        expr_type: if has_vector_arg || has_event_arg {
                             FastExprType::TypeError
                         } else {
                             FastExprType::Matrix
@@ -2397,5 +2652,59 @@ impl SchemaValidator {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_unused_variable_detection() {
+        let validator = SchemaValidator::new();
+        let report = validator.validate("ast = abs(assets) + 1; rank(close)");
+        assert!(!report.is_valid);
+        assert!(
+            report.errors.iter().any(|e| e.code == DiagnosticCode::ErrUnusedVariable),
+            "Expected ErrUnusedVariable diagnostic, found errors: {:?}",
+            report.errors
+        );
+        let unused_err = report
+            .errors
+            .iter()
+            .find(|e| e.code == DiagnosticCode::ErrUnusedVariable)
+            .unwrap();
+        assert_eq!(unused_err.field_id.as_deref(), Some("ast"));
+        assert!(unused_err.message.contains("Found unused variable \"ast\""));
+    }
+
+    #[test]
+    fn test_used_variable_chain() {
+        let validator = SchemaValidator::new();
+        let report = validator.validate("a = close; b = a + 1; rank(b)");
+        assert!(
+            report.is_valid,
+            "Used variable chain should pass validation, but failed: {:?}",
+            report.errors
+        );
+        assert!(report.errors.is_empty());
+    }
+
+    #[test]
+    fn test_event_field_ts_backfill_rejected() {
+        let validator = SchemaValidator::new();
+        let report = validator.validate("ts_backfill(anl4_fs_detail_rec_v4_nd_estimate, 20)");
+        assert!(!report.is_valid);
+        assert!(
+            report.errors.iter().any(|e| e.code == DiagnosticCode::ErrEventInputNotSupported),
+            "Expected ErrEventInputNotSupported, found errors: {:?}",
+            report.errors
+        );
+        let err = report
+            .errors
+            .iter()
+            .find(|e| e.code == DiagnosticCode::ErrEventInputNotSupported)
+            .unwrap();
+        assert_eq!(err.message, "Operator ts_backfill does not support EVENT inputs");
     }
 }

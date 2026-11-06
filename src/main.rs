@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 
 use alphafind::commands::auth::{cmd_auth, cmd_score, cmd_sync};
 use alphafind::commands::portfolio::{
-    cmd_allocate, cmd_audit, cmd_health, cmd_impact, cmd_portfolio,
+    cmd_allocate, cmd_audit, cmd_eval, cmd_health, cmd_impact, cmd_portfolio,
 };
 use alphafind::commands::research::{
     cmd_blueprint, cmd_fields, cmd_generate, cmd_matrix, cmd_shadow,
@@ -54,6 +54,17 @@ enum Commands {
     /// Simulate merged multi-alpha Out-of-Sample portfolio Sharpe and diversification metrics
     Portfolio {
         /// Force live re-fetch of all active OS Alpha PnLs before simulating
+        #[arg(long)]
+        refresh: bool,
+    },
+
+    /// Evaluate one or more candidate Alphas in a single pass (Correlation Audit + Portfolio Delta Impact)
+    Eval {
+        /// One or more Alpha IDs to evaluate
+        #[arg(required = true, num_args = 1..)]
+        alpha_ids: Vec<String>,
+
+        /// Force live re-fetch of all active OS Alpha PnLs before evaluating
         #[arg(long)]
         refresh: bool,
     },
@@ -123,11 +134,15 @@ enum Commands {
         count: usize,
     },
 
-    /// Simulate a single Alpha expression directly on MAIN account
+    /// Simulate a single Alpha expression or a batch file directly on MAIN account
     Sim {
         /// FastExpr alpha formula
         #[arg(short, long)]
-        expr: String,
+        expr: Option<String>,
+
+        /// Path to a batch file with one FastExpr per line
+        #[arg(short, long)]
+        batch: Option<std::path::PathBuf>,
 
         /// Target Universe (default: TOP1000)
         #[arg(short, long, default_value = "TOP1000")]
@@ -144,6 +159,10 @@ enum Commands {
         /// Weight truncation limit (default: 0.05)
         #[arg(short, long, default_value_t = 0.05)]
         truncation: f64,
+
+        /// Concurrent simulation workers in-process (default: 3, max: 3)
+        #[arg(short, long, default_value_t = 3)]
+        workers: usize,
     },
 
     /// Fetch and display the live dataset usage census
@@ -192,35 +211,39 @@ enum Commands {
         neutralization: String,
     },
 
-    /// Run sensitivity sweep over tuned constants to detect parameter overfitting (Plateau vs Spike)
+    /// Run a Neighbor Sensitivity Sweep over a template expression to verify Plateau vs. Spike stability
     Sweep {
-        /// FastExpr alpha formula
+        /// FastExpr template containing placeholder (e.g. `{H}`)
         #[arg(short, long)]
-        expr: String,
+        template: String,
 
-        /// Target Universe (default: TOP1000)
-        #[arg(short, long, default_value = "TOP1000")]
+        /// Comma-separated parameter values to sweep (e.g. `90,120,150,180`)
+        #[arg(short, long, value_delimiter = ',', required = true)]
+        values: Vec<String>,
+
+        /// Placeholder variable name inside curly braces (default: `H` for `{H}`)
+        #[arg(long, default_value = "H")]
+        placeholder: String,
+
+        /// Target Universe (default: TOP200)
+        #[arg(short, long, default_value = "TOP200")]
         universe: String,
 
-        /// Parameter to sweep: decay, exponent, or truncation (default: decay)
-        #[arg(long, default_value = "decay")]
-        param: String,
-
-        /// Base decay parameter (default: 10)
-        #[arg(short, long, default_value_t = 10)]
+        /// Signal decay parameter (default: 5)
+        #[arg(short, long, default_value_t = 5)]
         decay: i32,
 
-        /// Base neutralization group (default: SUBINDUSTRY)
+        /// Neutralization group (default: SUBINDUSTRY)
         #[arg(short, long, default_value = "SUBINDUSTRY")]
         neutralization: String,
 
-        /// Step size for sweep (optional, default depends on parameter)
-        #[arg(long)]
-        step: Option<f64>,
+        /// Max stock weight truncation (default: 0.05)
+        #[arg(long, default_value_t = 0.05)]
+        truncation: f64,
 
-        /// Number of points on each side of center (default: 2)
-        #[arg(long, default_value_t = 2)]
-        radius: usize,
+        /// Concurrent workers in-process (default: 3, max: 3)
+        #[arg(short, long, default_value_t = 3)]
+        workers: usize,
     },
 
     /// Simulate exact portfolio merge impact for a candidate Alpha
@@ -431,6 +454,7 @@ async fn main() -> Result<()> {
             refresh,
         } => cmd_audit(alpha_id, label, refresh).await,
         Commands::Portfolio { refresh } => cmd_portfolio(refresh).await,
+        Commands::Eval { alpha_ids, refresh } => cmd_eval(alpha_ids, refresh).await,
         Commands::Submit {
             alpha_id,
             name,
@@ -465,11 +489,13 @@ async fn main() -> Result<()> {
         }
         Commands::Sim {
             expr,
+            batch,
             universe,
             decay,
             neutralization,
             truncation,
-        } => cmd_sim(expr, universe, decay, neutralization, truncation).await,
+            workers,
+        } => cmd_sim(expr, batch, universe, decay, neutralization, truncation, workers).await,
         Commands::Radar {
             region,
             universe,
@@ -485,14 +511,27 @@ async fn main() -> Result<()> {
             neutralization,
         } => cmd_tune(expr, universe, target_fitness, decay, neutralization).await,
         Commands::Sweep {
-            expr,
+            template,
+            values,
+            placeholder,
             universe,
-            param,
             decay,
             neutralization,
-            step,
-            radius,
-        } => cmd_sweep(expr, universe, param, decay, neutralization, step, radius).await,
+            truncation,
+            workers,
+        } => {
+            cmd_sweep(
+                template,
+                values,
+                placeholder,
+                universe,
+                decay,
+                neutralization,
+                truncation,
+                workers,
+            )
+            .await
+        }
         Commands::Impact { alpha_id, refresh } => cmd_impact(alpha_id, refresh).await,
         Commands::Matrix {
             universe,

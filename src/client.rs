@@ -148,11 +148,20 @@ pub fn evaluate_submission_checks(stats: &InSampleStats) -> SubmissionCheckResul
     let mut passed_count = 0;
     let mut failed = Vec::new();
     let mut pending = Vec::new();
+    let mut advisory_warnings = Vec::new();
 
     for c in &stats.checks {
+        let is_core = CORE_SUBMISSION_CHECKS.contains(&c.name.as_str());
         match c.result.to_uppercase().as_str() {
             "PASS" => {
                 passed_count += 1;
+            }
+            "WARNING" => {
+                if is_core {
+                    failed.push(format!("{}: WARNING", c.name));
+                } else {
+                    advisory_warnings.push(format!("{}: WARNING", c.name));
+                }
             }
             "FAIL" => {
                 if c.name == "SELF_CORRELATION" {
@@ -250,12 +259,21 @@ pub fn evaluate_submission_checks(stats: &InSampleStats) -> SubmissionCheckResul
         };
     }
 
-    SubmissionCheckResult {
-        passed: true,
-        message: format!(
+    let message = if advisory_warnings.is_empty() {
+        format!(
             "ALL SUBMISSION CHECKS PASSED ({}/{} PASS)",
             passed_count, total_count
-        ),
+        )
+    } else {
+        format!(
+            "All core checks passed (advisory warnings: {})",
+            advisory_warnings.join(", ")
+        )
+    };
+
+    SubmissionCheckResult {
+        passed: true,
+        message,
         passed_count,
         total_count,
         failed_checks: Vec::new(),
@@ -1304,5 +1322,81 @@ impl BrainClient {
     ) -> Result<Vec<DataFieldEntry>> {
         self.fetch_dataset_fields(dataset_id, "EQUITY", "USA", 1, "TOP1000")
             .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::CheckItem;
+
+    #[test]
+    fn test_evaluate_submission_checks_warning_handling() {
+        let core_pass_checks: Vec<CheckItem> = CORE_SUBMISSION_CHECKS
+            .iter()
+            .map(|&name| CheckItem {
+                name: name.to_string(),
+                result: "PASS".to_string(),
+                value: None,
+                limit: None,
+            })
+            .collect();
+
+        // 1. Non-core check with WARNING (UNITS) alongside 6/6 core PASS checks evaluates to passed == true
+        let mut checks_with_warning = core_pass_checks.clone();
+        checks_with_warning.push(CheckItem {
+            name: "UNITS".to_string(),
+            result: "WARNING".to_string(),
+            value: None,
+            limit: None,
+        });
+
+        let mut stats = InSampleStats::default();
+        stats.checks = checks_with_warning;
+
+        let res = evaluate_submission_checks(&stats);
+        assert!(
+            res.passed,
+            "Non-core check with WARNING should allow submission to pass"
+        );
+        assert!(
+            res.message.contains("advisory warnings: UNITS: WARNING"),
+            "Message should record advisory warning, got: {}",
+            res.message
+        );
+        assert_eq!(res.passed_count, 6);
+        assert_eq!(res.total_count, 7);
+        assert!(res.failed_checks.is_empty());
+
+        // 2. Core check with WARNING (SELF_CORRELATION) must fail closed (passed == false)
+        let checks_core_warn: Vec<CheckItem> = CORE_SUBMISSION_CHECKS
+            .iter()
+            .map(|&name| CheckItem {
+                name: name.to_string(),
+                result: if name == "SELF_CORRELATION" {
+                    "WARNING".to_string()
+                } else {
+                    "PASS".to_string()
+                },
+                value: None,
+                limit: None,
+            })
+            .collect();
+
+        let mut stats_core_warn = InSampleStats::default();
+        stats_core_warn.checks = checks_core_warn;
+
+        let res_core_warn = evaluate_submission_checks(&stats_core_warn);
+        assert!(
+            !res_core_warn.passed,
+            "Core check with WARNING must fail closed"
+        );
+        assert!(
+            res_core_warn
+                .failed_checks
+                .iter()
+                .any(|c| c.contains("SELF_CORRELATION")),
+            "Failed checks should record failed core check"
+        );
     }
 }

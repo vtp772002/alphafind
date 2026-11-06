@@ -107,6 +107,8 @@ pub enum CheckDisplay {
     Pass,
     /// The platform is still calculating this check.
     Pending,
+    /// The platform reported an advisory warning.
+    Warning,
     /// The platform reported an explicit `FAIL`.
     Fail,
     /// The platform reported an execution error for this check.
@@ -121,6 +123,7 @@ impl CheckDisplay {
         match result.trim().to_ascii_uppercase().as_str() {
             "PASS" => Self::Pass,
             "PENDING" => Self::Pending,
+            "WARNING" => Self::Warning,
             "FAIL" => Self::Fail,
             "ERROR" => Self::Error,
             _ => Self::Unknown,
@@ -132,6 +135,7 @@ impl CheckDisplay {
         match self {
             Self::Pass => "PASS",
             Self::Pending => "PENDING",
+            Self::Warning => "WARNING",
             Self::Fail => "FAIL",
             Self::Error => "ERROR",
             Self::Unknown => "UNKNOWN",
@@ -153,7 +157,7 @@ pub fn format_check_table_row(name: &str, result: &str) -> String {
     let padded = format!("{:<10}", display.label());
     let styled = match display {
         CheckDisplay::Pass => padded.green().bold().to_string(),
-        CheckDisplay::Pending => padded.yellow().bold().to_string(),
+        CheckDisplay::Pending | CheckDisplay::Warning => padded.yellow().bold().to_string(),
         CheckDisplay::Fail | CheckDisplay::Error | CheckDisplay::Unknown => {
             padded.red().bold().to_string()
         }
@@ -182,6 +186,22 @@ pub async fn cmd_check(alpha_id: String) -> Result<()> {
     );
 
     let client = get_main_client()?;
+
+    // Check concurrency lock: advisory warning if simulations are in-flight
+    match crate::concurrency_lock::ProcessLock::try_acquire() {
+        Ok(lock) => {
+            drop(lock);
+        }
+        Err(_) => {
+            println!(
+                "  {}",
+                "⚠️  [CONCURRENCY WARNING] Active simulation worker lock detected. Running /check while simulations are in-flight may cause SELF_CORRELATION timeout/errors."
+                    .yellow()
+                    .bold()
+            );
+        }
+    }
+
     println!("  Querying check results for {}...", alpha_id.yellow());
 
     let (passed, summary, stats) = client.check_submission(&alpha_id, 100).await?;
@@ -280,40 +300,41 @@ pub async fn cmd_submit(
         }
         checks_confirmed = true;
         println!("  {} Submission checks confirmed!", "✅".green());
+    }
 
-        // Separate Local Portfolio-Policy Gate (self-correlation, staleness, overlap)
-        if Path::new("portfolio_os.json").exists() {
-            println!("  Evaluating local portfolio-policy gate (separate from platform check)...");
-            if let Ok(os_alphas) = load_portfolio_os() {
-                if !os_alphas.is_empty() {
-                    let (pnl_cache, cache_age) = load_pnl_cache();
-                    let (age_label, is_stale) = cache_age_label(cache_age);
-                    if is_stale {
-                        println!(
-                            "  {} Local PnL cache is {} (stale or missing). Run 'alphafind portfolio --refresh' to keep local policy checks fresh.",
-                            "⚠️  [LOCAL POLICY WARNING]".yellow().bold(),
-                            age_label
-                        );
-                    }
-                    if !pnl_cache.is_empty() {
-                        if let Ok(cand_pnl) = client.fetch_daily_pnl(&alpha_id).await {
-                            let audit = audit_candidate(&alpha_id, &cand_pnl, &pnl_cache);
-                            if !audit.is_within_correlation_proxy {
-                                anyhow::bail!(
-                                    "Local portfolio-policy gate rejected {}: max local correlation ({:?} vs {:?}, valid pairs: {}) failed the < 0.70 fail-closed local check.",
-                                    alpha_id,
-                                    audit.max_correlation,
-                                    audit.most_correlated_id,
-                                    audit.valid_comparisons
-                                );
-                            }
-                            println!(
-                                "  {} Local portfolio-policy gate passed (max local rho: {:+.2}% across {} active OS alphas).",
-                                "✅".green(),
-                                audit.max_correlation.unwrap_or(0.0) * 100.0,
+    // Separate Local Portfolio-Policy Gate (self-correlation, staleness, overlap)
+    // Executes unconditionally whether skip_checks was used or not.
+    if Path::new("portfolio_os.json").exists() {
+        println!("  Evaluating local portfolio-policy gate (separate from platform check)...");
+        if let Ok(os_alphas) = load_portfolio_os() {
+            if !os_alphas.is_empty() {
+                let (pnl_cache, cache_age) = load_pnl_cache();
+                let (age_label, is_stale) = cache_age_label(cache_age);
+                if is_stale {
+                    println!(
+                        "  {} Local PnL cache is {} (stale or missing). Run 'alphafind portfolio --refresh' to keep local policy checks fresh.",
+                        "⚠️  [LOCAL POLICY WARNING]".yellow().bold(),
+                        age_label
+                    );
+                }
+                if !pnl_cache.is_empty() {
+                    if let Ok(cand_pnl) = client.fetch_daily_pnl(&alpha_id).await {
+                        let audit = audit_candidate(&alpha_id, &cand_pnl, &pnl_cache);
+                        if !audit.is_within_correlation_proxy {
+                            anyhow::bail!(
+                                "Local portfolio-policy gate rejected {}: max local correlation ({:?} vs {:?}, valid pairs: {}) failed the < 0.70 fail-closed local check.",
+                                alpha_id,
+                                audit.max_correlation,
+                                audit.most_correlated_id,
                                 audit.valid_comparisons
                             );
                         }
+                        println!(
+                            "  {} Local portfolio-policy gate passed (max local rho: {:+.2}% across {} active OS alphas).",
+                            "✅".green(),
+                            audit.max_correlation.unwrap_or(0.0) * 100.0,
+                            audit.valid_comparisons
+                        );
                     }
                 }
             }
@@ -396,4 +417,22 @@ pub async fn cmd_submit(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_check_display_warning() {
+        assert_eq!(CheckDisplay::from_result("WARNING"), CheckDisplay::Warning);
+        assert_eq!(CheckDisplay::from_result("warning"), CheckDisplay::Warning);
+        assert_eq!(CheckDisplay::from_result(" Warning "), CheckDisplay::Warning);
+        assert_eq!(CheckDisplay::Warning.label(), "WARNING");
+        assert!(!CheckDisplay::Warning.is_pass());
+
+        let row = format_check_table_row("UNITS", "WARNING");
+        assert!(row.contains("UNITS"));
+        assert!(row.contains("WARNING"));
+    }
 }
