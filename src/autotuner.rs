@@ -194,6 +194,28 @@ impl<'a> FitnessAutoTuner<'a> {
         Self { client }
     }
 
+    /// Evaluates the held-out Test Period gate for an alpha.
+    pub async fn evaluate_test_period(
+        &self,
+        alpha_id: &str,
+    ) -> crate::test_period::TestPeriodVerdict {
+        match self.client.fetch_daily_pnl(alpha_id).await {
+            Ok(pnl) => {
+                let input = crate::test_period::split_daily_pnl(
+                    &pnl,
+                    crate::test_period::DEFAULT_TEST_YEARS,
+                );
+                crate::test_period::evaluate_test_period(
+                    &input,
+                    &crate::test_period::TestPeriodPolicy::default(),
+                )
+            }
+            Err(e) => crate::test_period::TestPeriodVerdict::Unknown {
+                reason: format!("failed to fetch daily PnL: {e}"),
+            },
+        }
+    }
+
     /// Automatically sweeps decay parameter to push Fitness >= target_fitness
     pub async fn tune_decay(
         &self,
@@ -559,23 +581,35 @@ impl<'a> FitnessAutoTuner<'a> {
             .tune_decay(expression, base_settings, target_fitness)
             .await
         {
-            let t_fit = tuned_decay_alpha
-                .is
-                .as_ref()
-                .and_then(|s| s.fitness)
-                .unwrap_or(0.0);
-            let sett = tuned_decay_alpha
-                .settings
-                .clone()
-                .unwrap_or_else(|| base_settings.clone());
-            return Ok(Some(TunedAlphaResult {
-                details: tuned_decay_alpha,
-                expression: expression.to_string(),
-                settings: sett,
-                original_fitness: base_fit,
-                tuned_fitness: t_fit,
-                tuning_strategy: "DECAY_SWEEP".to_string(),
-            }));
+            let tp_verdict = self.evaluate_test_period(&tuned_decay_alpha.id).await;
+            if let crate::test_period::TestPeriodVerdict::Fail { ref reason } = tp_verdict {
+                println!(
+                    "{}",
+                    format!(
+                        "     ⚠️ [AutoTuner Overfit Warning] Tuned decay on {} failed Test Period: {}. Rejecting overfitted candidate.",
+                        tuned_decay_alpha.id, reason
+                    )
+                    .yellow()
+                );
+            } else {
+                let t_fit = tuned_decay_alpha
+                    .is
+                    .as_ref()
+                    .and_then(|s| s.fitness)
+                    .unwrap_or(0.0);
+                let sett = tuned_decay_alpha
+                    .settings
+                    .clone()
+                    .unwrap_or_else(|| base_settings.clone());
+                return Ok(Some(TunedAlphaResult {
+                    details: tuned_decay_alpha,
+                    expression: expression.to_string(),
+                    settings: sett,
+                    original_fitness: base_fit,
+                    tuned_fitness: t_fit,
+                    tuning_strategy: "DECAY_SWEEP".to_string(),
+                }));
+            }
         }
 
         // 3. Strategy B: Non-linear Exponent Sweep
@@ -584,23 +618,35 @@ impl<'a> FitnessAutoTuner<'a> {
             .tune_exponent(expression, base_settings, target_fitness)
             .await
         {
-            let t_fit = tuned_exp_alpha
-                .is
-                .as_ref()
-                .and_then(|s| s.fitness)
-                .unwrap_or(0.0);
-            let sett = tuned_exp_alpha
-                .settings
-                .clone()
-                .unwrap_or_else(|| base_settings.clone());
-            return Ok(Some(TunedAlphaResult {
-                details: tuned_exp_alpha,
-                expression: mod_expr,
-                settings: sett,
-                original_fitness: base_fit,
-                tuned_fitness: t_fit,
-                tuning_strategy: "EXPONENT_SWEEP".to_string(),
-            }));
+            let tp_verdict = self.evaluate_test_period(&tuned_exp_alpha.id).await;
+            if let crate::test_period::TestPeriodVerdict::Fail { ref reason } = tp_verdict {
+                println!(
+                    "{}",
+                    format!(
+                        "     ⚠️ [AutoTuner Overfit Warning] Tuned exponent on {} failed Test Period: {}. Rejecting overfitted candidate.",
+                        tuned_exp_alpha.id, reason
+                    )
+                    .yellow()
+                );
+            } else {
+                let t_fit = tuned_exp_alpha
+                    .is
+                    .as_ref()
+                    .and_then(|s| s.fitness)
+                    .unwrap_or(0.0);
+                let sett = tuned_exp_alpha
+                    .settings
+                    .clone()
+                    .unwrap_or_else(|| base_settings.clone());
+                return Ok(Some(TunedAlphaResult {
+                    details: tuned_exp_alpha,
+                    expression: mod_expr,
+                    settings: sett,
+                    original_fitness: base_fit,
+                    tuned_fitness: t_fit,
+                    tuning_strategy: "EXPONENT_SWEEP".to_string(),
+                }));
+            }
         }
 
         // 4. Strategy C: Neutralization Rotation

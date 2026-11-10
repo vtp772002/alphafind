@@ -10,7 +10,7 @@ This reference describes command interfaces in `src/main.rs` as inspected on 202
 | `sync` | Fetch portfolio metadata into the local portfolio file. | Fetch paths have pagination/classification and freshness limitations; verify against BRAIN. |
 | `score` | Fetch profile/competition information. | Platform scoring formulas are not reproduced by this command. |
 | `sim` | Create and poll one simulation on the main account. | Keep live expressions private. |
-| `screen` | Simulate candidates from the local or fallback catalog. | Consumes a bounded `mpsc` queue with a per-account semaphore (`--workers` bounds in-flight simulations per account, not cross-process platform quota). Use `--single-account` (`ALPHAFIND_SINGLE_ACCOUNT=1`) to comply with single-account rules. |
+| `screen` | Simulate candidates from the local or fallback catalog. | Consumes a bounded `mpsc` queue with a per-account semaphore (`--workers` bounds in-flight simulations per account, not cross-process platform quota). Use `--single-account` (`ALPHAFIND_SINGLE_ACCOUNT=1`) to comply with single-account rules. Enforces the held-out Test Period gate before qualifying candidates; `--skip-test-period` requires `ALPHAFIND_ALLOW_SKIP_TEST_PERIOD=1`. |
 | `tune` | Try configured parameter variants for one expression. | A higher in-sample metric is not evidence of better OOS performance. |
 | `check` | Request platform submission check results. | Fail-closed locally: requires every core check present and every returned status explicitly `PASS`; `PENDING`, `ERROR`, unknown, missing, and empty responses reject. Not version-aware and does not capture the raw response, so BRAIN remains the authority. |
 | `submit` | Send a submission request to BRAIN. | Runs the fail-closed platform check gate plus a separate local portfolio-policy gate (self-correlation `< 0.70` and staleness check). `--skip-checks` needs `ALPHAFIND_ALLOW_SKIP_CHECKS=1` and prints a bypass warning. An ambiguous POST outcome is reported as unknown and exits non-zero. |
@@ -34,6 +34,7 @@ alphafind sim --expr <PRIVATE_EXPRESSION> [--universe TOP1000] [--decay 5]
               [--neutralization SUBINDUSTRY] [--truncation 0.05]
 alphafind screen [--pillar <PILLAR>] [--universe TOP1000]
                  [--min-fitness 1.50] [--workers 3] [--no-tune] [--single-account]
+                 [--skip-test-period]
 alphafind tune --expr <PRIVATE_EXPRESSION> [--universe TOP1000]
                 [--target-fitness 1.50] [--decay 10]
                 [--neutralization SUBINDUSTRY]
@@ -83,9 +84,19 @@ alphafind submit <ALPHA_ID> [--name <NAME>] [--category <CATEGORY>] \
 
 This command sends an external submission request. It runs the same fail-closed check first and refuses to continue when the gate rejects.
 
+`submit` also runs the local Test Period gate (see below); `--skip-test-period` aborts unless `ALPHAFIND_ALLOW_SKIP_TEST_PERIOD=1` is set.
+
 `--skip-checks` is disabled by default and aborts unless `ALPHAFIND_ALLOW_SKIP_CHECKS=1` (or `true`) is set; when it is set, the run prints a conspicuous bypass warning and the success message states that pre-flight checks were bypassed.
 
 The submission POST is non-idempotent. A transport failure is reported as an unknown outcome with instructions to verify the alpha stage in BRAIN, and the command exits non-zero instead of pretending the submission failed. Reconcile in the platform before retrying.
+
+## Test Period (local held-out gate)
+
+```text
+alphafind test-period <ALPHA_ID>
+```
+
+**Project policy, not a BRAIN rule.** BRAIN advises holding out the newest ~2 years of the IS window (dated 2026-11-10, from the platform UI hint; the API form of that setting is not verified here). AlphaFind therefore computes its own split from the alpha's daily PnL: the newest 2 calendar years *of the series* are the test block, the rest is train, and annualized Sharpe (252 days) is compared. Policy thresholds (hypotheses): train Sharpe >= 0.5, test Sharpe > 0 and >= 50% of train, test block >= 1.5y, >= 60 observations per block. Missing, short, non-finite, or fetch-failed data is `Unknown` and blocks `submit` (fail-closed). A ~2y Sharpe has a standard error near `1/sqrt(2)` ~ 0.7, so this is a coarse screen; selecting on it repeatedly also consumes the held-out block. It assumes `daily-pnl` values are daily (not cumulative) PnL, and it does not replace BRAIN's own Test Period setting or check gate.
 
 ## Local portfolio diagnostics
 

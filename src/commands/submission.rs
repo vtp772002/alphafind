@@ -11,6 +11,9 @@ use crate::commands::{
 };
 use crate::correlation::audit_candidate;
 use crate::models::SubmittableAlphaRecord;
+use crate::test_period::{
+    evaluate_test_period, split_daily_pnl, TestPeriodPolicy, TestPeriodVerdict, DEFAULT_TEST_YEARS,
+};
 
 /// Updates `submitted` to `true` for `alpha_id` in a `submittable_alphas.csv` ledger.
 ///
@@ -95,6 +98,55 @@ pub fn skip_checks_permitted(value: Option<&str>) -> bool {
 /// Reads the process environment to decide whether `--skip-checks` may run.
 fn skip_checks_allowed() -> bool {
     skip_checks_permitted(std::env::var(SKIP_CHECKS_ENV).ok().as_deref())
+}
+
+/// Environment variable that must be set for `--skip-test-period` to be honored.
+pub const SKIP_TEST_PERIOD_ENV: &str = "ALPHAFIND_ALLOW_SKIP_TEST_PERIOD";
+
+/// Fetches the alpha's daily PnL, evaluates the local held-out Test Period gate and prints it.
+///
+/// **Project policy, not a BRAIN rule.** Returns the verdict; fetch errors surface as
+/// `Unknown` so the caller fails closed.
+pub async fn run_test_period_gate(
+    client: &crate::client::BrainClient,
+    alpha_id: &str,
+) -> TestPeriodVerdict {
+    let pnl = match client.fetch_daily_pnl(alpha_id).await {
+        Ok(p) => p,
+        Err(e) => {
+            return TestPeriodVerdict::Unknown {
+                reason: format!("could not fetch daily PnL: {e}"),
+            }
+        }
+    };
+    let input = split_daily_pnl(&pnl, DEFAULT_TEST_YEARS);
+    let fmt = |v: Option<f64>| v.map_or("n/a".to_string(), |x| format!("{x:.2}"));
+    println!(
+        "  Test Period (newest {}y of {} PnL days): train Sharpe {}, test Sharpe {}, test length {}y",
+        DEFAULT_TEST_YEARS,
+        pnl.len(),
+        fmt(input.train_sharpe),
+        fmt(input.test_sharpe),
+        fmt(input.test_years)
+    );
+    evaluate_test_period(&input, &TestPeriodPolicy::default())
+}
+
+/// Read-only local Test Period report for an Alpha (project policy signal, not approval).
+pub async fn cmd_test_period(alpha_id: String) -> Result<()> {
+    let client = get_main_client()?;
+    match run_test_period_gate(&client, &alpha_id).await {
+        TestPeriodVerdict::Pass { retention } => println!(
+            "  {} PASS: test Sharpe retains {:.0}% of train (local signal; not a BRAIN rule).",
+            "✅".green(),
+            retention * 100.0
+        ),
+        TestPeriodVerdict::Fail { reason } => println!("  {} FAIL: {}", "❌".red(), reason),
+        TestPeriodVerdict::Unknown { reason } => {
+            println!("  {} UNKNOWN (treated as fail): {}", "⚠️".yellow(), reason)
+        }
+    }
+    Ok(())
 }
 
 /// How a platform submission check should be displayed.
@@ -216,7 +268,12 @@ pub async fn cmd_check(alpha_id: String) -> Result<()> {
         println!("  │ Check Name                   │ Result     │");
         println!("  ├──────────────────────────────┼────────────┤");
         for c in &stats.checks {
-            println!("{}", format_check_table_row(&c.name, &c.result));
+            let detail = match (&c.value, &c.limit) {
+                (Some(v), Some(l)) => format!(" (val: {}, limit: {})", v, l),
+                (Some(v), None) => format!(" (val: {})", v),
+                _ => String::new(),
+            };
+            println!("{}{}", format_check_table_row(&c.name, &c.result), detail);
         }
         println!("  └──────────────────────────────┴────────────┘");
     }
@@ -253,6 +310,7 @@ pub async fn cmd_submit(
     color: Option<String>,
     tags: Option<Vec<String>>,
     skip_checks: bool,
+    skip_test_period: bool,
 ) -> Result<()> {
     println!(
         "{}",
@@ -300,6 +358,31 @@ pub async fn cmd_submit(
         }
         checks_confirmed = true;
         println!("  {} Submission checks confirmed!", "✅".green());
+    }
+
+    // Local Test Period gate (project policy): fail-closed on Fail/Unknown.
+    if skip_test_period {
+        if !skip_checks_permitted(std::env::var(SKIP_TEST_PERIOD_ENV).ok().as_deref()) {
+            anyhow::bail!(
+                "--skip-test-period is disabled by default; set {}=1 to deliberately bypass it.",
+                SKIP_TEST_PERIOD_ENV
+            );
+        }
+        println!(
+            "  {} Test Period gate bypassed; overfitting on the newest 2y is NOT screened.",
+            "⚠️  [TEST PERIOD BYPASSED]".yellow().bold()
+        );
+    } else {
+        match run_test_period_gate(&client, &alpha_id).await {
+            TestPeriodVerdict::Pass { retention } => println!(
+                "  {} Test Period gate passed (retention {:.0}%).",
+                "✅".green(),
+                retention * 100.0
+            ),
+            TestPeriodVerdict::Fail { reason } | TestPeriodVerdict::Unknown { reason } => {
+                anyhow::bail!("Test Period gate rejected {}: {}", alpha_id, reason)
+            }
+        }
     }
 
     // Separate Local Portfolio-Policy Gate (self-correlation, staleness, overlap)

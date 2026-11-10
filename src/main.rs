@@ -9,7 +9,7 @@ use alphafind::commands::research::{
     cmd_blueprint, cmd_fields, cmd_generate, cmd_matrix, cmd_shadow,
 };
 use alphafind::commands::simulation::{cmd_radar, cmd_screen, cmd_sim, cmd_sweep, cmd_tune};
-use alphafind::commands::submission::{cmd_check, cmd_submit};
+use alphafind::commands::submission::{cmd_check, cmd_submit, cmd_test_period};
 
 #[derive(Parser)]
 #[command(name = "alphafind")]
@@ -33,6 +33,12 @@ enum Commands {
 
     /// Verify the mandatory In-Sample platform submission checks for an Alpha
     Check {
+        /// Alpha ID (e.g., A1b2C3d4)
+        alpha_id: String,
+    },
+
+    /// Local held-out Test Period report (newest 2y vs earlier Sharpe); project policy signal
+    TestPeriod {
         /// Alpha ID (e.g., A1b2C3d4)
         alpha_id: String,
     },
@@ -93,6 +99,10 @@ enum Commands {
         /// Skip pre-flight check verification (not recommended)
         #[arg(long)]
         skip_checks: bool,
+
+        /// Skip the local Test Period gate (requires ALPHAFIND_ALLOW_SKIP_TEST_PERIOD=1)
+        #[arg(long)]
+        skip_test_period: bool,
     },
 
     /// Screen candidates using configured BRAIN sessions with a bounded work queue
@@ -132,6 +142,10 @@ enum Commands {
         /// Candidate count for alternative generation (default: 10)
         #[arg(long, default_value_t = 10)]
         count: usize,
+
+        /// Skip the local held-out Test Period gate during screening (requires ALPHAFIND_ALLOW_SKIP_TEST_PERIOD=1)
+        #[arg(long)]
+        skip_test_period: bool,
     },
 
     /// Simulate a single Alpha expression or a batch file directly on MAIN account
@@ -448,6 +462,7 @@ async fn main() -> Result<()> {
         Commands::Sync => cmd_sync().await,
         Commands::Score => cmd_score().await,
         Commands::Check { alpha_id } => cmd_check(alpha_id).await,
+        Commands::TestPeriod { alpha_id } => cmd_test_period(alpha_id).await,
         Commands::Audit {
             alpha_id,
             label,
@@ -462,7 +477,10 @@ async fn main() -> Result<()> {
             color,
             tags,
             skip_checks,
-        } => cmd_submit(alpha_id, name, category, color, tags, skip_checks).await,
+            skip_test_period,
+        } => {
+            cmd_submit(alpha_id, name, category, color, tags, skip_checks, skip_test_period).await
+        }
         Commands::Screen {
             pillar,
             universe,
@@ -473,6 +491,7 @@ async fn main() -> Result<()> {
             alternative,
             dataset,
             count,
+            skip_test_period,
         } => {
             cmd_screen(
                 pillar,
@@ -484,6 +503,7 @@ async fn main() -> Result<()> {
                 alternative,
                 dataset,
                 count,
+                skip_test_period,
             )
             .await
         }

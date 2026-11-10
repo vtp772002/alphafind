@@ -9,6 +9,9 @@ use crate::config::quant::{
     min_fitness_for_delay, min_sharpe_for_delay, turnover_within_platform_bounds,
 };
 use crate::models::{CandidateAlpha, SubmittableAlphaRecord};
+use crate::test_period::{
+    evaluate_test_period, split_daily_pnl, TestPeriodPolicy, TestPeriodVerdict, DEFAULT_TEST_YEARS,
+};
 
 /// A single authenticated BRAIN account worker used for distributed screening.
 pub struct AccountWorker {
@@ -137,6 +140,25 @@ impl MultiAccountScreener {
         candidates: Vec<CandidateAlpha>,
         min_fitness: f64,
         enable_tuning: bool,
+        lock_path: Option<P>,
+    ) -> Result<Vec<SubmittableAlphaRecord>> {
+        self.screen_batch_with_options(
+            candidates,
+            min_fitness,
+            enable_tuning,
+            true,
+            lock_path,
+        )
+        .await
+    }
+
+    /// Screens a batch of candidates with configurable held-out Test Period verification.
+    pub async fn screen_batch_with_options<P: AsRef<std::path::Path>>(
+        &self,
+        candidates: Vec<CandidateAlpha>,
+        min_fitness: f64,
+        enable_tuning: bool,
+        verify_test_period: bool,
         lock_path: Option<P>,
     ) -> Result<Vec<SubmittableAlphaRecord>> {
         if candidates.is_empty() {
@@ -360,31 +382,92 @@ impl MultiAccountScreener {
                                 }
                             };
                             if check_pass {
-                                println!(
-                                    "{}",
-                                    format!(
-                                        "  🌟 [OFFICIAL PASS] Alpha {} on MAIN is 100% Submittable!\n  URL: https://platform.worldquantbrain.com/alpha/{}",
-                                        main_aid, main_aid
-                                    )
-                                    .green()
-                                    .bold()
-                                );
+                                let tp_passed = if !verify_test_period {
+                                    true
+                                } else {
+                                    println!(
+                                        "  Evaluating held-out Test Period gate (newest 2y) for {}...",
+                                        main_aid
+                                    );
+                                    match main_client.fetch_daily_pnl(&main_aid).await {
+                                        Ok(pnl) => {
+                                            let tp_input = split_daily_pnl(&pnl, DEFAULT_TEST_YEARS);
+                                            let tp_verdict = evaluate_test_period(
+                                                &tp_input,
+                                                &TestPeriodPolicy::default(),
+                                            );
+                                            match tp_verdict {
+                                                TestPeriodVerdict::Pass { retention } => {
+                                                    println!(
+                                                        "  {} [TEST PERIOD PASS] Alpha {} preserved Sharpe on 2Y held-out block: train {:.2}, test {:.2} (retention {:.0}%)",
+                                                        "✅".green(),
+                                                        main_aid,
+                                                        tp_input.train_sharpe.unwrap_or(0.0),
+                                                        tp_input.test_sharpe.unwrap_or(0.0),
+                                                        retention * 100.0
+                                                    );
+                                                    true
+                                                }
+                                                TestPeriodVerdict::Fail { reason } => {
+                                                    println!(
+                                                        "  {} [TEST PERIOD FAIL] Alpha {} rejected: {}. Overfitting detected on held-out 2Y block.",
+                                                        "❌".red(),
+                                                        main_aid,
+                                                        reason
+                                                    );
+                                                    false
+                                                }
+                                                TestPeriodVerdict::Unknown { reason } => {
+                                                    println!(
+                                                        "  {} [TEST PERIOD UNKNOWN] Alpha {} held-out block uncertain: {}. Failing closed; not marked submittable.",
+                                                        "⚠️".yellow(),
+                                                        main_aid,
+                                                        reason
+                                                    );
+                                                    false
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            println!(
+                                                "  {} [TEST PERIOD ERROR] Could not fetch daily PnL for {}: {}. Failing closed.",
+                                                "⚠️".yellow(),
+                                                main_aid,
+                                                e
+                                            );
+                                            false
+                                        }
+                                    }
+                                };
 
-                                let sett_json = serde_json::to_string(&final_settings).unwrap_or_default();
+                                if tp_passed {
+                                    println!(
+                                        "{}",
+                                        format!(
+                                            "  🌟 [QUALIFIED & SUBMITTABLE] Alpha {} passed platform checks & Test Period gate!\n  URL: https://platform.worldquantbrain.com/alpha/{}",
+                                            main_aid, main_aid
+                                        )
+                                        .green()
+                                        .bold()
+                                    );
 
-                                let mut res = results.lock().await;
-                                res.push(SubmittableAlphaRecord {
-                                    alpha_id: main_aid,
-                                    name: cand.name.clone(),
-                                    universe: final_settings.universe,
-                                    sharpe: (main_sh * 100.0).round() / 100.0,
-                                    fitness: (main_fit * 100.0).round() / 100.0,
-                                    turnover: (main_turn * 1000.0).round() / 10.0,
-                                    annual_return: (main_ret * 1000.0).round() / 10.0,
-                                    submitted: false,
-                                    expression: final_expr,
-                                    settings: sett_json,
-                                });
+                                    let sett_json =
+                                        serde_json::to_string(&final_settings).unwrap_or_default();
+
+                                    let mut res = results.lock().await;
+                                    res.push(SubmittableAlphaRecord {
+                                        alpha_id: main_aid,
+                                        name: cand.name.clone(),
+                                        universe: final_settings.universe,
+                                        sharpe: (main_sh * 100.0).round() / 100.0,
+                                        fitness: (main_fit * 100.0).round() / 100.0,
+                                        turnover: (main_turn * 1000.0).round() / 10.0,
+                                        annual_return: (main_ret * 1000.0).round() / 10.0,
+                                        submitted: false,
+                                        expression: final_expr,
+                                        settings: sett_json,
+                                    });
+                                }
                             } else {
                                 println!("  {} [Check Failed on Main] {}: {}", "⚠️".yellow(), main_aid, check_msg);
                             }

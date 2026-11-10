@@ -40,6 +40,7 @@ pub mod models;
 pub mod screener;
 pub mod shadow;
 pub mod taxonomy;
+pub mod test_period;
 
 pub use concurrency_lock::{get_default_lock_path, ProcessLock, DEFAULT_LOCK_FILE_NAME};
 pub use expression_builder::{

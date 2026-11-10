@@ -28,6 +28,7 @@ pub async fn cmd_screen(
     alternative: bool,
     dataset: Option<String>,
     count: usize,
+    skip_test_period: bool,
 ) -> Result<()> {
     println!(
         "{}",
@@ -95,8 +96,32 @@ pub async fn cmd_screen(
         candidates.len()
     );
 
+    let verify_test_period = if skip_test_period {
+        if !crate::commands::submission::skip_checks_permitted(
+            std::env::var(crate::commands::submission::SKIP_TEST_PERIOD_ENV).ok().as_deref(),
+        ) {
+            anyhow::bail!(
+                "--skip-test-period is disabled by default; set {}=1 to deliberately bypass it.",
+                crate::commands::submission::SKIP_TEST_PERIOD_ENV
+            );
+        }
+        println!(
+            "  {} Test Period verification is bypassed; overfitting on the newest 2Y is NOT screened.",
+            "⚠️  [TEST PERIOD BYPASSED]".yellow().bold()
+        );
+        false
+    } else {
+        true
+    };
+
     let qualified = screener
-        .screen_batch(candidates, min_fitness, !no_tune)
+        .screen_batch_with_options(
+            candidates,
+            min_fitness,
+            !no_tune,
+            verify_test_period,
+            None::<&std::path::Path>,
+        )
         .await?;
 
     println!(
