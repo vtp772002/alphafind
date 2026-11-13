@@ -63,6 +63,123 @@ To eliminate brute-force parameter mining and control overfitting, candidate alp
 
 When all 5 gates pass, automated submission via `alphafind submit <ID>` proceeds without requiring manual interactive confirmation.
 
+### Worked example: one end-to-end research round
+
+An illustrative reconstruction of a single successful round, included so a future
+contributor can repeat the shape of the work without re-deriving it. It is deliberately
+abstract: every expression, identifier, and metric appears as a placeholder. The real
+values stay in the ignored local stores described under *Private research material and
+Git hygiene*. Nothing here is a claim that the same universe, dataset, or weight will
+work again.
+
+**0. Establish the baseline before thinking about a new alpha.**
+Run `alphafind sync`, then recompute dataset usage across the whole active portfolio
+(field → dataset map joined against every active OS expression). The output is a
+saturation census: which datasets carry many alphas, which carry one or two. Treat a
+dataset that already underpins a large share of the book as a correlation hazard, not an
+opportunity, because a new expression built from it lands close to existing PnL and is
+likely to fail Gate 1 `SELF_CORRELATION` — this is observed behaviour, not a hypothesis:
+a strong high-Sharpe candidate from a saturated cluster was rejected at
+`SELF_CORRELATION` ≈ 1.00 against an existing alpha.
+
+**1. Pick a genuinely under-used data channel, and give it an economic reason.**
+Select from the low-usage side of the census, and state the economic mechanism before
+writing any expression (`<MECHANISM>`). Examples of channel *categories* that were
+locally under-used at the time: share-supply and buyback activity, footnote-level
+accounting accruals, event-sentiment/news-reaction, and composite style/quality scores.
+Also mine the local simulation ledger (`~/.cache/alphafind/sim_history.jsonl`) before
+simulating: it records every prior attempt with expression, settings, and metrics, so it
+both prevents re-treading old ground and shows which primitives have already been proven
+weak on their own.
+
+**2. Draft three ideas, not thirty.**
+Write one private round file per batch, e.g. `data/private_candidates_<run>_round<N>.json`,
+holding: round number, universe, neutralization, decay, truncation, a hypothesis theme,
+per-idea rationale, and each idea's name and expression. Three ideas per batch matches
+the `--workers 3` project policy and keeps each round attributable to one hypothesis. A
+typical batch spans one primary channel plus one orthogonal confirmation channel, for
+example `<NEWS_REACTION_FIELD>` (behavioural underreaction) combined with
+`<FOOTNOTE_ACCRUAL_FIELD>` (accounting quality) and `<NARRATIVE_FIELD>` (attention).
+
+**3. Validate the schema before spending simulations.**
+```
+alphafind fields --dataset <DATASET> --universe <UNIVERSE> --validate "<EXPRESSION>"
+```
+This catches unknown fields, wrong operator arity, and low-coverage warnings for a batch
+of one. Two concrete constraints were learned from platform API errors rather than from
+documentation (observed 2026-11; re-verify before relying on them):
+`winsorize` takes exactly one argument, so `winsorize(x, <N>)` is rejected; and
+`vec_avg` applies only to 3D event-vector fields, so it must not be wrapped around a
+plain matrix field. Prefer fields with high cross-coverage when the
+`LOW_SUB_UNIVERSE_SHARPE` check matters, since sparse fields shrink the scored breadth on
+smaller universes.
+
+**4. Simulate the batch.**
+```
+alphafind sim --batch scratch/batch_<N>.txt --universe <UNIVERSE> --decay <DECAY> \
+  --neutralization <GROUP_NEUT> --truncation <TRUNC> --workers 3
+```
+Read the summary table as a screen, not a verdict. A round where every idea scores far
+below the Sharpe and Fitness floors is a failed *hypothesis*, so record the failure and
+change the hypothesis; do not start tuning the failing formulas.
+
+**5. Fix breadth before fixing parameters.**
+The single highest-leverage lesson from this round: a composite whose sparse components
+produce `NaN` for most names silently drops those names, and the loss shows up as a
+`LOW_SUB_UNIVERSE_SHARPE` failure even when full-universe Sharpe looks healthy. Wrapping
+each sparse component as `if_else(is_nan(<COMPONENT>), 0, <TRANSFORM>)` keeps the stock in
+the cross-section with a neutral contribution. In this round that data-handling change
+alone — with identical economic weights and identical constants — moved the candidate from
+failing Gate 1 to clearing it comfortably. This is a robustness fix, not fitting: nothing
+was selected by scanning a parameter grid.
+
+**6. Evaluate the gates in escalating cost order.**
+- Gate 1 first, on the single best candidate only: `alphafind check <ID>`. It is the
+  cheapest disqualifier, since weak `LOW_SHARPE`/`LOW_FITNESS`, a sub-universe failure,
+  or `SELF_CORRELATION` ≈ 1.00 ends the candidate immediately. Re-run until
+  `SELF_CORRELATION` and the sub-universe check are resolved rather than `PENDING`; a
+  pending check is not a pass.
+- Gate 2: `alphafind test-period <ID>`.
+- Gate 3: `alphafind audit <ID>` (needs a fresh `portfolio_os.json`; check the reported
+  snapshot and cache ages, and treat missing overlap as unknown rather than as zero
+  correlation).
+- Gate 4: `alphafind impact <ID>`. Small deltas are normal for a single addition to a
+  large book; what matters is the sign, the volatility direction, and the correlation
+  buffer.
+- Gate 5: `alphafind sweep` on the one constant that carries a real economic
+  interpretation, plus the rank / binary / larger-universe probes.
+
+**7. Submit only after all five pass, then re-sync.**
+```
+alphafind submit <ID> --name "<NAME>" --category <CATEGORY> --color <COLOR> --tags <TAGS>
+alphafind sync && alphafind portfolio
+```
+Report the post-submission portfolio state (active count, universe mix, merged Sharpe,
+average pairwise correlation) rather than only the single-alpha metrics.
+
+**8. Close the round with hygiene.**
+Append the outcome and the gate evidence to the private ledger, delete the throwaway
+`scratch/batch_*.txt` files, and confirm with `git status` that no private store, field
+metadata file, or scratch artifact became tracked. A rejected idea is worth recording
+too: the ledger's value comes from the failures it prevents.
+
+**Honest limitations of this recipe.**
+
+- A flat sensitivity sweep carries almost no information. If five neighbouring values of
+  a constant return bit-identical metrics, the constant is not driving the result — which
+  is good for overfitting risk but bad as evidence. Confirm the component actually
+  contributes with an *ablation* (drop the block, re-simulate) and report the delta.
+- A larger-universe invariance run can exceed the CLI's client-side poll limit on a heavy
+  expression. That is a transport timeout, not a platform rejection; the simulation may
+  still finish server-side, so re-check before resubmitting, and never treat a timed-out
+  probe as a pass.
+- Gates 1–4 are local signals built on platform and cached local data. Only the platform
+  UI/API decides OOS eligibility, and an out-of-sample result requires weeks of live
+  tracking. Do not describe a submitted alpha as validated.
+- The dataset census, dataset "under-use", and any weight or horizon choice above are
+  research hypotheses at the time of writing. Recompute the census each run; stale
+  saturation numbers will point you at the wrong channel.
+
 ## Account concurrency and screening
 
 - **Project policy**: When searching for or screening new candidate alphas, always run 3 concurrent simulation workers (`--workers 3`, matching `DEFAULT_WORKERS_PER_ACCOUNT = 3` in `src/config.rs`) on the primary account within a single CLI process.
