@@ -61,7 +61,7 @@ To eliminate brute-force parameter mining and control overfitting, candidate alp
      - *Universe Invariance*: Preserves stability and profitability when evaluated on a larger super-universe (e.g., TOP1000).
    - **Research Hygiene**: Zero formula or identifier leakage into Git; private expressions stored in ignored local stores (`data/private_candidates_*.json`).
 
-When all 5 gates pass, automated submission via `alphafind submit <ID>` proceeds without requiring manual interactive confirmation.
+When all 5 gates pass, automated submission via `alphafind submit <ID>` proceeds without requiring manual interactive confirmation. The worked example below applies this loop end to end.
 
 ### Worked example: one end-to-end research round
 
