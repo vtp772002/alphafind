@@ -29,12 +29,39 @@ Do not describe a heuristic or internal target as an official BRAIN threshold. T
 - Do not promise performance from a universe, data set, neutralization, decay, transform, or truncation choice. Record such choices as hypotheses and verify them with platform simulations and OOS behavior.
 - Avoid look-ahead, repeated selection on one in-sample period, and claims of causality from backtests.
 
-## Submission safety
+## Submission safety and 5-Gate automated submission policy
 
 - The official BRAIN UI/API is the authority for current checks and OOS eligibility. AlphaFind output is not approval.
 - The check evaluator fails closed: it requires every core check in `CORE_SUBMISSION_CHECKS` to be present, and every returned check to be an explicit `PASS`. Empty responses, `PENDING`, `ERROR`, missing core checks, and unrecognized statuses all fail. It is not version-aware, it does not capture the raw response, and the list of core checks is maintained by hand, so treat `alphafind check` as a local signal only and automate `alphafind submit` only after the platform gate is verified against the current platform response.
 - `--skip-checks` is opt-in: it aborts unless `ALPHAFIND_ALLOW_SKIP_CHECKS=1` (or `true`) is set, and the run prints a bypass warning. Never make it the default, and never describe a submission as verified when it was used.
-- Keep external submission as a deliberate operation after reviewing the current platform result. Simulation and submission POSTs are non-idempotent: ambiguous transport failures (timeouts, resets, truncated responses) now fail closed with a `fingerprint` for reconciliation instead of being retried. Connection failures, where nothing was sent, and explicit `429` responses are still retried. Do not add retries or resubmit after an ambiguous result without checking platform state first.
+- Simulation and submission POSTs are non-idempotent: ambiguous transport failures (timeouts, resets, truncated responses) fail closed with a `fingerprint` for reconciliation instead of being retried. Connection failures, where nothing was sent, and explicit `429` responses are retried. Do not add retries or resubmit after an ambiguous result without checking platform state first.
+
+### 5-Gate Alpha Research & Automated Submission Pipeline
+
+To eliminate brute-force parameter mining and control overfitting, candidate alpha research must follow an idea-first quantitative workflow evaluated sequentially against 5 rigorous gates. **Automated submission (`alphafind submit <ID>`) is authorized if and only if a candidate passes all 5 gates**:
+
+1. **Gate 1: Platform Pre-flight Checks (Official BRAIN Gate)**
+   - Must return 100% explicit `PASS` on all core checks queried from the official platform check endpoint: `LOW_SHARPE` (>= 1.25), `LOW_FITNESS` (>= 1.00), `TURNOVER` within bounds (0.01 to 0.70), `LOW_SUB_UNIVERSE_SHARPE`, `CONCENTRATED_WEIGHT`, `MATCHES_COMPETITION`, and platform `SELF_CORRELATION` (< 0.70). Any pending, failed, or missing check halts the pipeline.
+2. **Gate 2: Held-out Test Period Gate (Local Out-of-Sample Guardrail)**
+   - Evaluated via `alphafind test-period <ID>`.
+   - The newest 2 years of the daily PnL series is partitioned as a held-out test block.
+   - Requirements: Train Sharpe >= 0.50, Test Sharpe > 0, and Retention (Test Sharpe / Train Sharpe) >= 50% on at least 1.5 years of test observations.
+3. **Gate 3: Local Portfolio-Policy Gate (Internal Self-Correlation & Staleness)**
+   - Evaluated via `alphafind audit <ID>`.
+   - Daily PnL pairwise Pearson correlation against every active OS Alpha in `portfolio_os.json` across common overlapping dates (>= 100 days).
+   - Maximum pairwise correlation must strictly satisfy `max_rho < 0.70` (fail-closed local check).
+4. **Gate 4: Portfolio Merge Impact Gate (Marginal Value-Add)**
+   - Evaluated via `alphafind impact <ID>`.
+   - Adding the candidate into the equal-weighted portfolio must produce a non-negative marginal impact (`delta_sharpe >= 0.0`), preserve or collapse portfolio volatility (`delta_vol <= 0.0` or compensated by return), and maintain an adequate safety buffer to the correlation trần.
+5. **Gate 5: Overfitting Robustness & Research Hygiene Gate**
+   - **Hypothesis-first restriction**: Candidates must be formulated with explicit financial rationales; blind grid parameter tuning is forbidden (`--no-tune`).
+   - **Robustness checks**:
+     - *Rank Test*: Converting the final signal into a pure rank cross-section retains a positive Sharpe.
+     - *Binary Test*: Quantizing the signal to {-1, +1} preserves positive return direction.
+     - *Universe Invariance*: Preserves stability and profitability when evaluated on a larger super-universe (e.g., TOP1000).
+   - **Research Hygiene**: Zero formula or identifier leakage into Git; private expressions stored in ignored local stores (`data/private_candidates_*.json`).
+
+When all 5 gates pass, automated submission via `alphafind submit <ID>` proceeds without requiring manual interactive confirmation.
 
 ## Account concurrency and screening
 

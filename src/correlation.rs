@@ -65,17 +65,18 @@ pub fn pearson_correlation(
 #[derive(Debug, Clone)]
 pub struct CorrelationAuditReport {
     pub candidate_id: String,
+    /// Signed rho for the pair with the greatest absolute correlation magnitude.
     pub max_correlation: Option<f64>,
     pub avg_correlation: Option<f64>,
     pub most_correlated_id: Option<String>,
     pub pairwise_results: Vec<(String, f64, usize)>, // (alpha_id, corr, common_days)
     pub insufficient_overlap_count: usize,
     pub valid_comparisons: usize,
-    /// Local Pearson rho at or below the platform's published self-correlation
+    /// Absolute local Pearson rho strictly below the platform's published self-correlation
     /// threshold (0.70), used as a **local proxy**. It is not BRAIN's own
     /// self-correlation computation, which the platform runs on its own data.
     pub is_within_correlation_proxy: bool,
-    /// Local rho at or below the project's internal orthogonality preference
+    /// Absolute local rho at or below the project's internal orthogonality preference
     /// (0.15). This is a research preference, not a platform criterion.
     pub is_locally_orthogonal: bool,
 }
@@ -100,7 +101,7 @@ pub fn audit_candidate(
         let (corr_opt, days) = pearson_correlation(cand_pnl, os_pnl);
         match corr_opt {
             Some(corr) => {
-                if max_corr.is_none_or(|m| corr > m) {
+                if max_corr.is_none_or(|m| corr.abs() > m.abs()) {
                     max_corr = Some(corr);
                     most_corr_id = Some(os_id.clone());
                 }
@@ -114,7 +115,11 @@ pub fn audit_candidate(
         }
     }
 
-    pairwise.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    pairwise.sort_by(|a, b| {
+        b.1.abs()
+            .partial_cmp(&a.1.abs())
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     let avg_corr = if valid_comparisons > 0 {
         Some(sum_corr / (valid_comparisons as f64))
@@ -123,8 +128,9 @@ pub fn audit_candidate(
     };
 
     // Fail-closed: Cannot claim compliance or orthogonality without valid comparisons
-    let is_within_correlation_proxy = max_corr.is_some_and(|m| m <= BRAIN_MAX_CORRELATION);
-    let is_locally_orthogonal = max_corr.is_some_and(|m| m <= ORTHOGONAL_CORRELATION_THRESHOLD);
+    let is_within_correlation_proxy = max_corr.is_some_and(|m| m.abs() < BRAIN_MAX_CORRELATION);
+    let is_locally_orthogonal =
+        max_corr.is_some_and(|m| m.abs() <= ORTHOGONAL_CORRELATION_THRESHOLD);
 
     CorrelationAuditReport {
         candidate_id: candidate_id.to_string(),
@@ -272,7 +278,7 @@ pub fn calculate_portfolio_impact(
             continue;
         }
         if let (Some(corr), _) = pearson_correlation(candidate_pnl, pnl) {
-            if max_corr.is_none_or(|m| corr > m) {
+            if max_corr.is_none_or(|m| corr.abs() > m.abs()) {
                 max_corr = Some(corr);
                 most_corr_id = os_id.clone();
             }
@@ -287,7 +293,7 @@ pub fn calculate_portfolio_impact(
 
     let max_corr_val = max_corr.unwrap();
     let avg_corr_vs_os = sum_corr / (valid_pairs as f64);
-    let safety_buffer = (BRAIN_MAX_CORRELATION - max_corr_val).max(0.0) * 100.0;
+    let safety_buffer = (BRAIN_MAX_CORRELATION - max_corr_val.abs()).max(0.0) * 100.0;
 
     Some(PortfolioImpactResult {
         candidate_id: candidate_id.to_string(),

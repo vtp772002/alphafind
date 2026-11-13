@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result};
 use colored::Colorize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::allocation::{
     compute_hrp_weights, evaluate_candidate_admission, evaluate_candidate_swap,
@@ -29,6 +29,10 @@ async fn load_or_refresh_os_pnl_cache(
 ) -> Result<HashMap<String, HashMap<String, f64>>> {
     let (mut pnl_cache, cache_age) = load_pnl_cache();
     let cache_file = get_cache_dir().join("portfolio_pnl.json");
+    let active_ids: HashSet<String> = os_alphas.iter().map(|a| a.id.clone()).collect();
+    let cache_size_before_prune = pnl_cache.len();
+    pnl_cache.retain(|id, _| active_ids.contains(id));
+    let pruned_inactive = cache_size_before_prune.saturating_sub(pnl_cache.len());
     if refresh {
         println!(
             "  🔄 --refresh requested: forcing live PnL re-fetch for all {} active OS alphas...",
@@ -37,6 +41,12 @@ async fn load_or_refresh_os_pnl_cache(
     } else {
         print_cache_status(cache_age, pnl_cache.len());
     }
+    if pruned_inactive > 0 {
+        println!(
+            "  Removed {} cached PnL series not present in the active OS portfolio.",
+            pruned_inactive
+        );
+    }
 
     let mut fetch_ids = Vec::new();
     for a in os_alphas {
@@ -44,8 +54,9 @@ async fn load_or_refresh_os_pnl_cache(
             fetch_ids.push(a.id.clone());
         }
     }
+    let has_fetch_ids = !fetch_ids.is_empty();
 
-    if !fetch_ids.is_empty() {
+    if has_fetch_ids {
         let client = get_main_client()?;
         if !refresh {
             println!(
@@ -58,6 +69,8 @@ async fn load_or_refresh_os_pnl_cache(
                 pnl_cache.insert(id, pnl);
             }
         }
+    }
+    if has_fetch_ids || pruned_inactive > 0 {
         if let Ok(serialized) = serde_json::to_string(&pnl_cache) {
             if let Err(e) = write_private_file(&cache_file, &serialized) {
                 eprintln!("  ⚠️  Warning: Failed to write cache: {}", e);
@@ -112,20 +125,20 @@ pub async fn cmd_audit(alpha_id: String, label: Option<String>, refresh: bool) -
     );
     println!("  ─────────────────────────────────────────────────────────────────────────");
     for (idx, (os_id, corr, days)) in report.pairwise_results.iter().take(8).enumerate() {
-        let status_icon = if *corr <= 0.15 {
+        let status_icon = if corr.abs() <= 0.15 {
             "🟢 ORTHOGONAL (local ≤0.15)".green()
-        } else if *corr <= 0.70 {
+        } else if corr.abs() < 0.70 {
             "🟡 WITHIN 0.70 PROXY".yellow()
         } else {
             "🔴 OVER 0.70 PROXY".red()
         };
 
         println!(
-            "    #{:<2} vs {:<10} : rho = {:+7.4} ({:+6.2}%) | {:4} days -> {}",
+            "    #{:<2} vs {:<10} : rho = {:+7.4} (|rho|={:6.2}%) | {:4} days -> {}",
             idx + 1,
             os_id.yellow(),
             corr,
-            corr * 100.0,
+            corr.abs() * 100.0,
             days,
             status_icon
         );
@@ -133,7 +146,7 @@ pub async fn cmd_audit(alpha_id: String, label: Option<String>, refresh: bool) -
 
     println!("  ─────────────────────────────────────────────────────────────────────────");
     let max_str = match report.max_correlation {
-        Some(m) => format!("{:+.4} ({:+.2}%)", m, m * 100.0),
+        Some(m) => format!("{:+.4} (|rho|={:.2}%)", m, m.abs() * 100.0),
         None => "N/A (insufficient overlap)".to_string(),
     };
     let avg_str = match report.avg_correlation {
@@ -142,7 +155,7 @@ pub async fn cmd_audit(alpha_id: String, label: Option<String>, refresh: bool) -
     };
     let partner = report.most_correlated_id.as_deref().unwrap_or("none");
     println!(
-        "  MAX INTERNAL CORRELATION: {} vs {}",
+        "  MAX ABS INTERNAL CORRELATION: {} vs {}",
         max_str,
         partner.yellow()
     );
@@ -161,7 +174,7 @@ pub async fn cmd_audit(alpha_id: String, label: Option<String>, refresh: bool) -
         );
     } else if report.is_locally_orthogonal {
         println!(
-            "\n  {} Candidate is locally orthogonal (rho <= 0.15, internal research preference) against the current OS portfolio.",
+            "\n  {} Candidate is locally orthogonal (|rho| <= 0.15, internal research preference) against the current OS portfolio.",
             "🌟 [EXCELLENT]".green().bold()
         );
     } else if report.is_within_correlation_proxy {
@@ -360,8 +373,8 @@ pub async fn cmd_impact(alpha_id: String, refresh: bool) -> Result<()> {
 
     println!("  ─────────────────────────────────────────────────────────────────────────");
     println!(
-        "    Max Pairwise Correlation:  {:+.2}% vs {}",
-        impact.max_pairwise_corr * 100.0,
+        "    Max |Pairwise Correlation|: {:.2}% vs {}",
+        impact.max_pairwise_corr.abs() * 100.0,
         impact.most_correlated_id.yellow()
     );
     println!(
@@ -388,7 +401,7 @@ pub async fn cmd_impact(alpha_id: String, refresh: bool) -> Result<()> {
     println!("    Safety Buffer to 70% Proxy: {}", buffer_styled);
     println!("  ─────────────────────────────────────────────────────────────────────────");
 
-    if impact.max_pairwise_corr > 0.70 {
+    if impact.max_pairwise_corr.abs() >= 0.70 {
         println!(
             "\n  {} Local rho exceeds the 0.70 proxy threshold; confirm with the platform check before submitting.",
             "❌ [OVER PROXY]".red().bold()
@@ -487,20 +500,20 @@ pub async fn cmd_eval(alpha_ids: Vec<String>, refresh: bool) -> Result<()> {
         );
         println!("  ─────────────────────────────────────────────────────────────────────────");
         for (idx, (os_id, corr, days)) in audit_report.pairwise_results.iter().take(8).enumerate() {
-            let status_icon = if *corr <= 0.15 {
+            let status_icon = if corr.abs() <= 0.15 {
                 "🟢 ORTHOGONAL (local ≤0.15)".green()
-            } else if *corr <= 0.70 {
+            } else if corr.abs() < 0.70 {
                 "🟡 WITHIN 0.70 PROXY".yellow()
             } else {
                 "🔴 OVER 0.70 PROXY".red()
             };
 
             println!(
-                "    #{:<2} vs {:<10} : rho = {:+7.4} ({:+6.2}%) | {:4} days -> {}",
+                "    #{:<2} vs {:<10} : rho = {:+7.4} (|rho|={:6.2}%) | {:4} days -> {}",
                 idx + 1,
                 os_id.yellow(),
                 corr,
-                corr * 100.0,
+                corr.abs() * 100.0,
                 days,
                 status_icon
             );
@@ -508,7 +521,7 @@ pub async fn cmd_eval(alpha_ids: Vec<String>, refresh: bool) -> Result<()> {
 
         println!("  ─────────────────────────────────────────────────────────────────────────");
         let max_str = match audit_report.max_correlation {
-            Some(m) => format!("{:+.4} ({:+.2}%)", m, m * 100.0),
+            Some(m) => format!("{:+.4} (|rho|={:.2}%)", m, m.abs() * 100.0),
             None => "N/A (insufficient overlap)".to_string(),
         };
         let avg_str = match audit_report.avg_correlation {
@@ -517,7 +530,7 @@ pub async fn cmd_eval(alpha_ids: Vec<String>, refresh: bool) -> Result<()> {
         };
         let partner = audit_report.most_correlated_id.as_deref().unwrap_or("none");
         println!(
-            "  MAX INTERNAL CORRELATION: {} vs {}",
+            "  MAX ABS INTERNAL CORRELATION: {} vs {}",
             max_str,
             partner.yellow()
         );
@@ -617,8 +630,8 @@ pub async fn cmd_eval(alpha_ids: Vec<String>, refresh: bool) -> Result<()> {
 
             println!("  ─────────────────────────────────────────────────────────────────────────");
             println!(
-                "    Max Pairwise Correlation:  {:+.2}% vs {}",
-                impact.max_pairwise_corr * 100.0,
+                "    Max |Pairwise Correlation|: {:.2}% vs {}",
+                impact.max_pairwise_corr.abs() * 100.0,
                 impact.most_correlated_id.yellow()
             );
             println!(
@@ -645,7 +658,7 @@ pub async fn cmd_eval(alpha_ids: Vec<String>, refresh: bool) -> Result<()> {
             println!("    Safety Buffer to 70% Proxy: {}", buffer_styled);
             println!("  ─────────────────────────────────────────────────────────────────────────");
 
-            let verdict_str = if impact.max_pairwise_corr > 0.70 {
+            let verdict_str = if impact.max_pairwise_corr.abs() >= 0.70 {
                 println!(
                     "\n  {} Local rho exceeds the 0.70 proxy threshold; confirm with the platform check before submitting.",
                     "❌ [HIGH CORRELATION RISK]".red().bold()
@@ -1108,7 +1121,7 @@ pub async fn cmd_allocate(
                         );
                     }
                 }
-            } else if adm_report.max_pairwise_corr < 0.68 {
+            } else if adm_report.max_pairwise_corr.abs() < 0.68 {
                 match client.check_submission(cand_id, 90).await {
                     Ok((checks_passed, check_summary, stats)) => {
                         let check_badge = if checks_passed {
@@ -1156,8 +1169,8 @@ pub async fn cmd_allocate(
                 }
             } else {
                 println!(
-                    "    Platform Checks:   ⏭️  Skipped server check (local rho = {:.2}% >= 68.0% vs {})",
-                    adm_report.max_pairwise_corr * 100.0,
+                    "    Platform Checks:   ⏭️  Skipped server check (local |rho| = {:.2}% >= 68.0% vs {})",
+                    adm_report.max_pairwise_corr.abs() * 100.0,
                     adm_report.most_correlated_id
                 );
             }
@@ -1178,8 +1191,8 @@ pub async fn cmd_allocate(
                 adm_report.merged_entropy_score
             );
             println!(
-                "      • Max Correlation:           +{:.2}% vs {} (Safety Buffer: {:.2}%)",
-                adm_report.max_pairwise_corr * 100.0,
+                "      • Max |Correlation|:         {:.2}% vs {} (Safety Buffer: {:.2}%)",
+                adm_report.max_pairwise_corr.abs() * 100.0,
                 adm_report.most_correlated_id,
                 adm_report.safety_buffer_pct
             );

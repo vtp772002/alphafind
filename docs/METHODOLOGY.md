@@ -44,17 +44,21 @@ The platform's visible Learn article currently presents six criterion groups. Al
 - a local pass is not proof that the BRAIN UI will allow submission;
 - the API response must be checked in the signed-in BRAIN UI/API before relying on automated submission.
 
-## 5. Internal review gates
+## 5. Five-gate review and automated submission policy
 
-These gates are useful only when backed by current data and adequate coverage:
+These 5 gates are executed sequentially to filter candidate alphas and prevent overfitting. When a candidate passes all 5 gates, automated submission (`alphafind submit`) is authorized:
 
-1. Re-run the exact candidate and settings on the intended account.
-2. Confirm each official BRAIN criterion and OOS eligibility on the platform.
-3. Compute local correlation only on a stated date intersection and report sample size, missingness, and cache age.
-4. Compare portfolio impact using a clearly stated weighting rule; label it a local estimate.
-5. Review candidate provenance and ensure no pending formula, ID, or private metrics enter tracked public files.
+1. **Gate 1 - Official Platform Pre-flight Checks**: Full `PASS` on all core checks from BRAIN API (`LOW_SHARPE >= 1.25`, `LOW_FITNESS >= 1.00`, turnover within bounds, `LOW_SUB_UNIVERSE_SHARPE`, `SELF_CORRELATION < 0.70`).
+2. **Gate 2 - Held-out Test Period Gate**: Preserves Sharpe on the newest 2-year held-out block of IS daily PnL (Train Sharpe $\ge 0.50$, Test Sharpe $> 0$, Retention $\ge 50\%$).
+3. **Gate 3 - Local Portfolio Policy Gate**: Pairwise Pearson correlation against active OS alphas across $\ge 100$ overlapping days must satisfy $\max(\rho) < 0.70$.
+4. **Gate 4 - Portfolio Merge Impact Gate**: Non-negative marginal delta Sharpe ($\Delta \text{Sharpe} \ge 0.0$), with portfolio volatility preserved or collapsed.
+5. **Gate 5 - Overfitting Robustness & Research Hygiene**:
+   - Signal rank test (preserving positive Sharpe without non-linear tails).
+   - Binary quantization test (preserving sign direction).
+   - Super-universe invariance (e.g. profitable on TOP1000).
+   - Research hygiene (zero leaked formulas or private IDs in tracked files).
 
-A failed or unavailable data fetch should fail closed. Zero overlap, stale PnL, or an empty active portfolio is not evidence of zero correlation or good diversification.
+A failed or unavailable data fetch fails closed. Zero overlap, stale PnL, or an empty active portfolio is not evidence of zero correlation or good diversification.
 
 ## 6. Crowd usage estimate
 

@@ -483,7 +483,7 @@ pub fn evaluate_candidate_admission(
             Some(os_pnl) => match pearson_correlation(candidate_pnl, os_pnl) {
                 (Some(corr), days) if days >= 30 => {
                     valid_corr_pairs += 1;
-                    if max_corr.is_none_or(|prev| corr > prev) {
+                    if max_corr.is_none_or(|prev| corr.abs() > prev.abs()) {
                         max_corr = Some(corr);
                         top_match = a.id.clone();
                     }
@@ -500,7 +500,7 @@ pub fn evaluate_candidate_admission(
 
     let has_complete_simulation = base_sim.is_some() && !os_alphas.is_empty();
     let safety_buffer = match max_corr {
-        Some(c) if missing_or_short_pairs == 0 => (0.70 - c.max(0.0)) * 100.0,
+        Some(c) if missing_or_short_pairs == 0 => (0.70 - c.abs()).max(0.0) * 100.0,
         _ => 0.0,
     };
 
@@ -564,10 +564,10 @@ pub fn evaluate_candidate_admission(
             merged_sim.is_some()
         ));
         AdmissionVerdict::NoGo
-    } else if reported_max_corr >= 0.70 {
+    } else if reported_max_corr.abs() >= 0.70 {
         rationale.push(format!(
-            "FAIL local self-correlation proxy (rho = {:.2}% >= 70.0% vs {}).",
-            reported_max_corr * 100.0,
+            "FAIL local self-correlation proxy (|rho| = {:.2}% >= 70.0% vs {}).",
+            reported_max_corr.abs() * 100.0,
             top_match
         ));
         AdmissionVerdict::NoGo
@@ -590,7 +590,7 @@ pub fn evaluate_candidate_admission(
         rationale.push(format!(
             "Robust safety buffer: {:.2}% (Max corr: {:.2}% vs {}).",
             safety_buffer,
-            reported_max_corr * 100.0,
+            reported_max_corr.abs() * 100.0,
             top_match
         ));
         AdmissionVerdict::StrongGo

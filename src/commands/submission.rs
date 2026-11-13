@@ -1,7 +1,8 @@
 //! Submission verification and alpha dispatch command handlers.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use colored::Colorize;
+use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
@@ -387,42 +388,62 @@ pub async fn cmd_submit(
 
     // Separate Local Portfolio-Policy Gate (self-correlation, staleness, overlap)
     // Executes unconditionally whether skip_checks was used or not.
-    if Path::new("portfolio_os.json").exists() {
-        println!("  Evaluating local portfolio-policy gate (separate from platform check)...");
-        if let Ok(os_alphas) = load_portfolio_os() {
-            if !os_alphas.is_empty() {
-                let (pnl_cache, cache_age) = load_pnl_cache();
-                let (age_label, is_stale) = cache_age_label(cache_age);
-                if is_stale {
-                    println!(
-                        "  {} Local PnL cache is {} (stale or missing). Run 'alphafind portfolio --refresh' to keep local policy checks fresh.",
-                        "⚠️  [LOCAL POLICY WARNING]".yellow().bold(),
-                        age_label
-                    );
-                }
-                if !pnl_cache.is_empty() {
-                    if let Ok(cand_pnl) = client.fetch_daily_pnl(&alpha_id).await {
-                        let audit = audit_candidate(&alpha_id, &cand_pnl, &pnl_cache);
-                        if !audit.is_within_correlation_proxy {
-                            anyhow::bail!(
-                                "Local portfolio-policy gate rejected {}: max local correlation ({:?} vs {:?}, valid pairs: {}) failed the < 0.70 fail-closed local check.",
-                                alpha_id,
-                                audit.max_correlation,
-                                audit.most_correlated_id,
-                                audit.valid_comparisons
-                            );
-                        }
-                        println!(
-                            "  {} Local portfolio-policy gate passed (max local rho: {:+.2}% across {} active OS alphas).",
-                            "✅".green(),
-                            audit.max_correlation.unwrap_or(0.0) * 100.0,
-                            audit.valid_comparisons
-                        );
-                    }
-                }
-            }
-        }
+    if !Path::new("portfolio_os.json").exists() {
+        anyhow::bail!("Local portfolio-policy gate requires portfolio_os.json; sync the active OS portfolio first.");
     }
+    println!("  Evaluating local portfolio-policy gate (separate from platform check)...");
+    let os_alphas = load_portfolio_os().context("Could not load active OS portfolio snapshot")?;
+    if os_alphas.is_empty() {
+        anyhow::bail!(
+            "Local portfolio-policy gate found no active OS alphas; compliance is unknown."
+        );
+    }
+    let (mut pnl_cache, cache_age) = load_pnl_cache();
+    let (age_label, is_stale) = cache_age_label(cache_age);
+    if is_stale {
+        println!(
+            "  {} Local PnL cache is {} (stale or missing). Run 'alphafind portfolio --refresh' to keep local policy checks fresh.",
+            "⚠️  [LOCAL POLICY WARNING]".yellow().bold(),
+            age_label
+        );
+        anyhow::bail!(
+            "Local portfolio-policy gate cannot use stale or missing PnL cache; refresh active OS PnLs first."
+        );
+    }
+    let active_ids: HashSet<String> = os_alphas.iter().map(|a| a.id.clone()).collect();
+    pnl_cache.retain(|id, _| active_ids.contains(id));
+    if pnl_cache.len() != os_alphas.len() {
+        anyhow::bail!(
+            "Local portfolio-policy gate has PnL for {} of {} active OS alphas; refresh the cache first.",
+            pnl_cache.len(),
+            os_alphas.len()
+        );
+    }
+    let cand_pnl = client
+        .fetch_daily_pnl(&alpha_id)
+        .await
+        .context("Could not fetch candidate daily PnL for local portfolio-policy gate")?;
+    let audit = audit_candidate(&alpha_id, &cand_pnl, &pnl_cache);
+    if !audit.is_within_correlation_proxy
+        || audit.valid_comparisons != os_alphas.len()
+        || audit.insufficient_overlap_count > 0
+    {
+        anyhow::bail!(
+            "Local portfolio-policy gate rejected {}: max local |correlation| ({:?} vs {:?}, valid pairs: {}/{}, insufficient pairs: {}) failed the strict < 0.70 fail-closed local check.",
+            alpha_id,
+            audit.max_correlation.map(|rho| rho.abs()),
+            audit.most_correlated_id,
+            audit.valid_comparisons,
+            os_alphas.len(),
+            audit.insufficient_overlap_count
+        );
+    }
+    println!(
+        "  {} Local portfolio-policy gate passed (max local |rho|: {:.2}% across {} active OS alphas).",
+        "✅".green(),
+        audit.max_correlation.unwrap_or(0.0).abs() * 100.0,
+        audit.valid_comparisons
+    );
 
     // Update metadata if specified
     if name.is_some() || category.is_some() || color.is_some() || tags.is_some() {
